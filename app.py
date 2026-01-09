@@ -4,7 +4,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "🚀 Super App API is running"
+    return "Exomnia cloud server is run, founder-supriyo dolui,ceo& co-founder-dipanjan khamrui"
 
 @app.route("/status")
 def status():
