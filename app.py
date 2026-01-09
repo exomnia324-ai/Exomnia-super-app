@@ -5015,27 +5015,11 @@ def security_info():
 # ----------------- Run -----------------
 if __name__=="__main__":
     init_db()
-    print("🚀 Starting Exomnia Super App on http://0.0.0.0:5000")
-    print("📱 Main App: http://0.0.0.0:5000/main")
-    print("💬 Chat Login: http://0.0.0.0:5000/")
-    print("🔒 Security Info: http://0.0.0.0:5000/security")
-    print("✅ All systems integrated")
-    print("🔐 End-to-End Encryption Enabled")
-    print("🗑️  WhatsApp-style delete feature enabled")
-    print("🔙 Back button navigation fixed")
-    print("😊 Message reactions enabled")
-    print("📁 Modern Bottom Sheet File sharing system enabled")
-    print("🎨 Premium UI/UX Design")
-    print("⚡ Performance Optimized for 50+ Users")
-    print("🔧 Connection Pooling Enabled")
-    print("💾 Enhanced Caching System Active")
-    print("🚦 Rate Limiting Implemented")
-    print("✅ SocketIO Disconnect Handler Fixed")
-    print("✅ Real-time Delete System Active")
-    print("✅ FIXED Context Menu System - Single tap will NOT open context menu!")
-    print("✅ Context menu only opens on right-click or long-press (500ms)")
-    print("✅ Infinite Scroll Implemented")
-    print("✅ Enhanced Message Grouping")
-
-    # SocketIO কে সঠিক host দিয়ে রান করুন
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False, allow_unsafe_werkzeug=True)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Starting Exomnia Super App on port {port}")
+    
+    socketio.run(app, 
+                host="0.0.0.0", 
+                port=port, 
+                debug=False, 
+                allow_unsafe_werkzeug=True)
