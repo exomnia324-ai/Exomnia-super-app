@@ -29,27 +29,39 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 # Create upload directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Performance optimizations for SocketIO
+# Detect environment
+is_render = 'RENDER' in os.environ
+
+# Performance optimizations for SocketIO - Render compatible
+if is_render:
+    # Render production environment - use gevent
+    async_mode = 'gevent'
+    print("🚀 Render Environment: Using gevent")
+else:
+    # Local development - use eventlet
+    async_mode = 'eventlet'
+    print("🏠 Local Environment: Using eventlet")
+
 socketio = SocketIO(
     app, 
     cors_allowed_origins="*", 
-    async_mode='eventlet',
+    async_mode=async_mode,
     ping_timeout=60,
     ping_interval=25,
     max_http_buffer_size=16 * 1024 * 1024,  # 16MB
-    logger=False,
-    engineio_logger=False
+    logger=True,
+    engineio_logger=True
 )
 
 # Render-এ SQLite database path
 if 'RENDER' in os.environ:
-    # Render environment
-    DB_NAME = "/tmp/chat.db"  # Render-এ /tmp folder persist করে
-    print("🚀 Running on Render Environment")
+    # Render environment - /tmp folder persists between deploys
+    DB_NAME = "/tmp/chat.db"
+    print("🚀 Running on Render Environment - Database: /tmp/chat.db")
 else:
     # Local environment
     DB_NAME = "chat.db"
-    print("🏠 Running on Local Environment")
+    print("🏠 Running on Local Environment - Database: chat.db")
 
 # Connection pool for database
 class ConnectionPool:
@@ -205,11 +217,8 @@ encryptor = MessageEncryptor()
 # ----------------- Database Setup -----------------
 def init_db():
     # Render-এ existing database remove করবো না
-    if not os.path.exists(DB_NAME) or 'RENDER' not in os.environ:
-        # Local environment বা নতুন database তৈরি করার সময়
-        if os.path.exists(DB_NAME) and 'RENDER' not in os.environ:
-            os.remove(DB_NAME)
-        
+    if not os.path.exists(DB_NAME):
+        print(f"📁 Creating new database: {DB_NAME}")
         conn = get_db_connection()
         try:
             c = conn.cursor()
@@ -282,8 +291,14 @@ def init_db():
                 )
             """)
             conn.commit()
+            print("✅ Database tables created successfully")
+        except Exception as e:
+            print(f"❌ Error creating database: {e}")
+            raise
         finally:
             return_db_connection(conn)
+    else:
+        print(f"📁 Database already exists: {DB_NAME}")
 
 def validate_phone(phone):
     pattern = r'^\+\d{1,4}\d{6,14}$'
@@ -5032,11 +5047,12 @@ if __name__ == "__main__":
     
     print("🚀 Starting Exomnia Super App")
     print(f"📱 Port: {port}")
+    print("🌍 Environment:", "RENDER" if 'RENDER' in os.environ else "LOCAL")
     print("💬 Chat Login: /")
     print("🔒 Security Info: /security")
     print("✅ All systems integrated")
     print("🔐 End-to-End Encryption Enabled")
-    print("🗑️  WhatsApp-style delete feature enabled")
+    print("🗑️ WhatsApp-style delete feature enabled")
     print("😊 Message reactions enabled")
     print("📁 Modern Bottom Sheet File sharing system enabled")
     print("🎨 Premium UI/UX Design")
@@ -5048,6 +5064,12 @@ if __name__ == "__main__":
     print("✅ FIXED Context Menu System")
     print("✅ Infinite Scroll Implemented")
     print("✅ Enhanced Message Grouping")
+    print("✅ Render Compatible")
 
     # Render-এ host 0.0.0.0 এবং environment variable থেকে port নিতে হবে
-    socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, 
+                host="0.0.0.0", 
+                port=port, 
+                debug=False, 
+                allow_unsafe_werkzeug=True,
+                log_output=True)
