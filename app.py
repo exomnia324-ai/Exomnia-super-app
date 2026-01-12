@@ -8,7 +8,10 @@ signin_html = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EXOMNIA - Sign In</title>
+
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
         * {
             margin: 0;
@@ -21,16 +24,18 @@ signin_html = """<!DOCTYPE html>
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            min-height: 100svh; /* FIXED */
             background: #A8D0CF;
             padding: 20px;
             color: #1a1a2e;
+            overflow-x: hidden;
         }
 
         .login-container {
             width: 100%;
             max-width: 420px;
             background: #ffffff;
+            color: #1a1a2e;
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
@@ -84,10 +89,6 @@ signin_html = """<!DOCTYPE html>
             padding: 40px 30px 30px;
         }
 
-        .input-group {
-            margin-bottom: 25px;
-        }
-
         .input-with-icon {
             position: relative;
             margin-bottom: 20px;
@@ -99,45 +100,20 @@ signin_html = """<!DOCTYPE html>
             top: 50%;
             transform: translateY(-50%);
             color: #6c757d;
-            z-index: 2;
         }
 
-        .input-with-icon select, .input-with-icon input {
+        .input-with-icon input,
+        .input-with-icon select {
             width: 100%;
             padding: 16px 16px 16px 48px;
             border-radius: 10px;
             border: 1px solid #ddd;
             font-size: 16px;
-            transition: all 0.3s ease;
-            background: white;
-        }
-
-        .input-with-icon select {
-            cursor: pointer;
-            appearance: none;
-            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-            background-repeat: no-repeat;
-            background-position: right 16px center;
-            background-size: 16px;
-        }
-
-        .input-with-icon select:focus, .input-with-icon input:focus {
-            outline: none;
-            border-color: #0E4950;
-            box-shadow: 0 0 0 3px rgba(14, 73, 80, 0.2);
         }
 
         .phone-combined {
             display: flex;
             gap: 12px;
-        }
-
-        .phone-combined .input-with-icon {
-            flex: 1;
-        }
-
-        .phone-combined .input-with-icon:last-child {
-            flex: 2;
         }
 
         .btn {
@@ -148,23 +124,13 @@ signin_html = """<!DOCTYPE html>
             font-size: 17px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+            background: #0E4950;
+            color: white;
             margin-top: 10px;
         }
 
-        .btn-primary {
-            background: #0E4950;
-            color: white;
-        }
-
-        .btn-primary:hover {
+        .btn:hover {
             background: #0a363b;
-            transform: translateY(-2px);
-            box-shadow: 0 7px 15px rgba(14, 73, 80, 0.4);
         }
 
         .login-footer {
@@ -174,60 +140,57 @@ signin_html = """<!DOCTYPE html>
             color: #6c757d;
         }
 
-        .login-footer a {
-            color: #0E4950;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .login-footer a:hover {
-            text-decoration: underline;
-        }
-
-        .footer-links {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 6px;
-        }
-
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
-        @media (max-width: 480px) {
-            .login-container {
-                max-width: 100%;
-            }
-
-            .phone-combined {
-                flex-direction: column;
-            }
-
-            .footer-links {
-                flex-direction: column;
-                gap: 5px;
-            }
-        }
-
-        .error-message {
-            color: #e74c3c;
-            background: #fdf0f0;
-            border: 1px solid #f8d7da;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-            font-size: 14px;
-            display: none;
-        }
     </style>
 </head>
+
 <body>
-    <!-- BODY UNCHANGED -->
+    <div class="login-container">
+        <div class="login-header">
+            <div class="logo">
+                <i class="fas fa-lock"></i>
+                <h1>Sign in EXOMNIA</h1>
+            </div>
+            <p>Enter your phone number to continue</p>
+        </div>
+
+        <div class="login-body">
+            <form>
+                <div class="input-with-icon">
+                    <i class="fas fa-user"></i>
+                    <input type="text" placeholder="Username or email" required>
+                </div>
+
+                <div class="phone-combined">
+                    <div class="input-with-icon">
+                        <i class="fas fa-globe"></i>
+                        <select>
+                            <option>+880</option>
+                            <option>+91</option>
+                            <option>+1</option>
+                        </select>
+                    </div>
+
+                    <div class="input-with-icon">
+                        <i class="fas fa-mobile-alt"></i>
+                        <input type="tel" placeholder="Phone number" required>
+                    </div>
+                </div>
+
+                <button class="btn">Sign In</button>
+            </form>
+
+            <div class="login-footer">
+                Don’t have an account? <a href="#">Sign up</a>
+            </div>
+        </div>
+    </div>
 </body>
-</html>"""
+</html>
+"""
 
 @app.route("/")
 def home():
