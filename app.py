@@ -370,5 +370,8 @@ signin_html = """<!DOCTYPE html>
 @app.route("/")
 def home():
     return render_template_string(signin_html)
+    @app.route("/health")
+def health():
+    return "OK"
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
