@@ -1,10 +1,9 @@
-Flask==3.0.0
-Flask-SocketIO==5.3.6
-python-socketio==5.10.0
-python-engineio==4.8.0
-Werkzeug==3.0.1
-gunicorn==21.2.0
-gevent==23.9.1
-gevent-websocket==0.10.1
-# cryptography বাদ দিন বা lighter version ব্যবহার করুন
-cryptography==41.0.4
+Flask
+Flask-SocketIO
+python-socketio
+python-engineio
+Werkzeug
+gunicorn
+gevent
+gevent-websocket
+cryptography
