@@ -1128,10 +1128,9 @@ signin_html = """<!DOCTYPE html>
                         <div class="input-with-icon">
                             <i class="fas fa-globe"></i>
                             <select id="country_code" name="country_code" required>
-                                <option value="+880">🇧🇩 +880</option>
-                                <option value="+91">🇮🇳 +91</option>
-                                <option value="+1">🇺🇸 +1</option>
-                                <option value="+44">🇬🇧 +44</option>
+                                <option value="+91"> +91</option>
+                                <option value="+1"> +1</option>
+                                <option value="+44">+44</option>
                             </select>
                         </div>
                         <div class="input-with-icon">
