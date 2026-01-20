@@ -22,46 +22,26 @@ import logging
 logging.basicConfig(level=logging.WARNING)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+app.config['SECRET_KEY'] = secrets.token_hex(32)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Create upload directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Detect environment
-is_render = 'RENDER' in os.environ
-
-# Performance optimizations for SocketIO - Render compatible
-if is_render:
-    # Render production environment - use gevent
-    async_mode = 'gevent'
-    print("🚀 Render Environment: Using gevent")
-else:
-    # Local development - use eventlet
-    async_mode = 'eventlet'
-    print("🏠 Local Environment: Using eventlet")
-
+# Performance optimizations for SocketIO
 socketio = SocketIO(
     app, 
     cors_allowed_origins="*", 
-    async_mode=async_mode,
+    async_mode='eventlet',
     ping_timeout=60,
     ping_interval=25,
     max_http_buffer_size=16 * 1024 * 1024,  # 16MB
-    logger=True,
-    engineio_logger=True
+    logger=True,  # Debugging enabled
+    engineio_logger=True  # Debugging enabled
 )
 
-# Render-এ SQLite database path
-if 'RENDER' in os.environ:
-    # Render environment - /tmp folder persists between deploys
-    DB_NAME = "/tmp/chat.db"
-    print("🚀 Running on Render Environment - Database: /tmp/chat.db")
-else:
-    # Local environment
-    DB_NAME = "chat.db"
-    print("🏠 Running on Local Environment - Database: chat.db")
+DB_NAME = "chat.db"
 
 # Connection pool for database
 class ConnectionPool:
@@ -216,89 +196,82 @@ encryptor = MessageEncryptor()
 
 # ----------------- Database Setup -----------------
 def init_db():
-    # Render-এ existing database remove করবো না
-    if not os.path.exists(DB_NAME):
-        print(f"📁 Creating new database: {DB_NAME}")
-        conn = get_db_connection()
-        try:
-            c = conn.cursor()
-            c.execute("""
-                CREATE TABLE users (
-                    phone TEXT PRIMARY KEY,
-                    last_online TEXT,
-                    public_key TEXT,
-                    encryption_version INTEGER DEFAULT 1
-                )
-            """)
-            c.execute("""
-                CREATE TABLE contacts (
-                    user_phone TEXT,
-                    contact_phone TEXT,
-                    contact_name TEXT,
-                    last_message TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY(user_phone, contact_phone)
-                )
-            """)
-            c.execute("""
-                CREATE TABLE messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    sender TEXT,
-                    receiver TEXT,
-                    message TEXT,
-                    encrypted_message TEXT,
-                    status TEXT DEFAULT 'sent',
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    encryption_version INTEGER DEFAULT 1,
-                    deleted_for_sender BOOLEAN DEFAULT 0,
-                    deleted_for_receiver BOOLEAN DEFAULT 0,
-                    deleted_for_everyone BOOLEAN DEFAULT 0,
-                    message_type TEXT DEFAULT 'text',  -- 'text', 'image', 'video', 'document'
-                    file_path TEXT,  -- Path to uploaded file
-                    file_name TEXT,  -- Original file name
-                    file_size INTEGER,  -- File size in bytes
-                    thumbnail_path TEXT  -- Path to thumbnail for images/videos
-                )
-            """)
-            c.execute("CREATE INDEX IF NOT EXISTS idx_messages_users ON messages(sender, receiver)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_contacts_user ON contacts(user_phone)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(message_type)")
+    if os.path.exists(DB_NAME):
+        os.remove(DB_NAME)
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        c.execute("""
+            CREATE TABLE users (
+                phone TEXT PRIMARY KEY,
+                last_online TEXT,
+                public_key TEXT,
+                encryption_version INTEGER DEFAULT 1
+            )
+        """)
+        c.execute("""
+            CREATE TABLE contacts (
+                user_phone TEXT,
+                contact_phone TEXT,
+                contact_name TEXT,
+                last_message TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(user_phone, contact_phone)
+            )
+        """)
+        c.execute("""
+            CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender TEXT,
+                receiver TEXT,
+                message TEXT,
+                encrypted_message TEXT,
+                status TEXT DEFAULT 'sent',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                encryption_version INTEGER DEFAULT 1,
+                deleted_for_sender BOOLEAN DEFAULT 0,
+                deleted_for_receiver BOOLEAN DEFAULT 0,
+                deleted_for_everyone BOOLEAN DEFAULT 0,
+                message_type TEXT DEFAULT 'text',  -- 'text', 'image', 'video', 'document'
+                file_path TEXT,  -- Path to uploaded file
+                file_name TEXT,  -- Original file name
+                file_size INTEGER,  -- File size in bytes
+                thumbnail_path TEXT  -- Path to thumbnail for images/videos
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_messages_users ON messages(sender, receiver)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_contacts_user ON contacts(user_phone)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(message_type)")
 
-            # Deleted messages ট্র্যাক করার জন্য নতুন টেবিল
-            c.execute("""
-                CREATE TABLE deleted_messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    message_id INTEGER,
-                    user_phone TEXT,
-                    delete_type TEXT, -- 'for_me' or 'for_everyone'
-                    deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(message_id) REFERENCES messages(id)
-                )
-            """)
-            
-            # Message reactions টেবিল
-            c.execute("""
-                CREATE TABLE message_reactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    message_id INTEGER,
-                    user_phone TEXT,
-                    emoji TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(message_id) REFERENCES messages(id),
-                    UNIQUE(message_id, user_phone)
-                )
-            """)
-            conn.commit()
-            print("✅ Database tables created successfully")
-        except Exception as e:
-            print(f"❌ Error creating database: {e}")
-            raise
-        finally:
-            return_db_connection(conn)
-    else:
-        print(f"📁 Database already exists: {DB_NAME}")
+        # Deleted messages ট্র্যাক করার জন্য নতুন টেবিল
+        c.execute("""
+            CREATE TABLE deleted_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER,
+                user_phone TEXT,
+                delete_type TEXT, -- 'for_me' or 'for_everyone'
+                deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(message_id) REFERENCES messages(id)
+            )
+        """)
+        
+        # Message reactions টেবিল
+        c.execute("""
+            CREATE TABLE message_reactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER,
+                user_phone TEXT,
+                emoji TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(message_id) REFERENCES messages(id),
+                UNIQUE(message_id, user_phone)
+            )
+        """)
+        conn.commit()
+    finally:
+        return_db_connection(conn)
 
 def validate_phone(phone):
     pattern = r'^\+\d{1,4}\d{6,14}$'
@@ -578,6 +551,8 @@ main_app_html = """<!DOCTYPE html>
     let allContacts = []; // Store all contacts for search functionality
 
     function openTab(tabName, element) {
+      console.log('Opening tab:', tabName);
+      
       // Remove active class from all tabs
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
 
@@ -591,10 +566,12 @@ main_app_html = """<!DOCTYPE html>
 
       let content = document.getElementById('main-content');
       const isLoggedIn = localStorage.getItem('exomnia_user_phone');
+      console.log('Is logged in?', isLoggedIn);
 
       if (tabName === 'chat') {
         if (isLoggedIn) {
           // User is logged in - load contacts
+          console.log('Loading contacts for:', isLoggedIn);
           loadContacts(isLoggedIn);
         } else {
           content.innerHTML = `
@@ -648,9 +625,16 @@ main_app_html = """<!DOCTYPE html>
     }
 
     function loadContacts(phone) {
+      console.log('Fetching contacts for:', phone);
       fetch(`/api/contacts?phone=${encodeURIComponent(phone)}`)
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
         .then(contacts => {
+          console.log('Contacts received:', contacts);
           allContacts = contacts; // Store contacts for search functionality
           renderContacts(contacts);
         })
@@ -661,6 +645,7 @@ main_app_html = """<!DOCTYPE html>
             <h2>💬 Chat</h2>
             <div class="placeholder-content">
               <p style="color: red;">Failed to load contacts. Please try again.</p>
+              <p style="color: gray; font-size: 12px;">Error: ${error.message}</p>
             </div>
           `;
         });
@@ -820,23 +805,44 @@ main_app_html = """<!DOCTYPE html>
 
     // Check for login status on page load
     window.addEventListener('load', function() {
+      console.log('Page loaded, checking login status...');
+      
+      // URL থেকে logged_in_phone পড়ুন
       const urlParams = new URLSearchParams(window.location.search);
       const loggedInPhone = urlParams.get('logged_in_phone');
-
+      console.log('URL param logged_in_phone:', loggedInPhone);
+      
       if (loggedInPhone) {
+        console.log('Setting phone in localStorage:', loggedInPhone);
         localStorage.setItem('exomnia_user_phone', loggedInPhone);
-        // Remove the parameter from URL
+        
+        // URL থেকে parameter সরান
         const newUrl = window.location.pathname;
         window.history.replaceState({}, '', newUrl);
-
-        // Automatically open chat tab with info
-        openTab('chat');
+        console.log('URL cleaned, now showing chat tab');
+        
+        // Automatically open chat tab
+        const chatTab = document.querySelector('.tab[onclick*="chat"]');
+        if (chatTab) {
+          openTab('chat', chatTab);
+        } else {
+          openTab('chat');
+        }
       } else {
         // Check if already logged in
         const savedPhone = localStorage.getItem('exomnia_user_phone');
+        console.log('Saved phone from localStorage:', savedPhone);
+        
         if (savedPhone) {
-          openTab('chat');
+          console.log('Already logged in, opening chat tab');
+          const chatTab = document.querySelector('.tab[onclick*="chat"]');
+          if (chatTab) {
+            openTab('chat', chatTab);
+          } else {
+            openTab('chat');
+          }
         } else {
+          console.log('Not logged in, showing chat tab with login prompt');
           // Show chat tab by default
           openTab('chat');
         }
@@ -1128,9 +1134,10 @@ signin_html = """<!DOCTYPE html>
                         <div class="input-with-icon">
                             <i class="fas fa-globe"></i>
                             <select id="country_code" name="country_code" required>
-                                <option value="+91"> +91</option>
-                                <option value="+1"> +1</option>
-                                <option value="+44">+44</option>
+                                <option value="+880">🇧🇩 +880</option>
+                                <option value="+91">🇮🇳 +91</option>
+                                <option value="+1">🇺🇸 +1</option>
+                                <option value="+44">🇬🇧 +44</option>
                             </select>
                         </div>
                         <div class="input-with-icon">
@@ -1224,6 +1231,8 @@ def signin():
         if not phone and country_code and phone_number:
             phone = country_code + phone_number
 
+        print(f"🔑 Signin attempt - Phone: {phone}, Username: {username}")
+
         if not phone:
             return render_template_string(signin_html, error="Please enter your phone number")
 
@@ -1238,9 +1247,14 @@ def signin():
                 c.execute("INSERT OR IGNORE INTO users(phone,last_online) VALUES(?,?)",(phone, now_iso))
                 c.execute("UPDATE users SET last_online=? WHERE phone=?",(now_iso, phone))
                 conn.commit()
+                print(f"✅ User saved to DB: {phone}")
             finally:
                 return_db_connection(conn)
+            
+            # main_app রুটে redirect করুন - URL parameter হিসেবে phone পাঠান
+            print(f"🔗 Redirecting to /main?logged_in_phone={phone}")
             return redirect(url_for('main_app', logged_in_phone=phone))
+            
         except Exception as e:
             print(f"❌ Error in signin: {e}")
             return render_template_string(signin_html, error="An error occurred. Please try again.")
@@ -1250,6 +1264,10 @@ def signin():
 @app.route("/main")
 def main_app():
     logged_in_phone = request.args.get('logged_in_phone')
+    print(f"📱 Main app accessed. Phone from URL: {logged_in_phone}")
+    
+    # সরাসরি main_app_html রেন্ডার করুন
+    # JavaScript URL থেকে phone পড়বে এবং localStorage এ সেভ করবে
     return render_template_string(main_app_html)
 
 # ----------------- File Upload Route -----------------
@@ -1289,8 +1307,6 @@ def upload_file():
         # For images and videos, you could generate thumbnails here
         thumbnail_path = None
         if file_type in ['image', 'video']:
-            # Thumbnail generation would go here
-            # For now, we'll use the same file as thumbnail
             thumbnail_path = unique_filename
         
         # Save to database
@@ -1430,91 +1446,126 @@ def add_contact():
         print(f"❌ Error in add_contact: {e}")
         return jsonify({"success": False, "error": "An error occurred"}), 500
 
-# ----------------- Delete Messages API -----------------
+# ==================== INSTANT DELETE API ====================
 @app.route("/api/delete_message", methods=["POST"])
 @rate_limit(limit=20, window=60)  # 20 deletes per minute
 def api_delete_message():
+    """INSTANT DELETE - Works for both users without refresh"""
     try:
         data = request.get_json()
         message_id = data.get("message_id")
         user_phone = data.get("user_phone")
         delete_type = data.get("delete_type")  # 'for_me' or 'for_everyone'
 
+        print(f"🗑️ INSTANT DELETE: message_id={message_id}, user={user_phone}, type={delete_type}")
+
         if not all([message_id, user_phone, delete_type]):
             return jsonify({"success": False, "error": "Missing parameters"}), 400
+
+        # For temporary messages
+        if isinstance(message_id, str) and message_id.startswith('temp_'):
+            print(f"🔥 Temp message delete: {message_id}")
+            return jsonify({
+                "success": True, 
+                "message": "Temporary message deleted",
+                "is_temp": True,
+                "temp_id": message_id
+            })
 
         conn = get_db_connection()
         try:
             c = conn.cursor()
 
-            # Message details get করুন
-            c.execute("SELECT sender, receiver FROM messages WHERE id=?", (message_id,))
+            # Get message details
+            c.execute("SELECT id, sender, receiver FROM messages WHERE id=?", (message_id,))
             message = c.fetchone()
 
             if not message:
+                print(f"❌ Message not found: {message_id}")
                 return jsonify({"success": False, "error": "Message not found"}), 404
 
-            sender, receiver = message
+            msg_id, sender, receiver = message
+            print(f"📩 Message found: id={msg_id}, sender={sender}, receiver={receiver}")
+
+            # Track who's deleting
+            is_sender = user_phone == sender
+            is_receiver = user_phone == receiver
+            
+            print(f"👤 Delete by: {user_phone} (sender={is_sender}, receiver={is_receiver})")
 
             if delete_type == "for_me":
-                # শুধু নিজের জন্য ডিলিট
-                if user_phone == sender:
+                # Delete only for this user
+                if is_sender:
                     c.execute("UPDATE messages SET deleted_for_sender=1 WHERE id=?", (message_id,))
-                elif user_phone == receiver:
+                    print(f"✅ Set deleted_for_sender for message {message_id}")
+                elif is_receiver:
                     c.execute("UPDATE messages SET deleted_for_receiver=1 WHERE id=?", (message_id,))
+                    print(f"✅ Set deleted_for_receiver for message {message_id}")
                 else:
-                    return jsonify({"success": False, "error": "User not authorized to delete this message"}), 403
+                    return jsonify({"success": False, "error": "User not authorized"}), 403
 
-                # Track deletion
+                # Track in deleted_messages
                 c.execute("INSERT INTO deleted_messages (message_id, user_phone, delete_type) VALUES (?, ?, ?)",
                          (message_id, user_phone, delete_type))
-
-                # Send to both users in the conversation
-                room = get_room(sender, receiver)
-                socketio.emit('delete_success', {
-                    'message_id': message_id, 
-                    'delete_type': delete_type,
-                    'user_phone': user_phone
-                }, room=room)
-                print(f"✅ Message {message_id} deleted for me by {user_phone}")
+                print(f"✅ Tracked in deleted_messages")
 
             elif delete_type == "for_everyone":
-                # সবার জন্য ডিলিট - শুধু sender করতে পারবে
-                if user_phone == sender:
+                # Delete for everyone - only sender can do this
+                if is_sender:
                     c.execute("UPDATE messages SET deleted_for_everyone=1 WHERE id=?", (message_id,))
+                    print(f"✅ Set deleted_for_everyone for message {message_id}")
+                    
+                    # Also mark as deleted for sender (since they initiated delete for everyone)
+                    c.execute("UPDATE messages SET deleted_for_sender=1 WHERE id=?", (message_id,))
+                    print(f"✅ Also marked as deleted_for_sender")
+                    
+                    # Track in deleted_messages
                     c.execute("INSERT INTO deleted_messages (message_id, user_phone, delete_type) VALUES (?, ?, ?)",
                              (message_id, user_phone, delete_type))
-
-                    # Send to both users in the conversation
-                    room = get_room(sender, receiver)
-                    socketio.emit('delete_success', {
-                        'message_id': message_id,
-                        'delete_type': delete_type,
-                        'user_phone': user_phone
-                    }, room=room)
-                    
-                    print(f"✅ Message {message_id} deleted for everyone by {user_phone}")
+                    print(f"✅ Tracked in deleted_messages (for everyone)")
                 else:
                     return jsonify({"success": False, "error": "Only sender can delete for everyone"}), 403
 
             conn.commit()
+            print(f"✅ Database commit successful")
+            
         finally:
             return_db_connection(conn)
 
-        # Clear cache for this conversation
+        # Clear cache for BOTH users
         cache.clear_pattern(f"messages_{sender}_{receiver}")
         cache.clear_pattern(f"messages_{receiver}_{sender}")
+        cache.clear_pattern(f"contacts_{sender}")
+        cache.clear_pattern(f"contacts_{receiver}")
+        print(f"✅ Cleared cache for both users")
 
-        return jsonify({"success": True})
+        # Create room for real-time notification
+        room = f"chat_{sender}_{receiver}" if sender < receiver else f"chat_{receiver}_{sender}"
+        
+        # Return success with all necessary data for real-time update
+        return jsonify({
+            "success": True, 
+            "message": "Message deleted successfully",
+            "message_id": message_id,
+            "sender": sender,
+            "receiver": receiver,
+            "delete_type": delete_type,
+            "deleted_by": user_phone,
+            "deleted_for_everyone": delete_type == "for_everyone",
+            "room": room,
+            "should_update_ui": True
+        })
 
     except Exception as e:
         print(f"❌ Error in api_delete_message: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": "An error occurred"}), 500
 
 @app.route("/api/get_messages")
 @rate_limit(limit=50, window=60)  # 50 requests per minute
 def api_get_messages():
-    """Get messages with delete status considered"""
+    """Get messages with proper delete filtering"""
     user_phone = request.args.get("user_phone")
     contact_phone = request.args.get("contact_phone")
     page = request.args.get("page", 1, type=int)
@@ -1524,7 +1575,6 @@ def api_get_messages():
     if not all([user_phone, contact_phone]):
         return jsonify([]), 400
 
-    # Check cache first
     cache_key = f"messages_{user_phone}_{contact_phone}_page_{page}"
     cached_messages = cache.get(cache_key)
     if cached_messages:
@@ -1534,23 +1584,23 @@ def api_get_messages():
         conn = get_db_connection()
         try:
             c = conn.cursor()
+            
+            # Get all messages regardless of delete status
             c.execute("""
                 SELECT m.id, m.sender, m.receiver, m.message, m.encrypted_message, m.status, m.timestamp,
                        m.deleted_for_sender, m.deleted_for_receiver, m.deleted_for_everyone,
                        m.message_type, m.file_path, m.file_name, m.file_size, m.thumbnail_path
                 FROM messages m
                 WHERE ((m.sender=? AND m.receiver=?) OR (m.sender=? AND m.receiver=?))
-                AND m.deleted_for_everyone = 0
-                AND (m.deleted_for_sender = 0 OR m.sender != ?)
-                AND (m.deleted_for_receiver = 0 OR m.receiver != ?)
                 ORDER BY m.timestamp ASC
                 LIMIT ? OFFSET ?
-            """, (user_phone, contact_phone, contact_phone, user_phone, 
-                  user_phone, user_phone, limit, offset))
+            """, (user_phone, contact_phone, contact_phone, user_phone, limit, offset))
+            
             messages_data = c.fetchall()
+            print(f"📨 Loaded {len(messages_data)} messages from DB for {user_phone}")
 
-            # Get reactions for all messages
-            message_ids = [str(m[0]) for m in messages_data]
+            # Get reactions
+            message_ids = [str(m[0]) for m in messages_data if m[0]]
             reactions_dict = {}
             if message_ids:
                 placeholders = ','.join('?' * len(message_ids))
@@ -1562,11 +1612,11 @@ def api_get_messages():
                 reactions_data = c.fetchall()
                 
                 for reaction in reactions_data:
-                    msg_id, user_phone, emoji = reaction
+                    msg_id, r_user_phone, emoji = reaction
                     if msg_id not in reactions_dict:
                         reactions_dict[msg_id] = []
                     reactions_dict[msg_id].append({
-                        'user_phone': user_phone,
+                        'user_phone': r_user_phone,
                         'emoji': emoji
                     })
         finally:
@@ -1578,74 +1628,25 @@ def api_get_messages():
              deleted_for_sender, deleted_for_receiver, deleted_for_everyone,
              message_type, file_path, file_name, file_size, thumbnail_path) = m
 
-            # Check if message should be shown to this user
-            should_show = True
+            # Check if this user should see this message
             is_sender = user_phone == sender
             is_receiver = user_phone == receiver
-
+            
+            should_show = True
+            is_deleted = False
+            
+            # Check delete status
             if deleted_for_everyone:
-                should_show = False
+                is_deleted = True
             elif is_sender and deleted_for_sender:
-                should_show = False
+                is_deleted = True
             elif is_receiver and deleted_for_receiver:
-                should_show = False
+                is_deleted = True
 
             # Get reactions for this message
             reactions = reactions_dict.get(message_id, [])
 
-            if should_show:
-                # Handle different message types
-                if message_type == 'text':
-                    # Decrypt text message
-                    if encrypted:
-                        try:
-                            decrypted_message = encryptor.decrypt_message(encrypted, sender, receiver)
-                            message_content = decrypted_message
-                        except Exception as e:
-                            message_content = "🔒 [Encrypted message]"
-                    else:
-                        message_content = plaintext
-                        
-                    messages.append({
-                        "id": message_id,
-                        "sender": sender,
-                        "receiver": receiver,
-                        "message": message_content,
-                        "status": status,
-                        "timestamp": timestamp,
-                        "deleted_for_everyone": bool(deleted_for_everyone),
-                        "can_delete_for_everyone": is_sender,
-                        "reactions": reactions,
-                        "message_type": message_type,
-                        "is_deleted": False
-                    })
-                else:
-                    # File message - show appropriate content
-                    if message_type == 'image':
-                        message_content = f"📷 Image: {file_name}"
-                    elif message_type == 'video':
-                        message_content = f"🎥 Video: {file_name}"
-                    else:
-                        message_content = f"📄 File: {file_name}"
-
-                    messages.append({
-                        "id": message_id,
-                        "sender": sender,
-                        "receiver": receiver,
-                        "message": message_content,
-                        "status": status,
-                        "timestamp": timestamp,
-                        "deleted_for_everyone": bool(deleted_for_everyone),
-                        "can_delete_for_everyone": is_sender,
-                        "reactions": reactions,
-                        "message_type": message_type,
-                        "file_path": file_path,
-                        "file_name": file_name,
-                        "file_size": file_size,
-                        "thumbnail_path": thumbnail_path,
-                        "is_deleted": False
-                    })
-            else:
+            if is_deleted:
                 # Show deleted message placeholder
                 messages.append({
                     "id": message_id,
@@ -1655,12 +1656,48 @@ def api_get_messages():
                     "status": "deleted",
                     "timestamp": timestamp,
                     "is_deleted": True,
-                    "reactions": []  # Empty reactions for deleted messages
+                    "deleted_for_everyone": bool(deleted_for_everyone),
+                    "reactions": [],
+                    "message_type": "text",
+                    "can_delete_for_everyone": False
+                })
+            else:
+                # Show normal message
+                if message_type == 'text':
+                    if encrypted:
+                        try:
+                            decrypted_message = encryptor.decrypt_message(encrypted, sender, receiver)
+                            message_content = decrypted_message
+                        except Exception as e:
+                            message_content = "🔒 [Encrypted message]"
+                    else:
+                        message_content = plaintext
+                else:
+                    if message_type == 'image':
+                        message_content = f"📷 Image: {file_name}"
+                    elif message_type == 'video':
+                        message_content = f"🎥 Video: {file_name}"
+                    else:
+                        message_content = f"📄 File: {file_name}"
+
+                messages.append({
+                    "id": message_id,
+                    "sender": sender,
+                    "receiver": receiver,
+                    "message": message_content,
+                    "status": status,
+                    "timestamp": timestamp,
+                    "deleted_for_everyone": bool(deleted_for_everyone),
+                    "can_delete_for_everyone": is_sender,
+                    "reactions": reactions,
+                    "message_type": message_type,
+                    "file_path": file_path,
+                    "file_name": file_name,
+                    "file_size": file_size,
+                    "thumbnail_path": thumbnail_path
                 })
 
-        # Cache the results
         cache.set(cache_key, messages)
-
         return jsonify(messages)
 
     except Exception as e:
@@ -1675,302 +1712,100 @@ chat_html = """<!DOCTYPE html>
     <title>Chat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        :root {
-            --primary-color: #0E4950;
-            --primary-light: #1a6b75;
-            --secondary-color: #A8D0CF;
-            --accent-color: #38b6ff;
-            --sent-bubble: #dcf8c6;
-            --received-bubble: #ffffff;
-            --background-color: #A8D0CF;
-            --text-color: #333333;
-            --light-text: #777777;
-            --border-color: #e0e0e0;
-            --shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, sans-serif;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            background: var(--background-color);
-            color: var(--text-color);
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; height: 100vh; background: #A8D0CF; }
+        
         #chat-header {
-            background: var(--primary-color);
-            color: #fff;
-            padding: 16px 20px;
-            font-weight: 600;
-            font-size: 18px;
+            background: #0E4950;
+            color: white;
+            padding: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: var(--shadow);
-            z-index: 10;
-            position: relative;
         }
-
-        #contact-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
-        }
-
-        .left-header-actions {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-right: 15px;
-        }
-
-        #saveBtn {
-            background: var(--accent-color);
-            border: none;
-            color: #fff;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            width: 36px;
-            height: 36px;
-        }
-
-        #saveBtn:hover {
-            background: #2aa0e6;
-            transform: scale(1.1);
-        }
-
-        .contact-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--accent-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 18px;
-        }
-
-        .contact-details {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-        }
-
-        .contact-name {
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .connection-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12px;
-            margin-top: 2px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
-        .status-online {
-            background: #4CAF50;
-        }
-
-        .status-offline {
-            background: #f44336;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        #chat-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
+        
         #chat {
-            flex: 1;
+            height: calc(100vh - 140px);
             overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            padding: 15px;
         }
-
-        .message-group {
-            display: flex;
-            flex-direction: column;
-            margin-bottom: 12px;
-            max-width: 85%;
-        }
-
-        .sent-group {
-            align-self: flex-end;
-            align-items: flex-end;
-        }
-
-        .received-group {
-            align-self: flex-start;
-            align-items: flex-start;
-        }
-
-        .bubble {
-            padding: 12px 16px;
+        
+        .message {
+            margin: 10px 0;
+            padding: 10px 15px;
             border-radius: 18px;
-            margin: 2px 0;
-            font-size: 15px;
-            line-height: 1.4;
+            max-width: 70%;
             word-wrap: break-word;
-            position: relative;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            white-space: pre-wrap;
-            word-break: break-word;
-            overflow-wrap: break-word;
-            max-width: 100%;
-            user-select: none;
-            -webkit-user-select: none;
         }
-
+        
         .sent {
-            background: var(--sent-bubble);
-            border-bottom-right-radius: 6px;
+            background: #dcf8c6;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
         }
-
+        
         .received {
-            background: var(--received-bubble);
-            border-bottom-left-radius: 6px;
-            border: 1px solid var(--border-color);
+            background: white;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
         }
-
-        .status {
-            font-size: 11px;
-            color: var(--light-text);
-            margin-top: 4px;
-            text-align: right;
-            padding-right: 4px;
-        }
-
-        .message-time {
-            font-size: 11px;
-            color: var(--light-text);
-            margin-top: 2px;
-            padding: 0 4px;
-        }
-
-        #typing {
-            font-size: 14px;
-            color: var(--light-text);
-            margin: 0 20px 10px;
-            height: 20px;
+        
+        .deleted {
+            background: #f5f5f5 !important;
+            color: #999 !important;
             font-style: italic;
+            border: 1px dashed #ddd !important;
         }
-
+        
         #message-box {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background: white;
+            padding: 10px;
             display: flex;
-            padding: 16px 20px;
-            background: transparent;
-            gap: 12px;
-            align-items: flex-end;
-            min-height: 70px;
+            gap: 10px;
+            border-top: 1px solid #ddd;
         }
-
+        
         #message {
             flex: 1;
-            padding: 12px 18px;
-            font-size: 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
-            outline: none;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
             resize: none;
-            max-height: 120px;
-            font-family: inherit;
-            transition: border 0.2s;
-            background: white;
-            line-height: 1.4;
-            overflow-y: auto;
-            min-height: 48px;
-            height: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            word-break: break-word;
         }
-
-        #message:focus {
-            border-color: var(--accent-color);
-        }
-
+        
         #send-btn {
-            width: 48px;
-            height: 48px;
+            background: #0E4950;
+            color: white;
             border: none;
             border-radius: 50%;
-            background: var(--primary-color);
-            color: white;
-            font-size: 18px;
+            width: 40px;
+            height: 40px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
         }
-
-        #send-btn:hover {
-            background: var(--primary-light);
-            transform: scale(1.05);
+        
+        .context-menu {
+            position: fixed;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
         }
-
-        #send-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* File Upload Button */
-        #file-upload-btn {
-            width: 48px;
-            height: 48px;
-            border: none;
-            border-radius: 50%;
-            background: var(--accent-color);
-            color: white;
-            font-size: 18px;
+        
+        .context-item {
+            padding: 10px 20px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
+            border-bottom: 1px solid #eee;
         }
-
-        #file-upload-btn:hover {
-            background: #2aa0e6;
-            transform: scale(1.05);
+        
+        .context-item:hover {
+            background: #f5f5f5;
         }
-
-        /* Modern Bottom Sheet Modal Styles */
-        .file-upload-modal {
+        
+        .delete-modal {
             display: none;
             position: fixed;
             top: 0;
@@ -1978,2572 +1813,349 @@ chat_html = """<!DOCTYPE html>
             width: 100%;
             height: 100%;
             background: rgba(0,0,0,0.5);
-            z-index: 2000;
-            align-items: flex-end;
-            justify-content: center;
-        }
-
-        .file-upload-content {
-            background: white;
-            border-radius: 24px 24px 0 0;
-            padding: 25px 20px;
-            width: 100%;
-            max-width: 100%;
-            text-align: center;
-            box-shadow: 0 -10px 40px rgba(0,0,0,0.2);
-            animation: slideUpFromBottom 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            position: relative;
-            overflow: hidden;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        @keyframes slideUpFromBottom {
-            from { 
-                opacity: 0;
-                transform: translateY(100%);
-            }
-            to { 
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .file-upload-content::before {
-            content: '';
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 40px;
-            height: 4px;
-            background: #ddd;
-            border-radius: 2px;
-        }
-
-        .file-upload-content h3 {
-            margin-bottom: 20px;
-            color: #0E4950;
-            font-size: 20px;
-            font-weight: 700;
-            margin-top: 15px;
-        }
-
-        .file-upload-subtitle {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 25px;
-            font-weight: 500;
-        }
-
-        .file-upload-options {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin: 20px 0;
-        }
-
-        .file-upload-option {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            padding: 15px 10px;
-            border: 2px solid transparent;
-            border-radius: 16px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: #f8f9fa;
-        }
-
-        .file-upload-option:hover {
-            background: #e9ecef;
-            transform: translateY(-2px);
-        }
-
-        .option-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            transition: all 0.3s ease;
-        }
-
-        .photo-option .option-icon {
-            background: #4CAF50;
-            color: white;
-        }
-
-        .video-option .option-icon {
-            background: #FF9800;
-            color: white;
-        }
-
-        .document-option .option-icon {
-            background: #2196F3;
-            color: white;
-        }
-
-        .option-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .option-description {
-            font-size: 11px;
-            color: #666;
-            line-height: 1.3;
-        }
-
-        .file-upload-info {
-            margin-top: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 12px;
-            border-left: 4px solid #0E4950;
-        }
-
-        .info-text {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            color: #555;
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        /* File Input Styling */
-        #fileInput {
-            display: none;
-        }
-
-        .modal-close-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 24px;
-            color: #666;
-            cursor: pointer;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Enhanced Media Message Styles */
-        .media-message {
-            max-width: 280px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .media-message:hover {
-            transform: translateY(-2px);
-        }
-
-        .media-preview {
-            border-radius: 16px;
-            overflow: hidden;
-            margin-bottom: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            position: relative;
-            transition: all 0.3s ease;
-        }
-
-        .media-preview::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0);
-            transition: background 0.3s ease;
-        }
-
-        .media-preview:hover::after {
-            background: rgba(0,0,0,0.1);
-        }
-
-        .media-preview img, .media-preview video {
-            width: 100%;
-            height: auto;
-            display: block;
-            transition: transform 0.3s ease;
-        }
-
-        .media-preview:hover img, .media-preview:hover video {
-            transform: scale(1.05);
-        }
-
-        .media-info {
-            padding: 8px 4px;
-        }
-
-        .media-filename {
-            font-weight: 600;
-            font-size: 13px;
-            color: #333;
-            margin-bottom: 4px;
-            word-break: break-word;
-            line-height: 1.3;
-        }
-
-        .media-metadata {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 11px;
-            color: #666;
-        }
-
-        .media-size {
-            font-weight: 500;
-        }
-
-        .media-type {
-            background: #0E4950;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: 600;
-        }
-
-        /* Enhanced File Message Styles */
-        .file-message {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            padding: 16px;
-            background: linear-gradient(135deg, #f8f9fa, #ffffff);
-            border-radius: 16px;
-            border: 1px solid #e9ecef;
-            transition: all 0.3s ease;
-        }
-
-        .file-message:hover {
-            background: linear-gradient(135deg, #ffffff, #f8f9fa);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
-        }
-
-        .file-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            flex-shrink: 0;
-        }
-
-        .file-icon.photo { background: #E8F5E8; color: #4CAF50; }
-        .file-icon.video { background: #FFF3E0; color: #FF9800; }
-        .file-icon.document { background: #E3F2FD; color: #2196F3; }
-
-        .file-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .file-name {
-            font-weight: 700;
-            font-size: 14px;
-            margin-bottom: 6px;
-            word-break: break-word;
-            color: #333;
-            line-height: 1.3;
-        }
-
-        .file-details {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            font-size: 12px;
-            color: #666;
-        }
-
-        .file-size {
-            font-weight: 600;
-            color: #0E4950;
-        }
-
-        .file-type {
-            background: #0E4950;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 8px;
-            font-size: 10px;
-            font-weight: 600;
-        }
-
-        .download-btn {
-            background: linear-gradient(135deg, #0E4950, #1a6b75);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 10px 16px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex-shrink: 0;
-        }
-
-        .download-btn:hover {
-            background: linear-gradient(135deg, #1a6b75, #0E4950);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(14, 73, 80, 0.3);
-        }
-
-        .download-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .file-upload-options {
-                grid-template-columns: 1fr;
-                gap: 10px;
-            }
-            
-            .file-upload-option {
-                flex-direction: row;
-                justify-content: flex-start;
-                padding: 12px 15px;
-                gap: 15px;
-            }
-            
-            .option-text {
-                text-align: left;
-            }
-        }
-
-        /* Rest of the existing styles remain the same */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            animation: fadeIn 0.2s ease-out;
-        }
-
-        .modal-content {
-            background: #fff;
-            padding: 24px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            animation: slideUp 0.3s ease-out;
-        }
-
-        .modal h3 {
-            margin-bottom: 16px;
-            color: var(--primary-color);
-        }
-
-        .modal input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 16px;
-            margin-bottom: 20px;
-            outline: none;
-            transition: border 0.2s;
-        }
-
-        .modal input:focus {
-            border-color: var(--accent-color);
-        }
-
-        .modal-buttons {
-            display: flex;
-            gap: 12px;
-        }
-
-        .modal-btn {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .modal-btn.primary {
-            background: var(--primary-color);
-            color: white;
-        }
-
-        .modal-btn.primary:hover {
-            background: var(--primary-light);
-        }
-
-        .modal-btn.secondary {
-            background: #e0e0e0;
-            color: #333;
-        }
-
-        .modal-btn.secondary:hover {
-            background: #d0d0d0;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .message-appear {
-            animation: messageAppear 0.3s ease-out;
-        }
-
-        @keyframes messageAppear {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        #chat::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        #chat::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        #chat::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 3px;
-        }
-
-        #chat::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
-
-        #message::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        #message::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        #message::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 2px;
-        }
-
-        .back-button {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 8px;
-        }
-
-        /* Message Context Menu */
-        .context-menu {
-            position: fixed;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            z-index: 1000;
-            min-width: 160px;
-            padding: 8px 0;
-            display: none;
-            animation: slideUp 0.2s ease-out;
-            border: 1px solid #e0e0e0;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-        }
-
-        .context-menu-item {
-            padding: 12px 16px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 14px;
-            color: #333;
-            transition: background 0.2s;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-
-        .context-menu-item:hover {
-            background: #f5f5f5;
-        }
-
-        .context-menu-item i {
-            font-size: 16px;
-            width: 20px;
-            text-align: center;
-        }
-
-        .context-menu-divider {
-            height: 1px;
-            background: #e0e0e0;
-            margin: 4px 0;
-        }
-
-        /* Context menu animation */
-        @keyframes contextMenuAppear {
-            from {
-                opacity: 0;
-                transform: scale(0.9) translateY(-5px);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1) translateY(0);
-            }
-        }
-
-        .context-menu {
-            animation: contextMenuAppear 0.15s ease-out;
-        }
-
-        /* Emoji Reaction Menu */
-        .emoji-menu {
-            position: fixed;
-            background: white;
-            border-radius: 24px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            z-index: 1001;
-            padding: 8px;
-            display: none;
-            animation: slideUp 0.2s ease-out;
-        }
-
-        .emoji-options {
-            display: flex;
-            gap: 8px;
-        }
-
-        .emoji-option {
-            font-size: 20px;
-            padding: 8px;
-            cursor: pointer;
-            border-radius: 50%;
-            transition: all 0.2s;
-        }
-
-        .emoji-option:hover {
-            background: #f0f0f0;
-            transform: scale(1.2);
-        }
-
-        /* Message Reactions */
-        .message-reactions {
-            display: flex;
-            gap: 4px;
-            margin-top: 4px;
-            flex-wrap: wrap;
-        }
-
-        .reaction {
-            background: rgba(0, 0, 0, 0.05);
-            border-radius: 12px;
-            padding: 2px 6px;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 2px;
-        }
-
-        .reaction-emoji {
-            font-size: 12px;
-        }
-
-        .reaction-count {
-            font-size: 10px;
-            color: #666;
-        }
-
-        .bubble.selected {
-            background: rgba(56, 182, 255, 0.1) !important;
-            border: 1px solid var(--accent-color) !important;
-        }
-
-        .deleted-message {
-            font-style: italic;
-            color: #999 !important;
-            background: #f5f5f5 !important;
-            border: 1px dashed #ddd !important;
-            pointer-events: none;
-        }
-
-        .deleted-message .message-reactions {
-            display: none !important;
-        }
-
-        /* Delete Options Modal */
-        .delete-options-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
             justify-content: center;
             align-items: center;
             z-index: 2000;
         }
-
-        .delete-options-content {
+        
+        .delete-content {
             background: white;
-            padding: 24px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 320px;
+            padding: 20px;
+            border-radius: 10px;
+            width: 300px;
             text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
-
-        .delete-options-content h3 {
-            margin-bottom: 16px;
-            color: #333;
-        }
-
-        .delete-options-buttons {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .delete-option-btn {
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .delete-option-btn.for-me {
-            background: #ff9800;
-            color: white;
-        }
-
-        .delete-option-btn.for-me:hover {
-            background: #f57c00;
-        }
-
-        .delete-option-btn.for-everyone {
-            background: #f44336;
-            color: white;
-        }
-
-        .delete-option-btn.for-everyone:hover {
-            background: #d32f2f;
-        }
-
-        .delete-option-btn.cancel {
-            background: #e0e0e0;
-            color: #333;
-        }
-
-        .delete-option-btn.cancel:hover {
-            background: #d0d0d0;
-        }
-
-        /* Copy Feedback */
-        .copy-feedback {
-            position: fixed;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            z-index: 1002;
-            animation: fadeInOut 2s ease-in-out;
-        }
-
-        @keyframes fadeInOut {
-            0%, 100% { opacity: 0; transform: translateY(10px); }
-            20%, 80% { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Media Viewer */
-        .media-viewer {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
-            z-index: 3000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .media-viewer-content {
-            max-width: 90%;
-            max-height: 90%;
-            position: relative;
-        }
-
-        .media-viewer-content img,
-        .media-viewer-content video {
-            max-width: 100%;
-            max-height: 90vh;
-            border-radius: 8px;
-        }
-
-        .close-viewer {
-            position: absolute;
-            top: -40px;
-            right: 0;
-            background: none;
-            border: none;
-            color: white;
-            font-size: 24px;
-            cursor: pointer;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        @media (max-width: 768px) {
-            #chat-header {
-                padding: 14px 16px;
-            }
-
-            #chat {
-                padding: 16px;
-            }
-
-            .message-group {
-                max-width: 90%;
-            }
-
-            #message-box {
-                padding: 14px 16px;
-                min-height: 65px;
-            }
-
-            #message {
-                min-height: 44px;
-                max-height: 100px;
-            }
-
-            #saveBtn {
-                width: 34px;
-                height: 34px;
-                padding: 6px;
-            }
-
-            .context-menu {
-                min-width: 140px;
-            }
-
-            .emoji-menu {
-                padding: 6px;
-            }
-
-            .emoji-option {
-                font-size: 18px;
-                padding: 6px;
-            }
-
-            .media-message {
-                max-width: 250px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .contact-avatar {
-                width: 36px;
-                height: 36px;
-                font-size: 16px;
-            }
-
-            .contact-name {
-                font-size: 16px;
-            }
-
-            .bubble {
-                padding: 10px 14px;
-                font-size: 14px;
-            }
-
-            #message {
-                padding: 10px 16px;
-                font-size: 15px;
-                min-height: 42px;
-                max-height: 90px;
-            }
-
-            #send-btn, #file-upload-btn {
-                width: 44px;
-                height: 44px;
-            }
-
-            #message-box {
-                min-height: 60px;
-            }
-
-            #saveBtn {
-                width: 32px;
-                height: 32px;
-                padding: 5px;
-            }
-
-            .media-message {
-                max-width: 200px;
-            }
-
-            .file-message {
-                padding: 12px;
-                gap: 12px;
-            }
-            
-            .file-icon {
-                width: 40px;
-                height: 40px;
-                font-size: 20px;
-            }
-        }
-
-        /* Loading Indicator */
-        .loading-indicator {
-            text-align: center;
+        
+        .delete-btn {
             padding: 10px;
-            color: #666;
-            font-style: italic;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
         }
-
-        .loading-indicator.hidden {
-            display: none;
-        }
-
-        /* Message Grouping Improvements */
-        .message-group .bubble:first-child {
-            margin-top: 0;
-        }
-
-        .message-group .bubble:last-child {
-            margin-bottom: 0;
-        }
-
-        /* Improved Message Status */
-        .message-status {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 10px;
-            color: #999;
-            margin-top: 2px;
-        }
-
-        .message-status.sent { color: #999; }
-        .message-status.delivered { color: #4CAF50; }
-        .message-status.seen { color: #2196F3; }
+        
+        .for-me { background: #ff9800; color: white; }
+        .for-everyone { background: #f44336; color: white; }
+        .cancel { background: #ddd; }
     </style>
 </head>
 <body>
     <div id="chat-header">
-        <div class="left-header-actions">
-            <button class="back-button" onclick="goBack()">←</button>
-            {% if contact_name == contact_phone %}
-                <button id="saveBtn" onclick="openSaveModal()" title="Save Contact">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="white"/>
-                    </svg>
-                </button>
-            {% endif %}
-        </div>
-
-        <div id="contact-info">
-            <div class="contact-avatar">{{ contact_name[0] if contact_name else '?' }}</div>
-            <div class="contact-details">
-                <div class="contact-name">{{ contact_name }}</div>
-                <div class="connection-status">
-                    <span class="status-dot status-online" id="statusDot"></span>
-                    <span id="statusText">Connected</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="header-actions">
-            <!-- Empty for balance -->
-        </div>
+        <button onclick="goBack()">← Back</button>
+        <div>{{ contact_name }}</div>
+        <div></div>
     </div>
-
-    <div id="chat-container">
-        <div id="chat">
-            <div id="loadingIndicator" class="loading-indicator hidden">Loading more messages...</div>
-        </div>
-        <div id="typing"></div>
-    </div>
-
+    
+    <div id="chat"></div>
+    
     <div id="message-box">
-        <button id="file-upload-btn" onclick="openFileUploadModal()" title="Send file">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="white" stroke-width="2"/>
-                <polyline points="14,2 14,8 20,8" stroke="white" stroke-width="2"/>
-                <line x1="16" y1="13" x2="8" y2="13" stroke="white" stroke-width="2"/>
-                <line x1="16" y1="17" x2="8" y2="17" stroke="white" stroke-width="2"/>
-                <polyline points="10,9 9,9 8,9" stroke="white" stroke-width="2"/>
-            </svg>
-        </button>
         <textarea id="message" placeholder="Type a message..." rows="1"></textarea>
-        <button id="send-btn" onclick="sendMessage()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="white"/>
-            </svg>
-        </button>
+        <button id="send-btn" onclick="sendMessage()">➤</button>
     </div>
-
-    <!-- Modern Bottom Sheet File Upload Modal -->
-    <div id="fileUploadModal" class="file-upload-modal">
-        <div class="file-upload-content">
-            <button class="modal-close-btn" onclick="closeFileUploadModal()">×</button>
-            <h3>📁 Share File</h3>
-            <div class="file-upload-subtitle">Choose what you'd like to share</div>
-            
-            <div class="file-upload-options">
-                <div class="file-upload-option photo-option" onclick="triggerFileInput('image')">
-                    <div class="option-icon">🖼️</div>
-                    <div class="option-text">
-                        <div class="option-title">Photos</div>
-                        <div class="option-description">JPG, PNG, GIF</div>
-                    </div>
-                </div>
-                <div class="file-upload-option video-option" onclick="triggerFileInput('video')">
-                    <div class="option-icon">🎬</div>
-                    <div class="option-text">
-                        <div class="option-title">Videos</div>
-                        <div class="option-description">MP4, MOV, AVI</div>
-                    </div>
-                </div>
-                <div class="file-upload-option document-option" onclick="triggerFileInput('document')">
-                    <div class="option-icon">📄</div>
-                    <div class="option-text">
-                        <div class="option-title">Documents</div>
-                        <div class="option-description">PDF, DOC, TXT</div>
-                    </div>
-                </div>
-            </div>
-            
-            <input type="file" id="fileInput" accept="*/*">
-            
-            <div class="file-upload-info">
-                <div class="info-text">
-                    <i>💡</i>
-                    <span>Max file size: 16MB • All files are securely encrypted</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Save Contact Modal -->
-    <div id="saveModal" class="modal">
-        <div class="modal-content">
-            <h3>Save Contact</h3>
-            <form id="saveContactForm">
-                <input type="hidden" name="user" value="{{ phone }}">
-                <input type="hidden" name="country_code" value="">
-                <input type="hidden" name="contact_phone" value="{{ contact_phone }}">
-                <input type="text" name="contact_name" placeholder="Enter name" required>
-                <div class="modal-buttons">
-                    <button type="submit" class="modal-btn primary">Save</button>
-                    <button type="button" onclick="closeSaveModal()" class="modal-btn secondary">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Delete Options Modal -->
-    <div id="deleteOptionsModal" class="delete-options-modal">
-        <div class="delete-options-content">
-            <h3>Delete Message</h3>
-            <div class="delete-options-buttons">
-                <button class="delete-option-btn for-me" onclick="deleteMessageForMe()">
-                    Delete for Me
-                </button>
-                <button class="delete-option-btn for-everyone" onclick="deleteMessageForEveryone()" id="deleteForEveryoneBtn">
-                    Delete for Everyone
-                </button>
-                <button class="delete-option-btn cancel" onclick="closeDeleteOptions()">
-                    Cancel
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Context Menu -->
+    
     <div id="contextMenu" class="context-menu">
-        <div class="context-menu-item" onclick="copyMessage()">
-            <i>📋</i>
-            <span>Copy</span>
-        </div>
-        <div class="context-menu-item" onclick="showEmojiMenu()">
-            <i>😊</i>
-            <span>React</span>
-        </div>
-        <div class="context-menu-divider"></div>
-        <div class="context-menu-item" onclick="showDeleteOptionsFromContext()">
-            <i>🗑️</i>
-            <span>Delete</span>
+        <div class="context-item" onclick="copyMessage()">Copy</div>
+        <div class="context-item" onclick="showDeleteOptions()">Delete</div>
+    </div>
+    
+    <div id="deleteModal" class="delete-modal">
+        <div class="delete-content">
+            <h3>Delete Message</h3>
+            <p>Choose how to delete this message:</p>
+            <button class="delete-btn for-me" onclick="deleteForMe()">Delete for Me</button>
+            <button class="delete-btn for-everyone" onclick="deleteForEveryone()" id="deleteForEveryoneBtn">Delete for Everyone</button>
+            <button class="delete-btn cancel" onclick="closeDeleteModal()">Cancel</button>
         </div>
     </div>
 
-    <!-- Emoji Reaction Menu -->
-    <div id="emojiMenu" class="emoji-menu">
-        <div class="emoji-options">
-            <div class="emoji-option" onclick="addReaction('👍')">👍</div>
-            <div class="emoji-option" onclick="addReaction('❤️')">❤️</div>
-            <div class="emoji-option" onclick="addReaction('😂')">😂</div>
-            <div class="emoji-option" onclick="addReaction('😮')">😮</div>
-            <div class="emoji-option" onclick="addReaction('😢')">😢</div>
-            <div class="emoji-option" onclick="addReaction('🙏')">🙏</div>
-        </div>
-    </div>
-
-    <!-- Media Viewer -->
-    <div id="mediaViewer" class="media-viewer">
-        <div class="media-viewer-content">
-            <button class="close-viewer" onclick="closeMediaViewer()">✕</button>
-            <img id="viewerImage" src="" alt="">
-            <video id="viewerVideo" controls style="display: none;"></video>
-        </div>
-    </div>
-
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
         let myPhone = {{ phone|tojson }};
         let contactPhone = {{ contact_phone|tojson }};
-        const typingDiv = document.getElementById('typing');
         let chatDiv = document.getElementById('chat');
-        const messageInput = document.getElementById('message');
-        const messageBox = document.getElementById('message-box');
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const contextMenu = document.getElementById('contextMenu');
-        const emojiMenu = document.getElementById('emojiMenu');
-        const fileInput = document.getElementById('fileInput');
-        const fileUploadModal = document.getElementById('fileUploadModal');
-        const mediaViewer = document.getElementById('mediaViewer');
-        const viewerImage = document.getElementById('viewerImage');
-        const viewerVideo = document.getElementById('viewerVideo');
-        const loadingIndicator = document.getElementById('loadingIndicator');
+        let currentDeleteMessageId = null;
+        let currentDeleteMessageElement = null;
         
-        let typingTimeout;
-        let isConnected = false;
-        let lastSender = null;
-        let messageGroups = {};
-        let lastMarkedSeenTime = 0;
-        let currentMessageToDelete = null;
-        let currentBubbleToDelete = null;
-        let selectedMessage = null;
-        let selectedMessageId = null;
-        let contextMenuMessageId = null;
-
-        // Enhanced variables for better performance
-        let currentPage = 1;
-        let isLoading = false;
-        let hasMoreMessages = true;
-        let scrollPositionBeforeLoad = 0;
-
-        // Context Menu Variables
-        let pressTimer;
-        let longPressActive = false;
-
-        function goBack() {
-            window.location.href = '/main?phone=' + encodeURIComponent(myPhone);
-        }
-
-        function autoResizeTextarea() {
-            messageInput.style.height = 'auto';
-            const scrollHeight = messageInput.scrollHeight;
-            const maxHeight = 120;
-            if (scrollHeight <= maxHeight) {
-                messageInput.style.height = scrollHeight + 'px';
-                messageBox.style.minHeight = Math.max(70, scrollHeight + 22) + 'px';
-            } else {
-                messageInput.style.height = maxHeight + 'px';
-                messageInput.style.overflowY = 'auto';
-                messageBox.style.minHeight = '140px';
-            }
-            chatDiv.scrollTop = chatDiv.scrollHeight;
-        }
-
-        messageInput.addEventListener('input', autoResizeTextarea);
-        messageInput.addEventListener('keydown', autoResizeTextarea);
-        messageInput.addEventListener('keyup', autoResizeTextarea);
-        messageInput.addEventListener('focus', function() {
-            setTimeout(autoResizeTextarea, 10);
-        });
-
-        function resetTextareaHeight() {
-            setTimeout(() => {
-                messageInput.style.height = 'auto';
-                messageInput.style.overflowY = 'hidden';
-                messageBox.style.minHeight = '70px';
-            }, 100);
-        }
-
-        // ==================== FIXED CONTEXT MENU SYSTEM ====================
+        // Socket connection
+        const socket = io();
         
-        function initializeContextMenuSystem() {
-            console.log('🔄 Initializing fixed context menu system...');
-            
-            // Remove any existing event listeners first
-            chatDiv.removeEventListener('contextmenu', handleContextMenu);
-            chatDiv.removeEventListener('touchstart', handleTouchStart);
-            chatDiv.removeEventListener('touchend', handleTouchEnd);
-            chatDiv.removeEventListener('touchmove', handleTouchMove);
-            
-            // Add new event listeners
-            chatDiv.addEventListener('contextmenu', handleContextMenu);
-            chatDiv.addEventListener('touchstart', handleTouchStart);
-            chatDiv.addEventListener('touchend', handleTouchEnd);
-            chatDiv.addEventListener('touchmove', handleTouchMove);
-            
-            console.log('✅ Fixed context menu system initialized');
-        }
-
-        function handleContextMenu(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const bubble = e.target.closest('.bubble');
-            if (bubble && bubble.dataset.messageId && !bubble.classList.contains('deleted-message')) {
-                console.log('🎯 Context menu triggered for message:', bubble.dataset.messageId);
-                showContextMenu(e.clientX, e.clientY, bubble.dataset.messageId, bubble);
-            }
-        }
-
-        function handleTouchStart(e) {
-            const bubble = e.target.closest('.bubble');
-            if (bubble && bubble.dataset.messageId && !bubble.classList.contains('deleted-message')) {
-                longPressActive = true;
-                pressTimer = setTimeout(() => {
-                    const touch = e.touches[0];
-                    console.log('📱 Long press detected for message:', bubble.dataset.messageId);
-                    showContextMenu(touch.clientX, touch.clientY, bubble.dataset.messageId, bubble);
-                    longPressActive = false;
-                    e.preventDefault();
-                }, 500); // Increased to 500ms for better UX
-            }
-        }
-
-        function handleTouchEnd() {
-            clearTimeout(pressTimer);
-            longPressActive = false;
-        }
-
-        function handleTouchMove() {
-            clearTimeout(pressTimer);
-            longPressActive = false;
-        }
-
-        function showContextMenu(x, y, messageId, bubble) {
-            // Hide any existing menus immediately
-            hideContextMenu();
-            hideEmojiMenu();
-            
-            selectedMessage = bubble;
-            selectedMessageId = messageId;
-            contextMenuMessageId = messageId;
-            currentMessageToDelete = messageId; // Set this for delete functions
-            currentBubbleToDelete = bubble; // Set this for delete functions
-            
-            // Position calculation
-            const menuWidth = 160;
-            const menuHeight = 180;
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            
-            let adjustedX = Math.min(x, viewportWidth - menuWidth - 10);
-            let adjustedY = Math.min(y, viewportHeight - menuHeight - 10);
-            
-            // Show menu immediately
-            contextMenu.style.display = 'block';
-            contextMenu.style.left = adjustedX + 'px';
-            contextMenu.style.top = adjustedY + 'px';
-            
-            // Select bubble
-            document.querySelectorAll('.bubble.selected').forEach(b => b.classList.remove('selected'));
-            bubble.classList.add('selected');
-            
-            console.log('📱 Context menu shown for message:', messageId);
-        }
-
-        function hideContextMenu() {
-            contextMenu.style.display = 'none';
-            if (selectedMessage) {
-                selectedMessage.classList.remove('selected');
-                selectedMessage = null;
-            }
-            contextMenuMessageId = null;
-        }
-
-        function hideEmojiMenu() {
-            emojiMenu.style.display = 'none';
-        }
-
-        function showEmojiMenu() {
-            if (!selectedMessage || !contextMenuMessageId) return;
-            
-            const rect = selectedMessage.getBoundingClientRect();
-            const menuWidth = 240;
-            const menuHeight = 60;
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            
-            let adjustedX = rect.left + rect.width / 2 - menuWidth / 2;
-            let adjustedY = rect.top - menuHeight - 10;
-            
-            if (adjustedX < 10) adjustedX = 10;
-            if (adjustedX + menuWidth > viewportWidth) adjustedX = viewportWidth - menuWidth - 10;
-            if (adjustedY < 10) adjustedY = rect.bottom + 10;
-            
-            emojiMenu.style.display = 'block';
-            emojiMenu.style.left = adjustedX + 'px';
-            emojiMenu.style.top = adjustedY + 'px';
-            
-            hideContextMenu();
-        }
-
-        function copyMessage() {
-            if (!selectedMessage) return;
-            
-            const messageContent = selectedMessage.querySelector('div:first-child');
-            if (messageContent) {
-                const textToCopy = messageContent.textContent;
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                    showCopyFeedback('Copied to clipboard!');
-                }).catch(err => {
-                    console.error('Failed to copy: ', err);
-                    showCopyFeedback('Copy failed!');
-                });
-            }
-            
-            hideContextMenu();
-        }
-
-        function showCopyFeedback(message) {
-            const feedback = document.createElement('div');
-            feedback.className = 'copy-feedback';
-            feedback.textContent = message;
-            feedback.style.left = '50%';
-            feedback.style.top = '50%';
-            feedback.style.transform = 'translate(-50%, -50%)';
-            document.body.appendChild(feedback);
-            
-            setTimeout(() => {
-                document.body.removeChild(feedback);
-            }, 2000);
-        }
-
-        function addReaction(emoji) {
-            if (!contextMenuMessageId) return;
-            
-            // Send reaction via socket
-            socket.emit('add_reaction', {
-                message_id: contextMenuMessageId,
-                emoji: emoji,
-                user_phone: myPhone
-            });
-            
-            hideEmojiMenu();
-        }
-
-        function showDeleteOptionsFromContext() {
-            if (!contextMenuMessageId || !selectedMessage) return;
-            
-            currentMessageToDelete = contextMenuMessageId;
-            currentBubbleToDelete = selectedMessage;
-            
-            const canDeleteForEveryone = selectedMessage.classList.contains('sent');
-            const deleteForEveryoneBtn = document.getElementById('deleteForEveryoneBtn');
-            if (deleteForEveryoneBtn) {
-                deleteForEveryoneBtn.style.display = canDeleteForEveryone ? 'block' : 'none';
-            }
-            
-            document.getElementById('deleteOptionsModal').style.display = 'flex';
-            hideContextMenu();
-            
-            console.log('🗑️ Delete options for message:', currentMessageToDelete);
-        }
-
-        // ==================== ENHANCED MESSAGE LOADING ====================
-
-        function setupInfiniteScroll() {
-            chatDiv.addEventListener('scroll', function() {
-                if (chatDiv.scrollTop < 100 && !isLoading && hasMoreMessages) {
-                    loadMoreMessages();
-                }
-            });
-        }
-
-        async function loadMoreMessages() {
-            if (isLoading || !hasMoreMessages) return;
-            
-            isLoading = true;
-            currentPage++;
-            scrollPositionBeforeLoad = chatDiv.scrollHeight - chatDiv.scrollTop;
-            
-            loadingIndicator.classList.remove('hidden');
-            
-            try {
-                const response = await fetch(`/api/get_messages?user_phone=${encodeURIComponent(myPhone)}&contact_phone=${encodeURIComponent(contactPhone)}&page=${currentPage}&limit=50`);
-                const newMessages = await response.json();
-                
-                if (newMessages.length === 0) {
-                    hasMoreMessages = false;
-                    loadingIndicator.textContent = 'No more messages';
-                    return;
-                }
-                
-                // Prepend messages to chat
-                prependMessages(newMessages);
-                
-                // Restore scroll position
-                const newScrollHeight = chatDiv.scrollHeight;
-                chatDiv.scrollTop = newScrollHeight - scrollPositionBeforeLoad;
-                
-            } catch (error) {
-                console.error('Error loading more messages:', error);
-                currentPage--; // Revert page on error
-            } finally {
-                isLoading = false;
-                loadingIndicator.classList.add('hidden');
-                
-                // Re-initialize context menu for new messages
-                setTimeout(initializeContextMenuSystem, 100);
-            }
-        }
-
-        function prependMessages(messages) {
-            const fragment = document.createDocumentFragment();
-            let currentGroup = null;
-            let lastMessageSender = null;
-            
-            messages.reverse().forEach(message => {
-                if (message.is_deleted) {
-                    const deletedElement = createDeletedMessage(message.sender, message.id);
-                    fragment.prepend(deletedElement);
-                    lastMessageSender = null;
-                } else if (message.message_type === 'text') {
-                    if (message.sender !== lastMessageSender) {
-                        currentGroup = createMessageGroup(message.sender === String(myPhone));
-                        fragment.prepend(currentGroup);
-                    }
-                    const messageElement = createTextMessage(message);
-                    currentGroup.prepend(messageElement);
-                    lastMessageSender = message.sender;
-                } else {
-                    if (message.sender !== lastMessageSender) {
-                        currentGroup = createMessageGroup(message.sender === String(myPhone));
-                        fragment.prepend(currentGroup);
-                    }
-                    const messageElement = createMediaMessage(message);
-                    currentGroup.prepend(messageElement);
-                    lastMessageSender = message.sender;
-                }
-            });
-            
-            chatDiv.prepend(fragment);
-        }
-
-        function createMessageGroup(isSent) {
-            const group = document.createElement('div');
-            group.className = `message-group ${isSent ? 'sent-group' : 'received-group'}`;
-            return group;
-        }
-
-        function createTextMessage(message) {
-            const bubble = document.createElement('div');
-            bubble.className = `bubble ${message.sender === String(myPhone) ? 'sent' : 'received'} message-appear`;
-            bubble.dataset.messageId = message.id;
-
-            const messageContent = document.createElement('div');
-            messageContent.textContent = message.message;
-            bubble.appendChild(messageContent);
-
-            // Add reactions if any
-            if (message.reactions && message.reactions.length > 0) {
-                bubble.appendChild(createReactionsElement(message.reactions));
-            }
-
-            // Add status and time
-            if (message.sender === String(myPhone)) {
-                bubble.appendChild(createStatusElement(message.status));
-            }
-            bubble.appendChild(createTimeElement());
-
-            return bubble;
-        }
-
-        function createMediaMessage(message) {
-            const bubble = document.createElement('div');
-            bubble.className = `bubble ${message.sender === String(myPhone) ? 'sent' : 'received'} media-message message-appear`;
-            bubble.dataset.messageId = message.id;
-
-            // Media content will be added here based on message type
-            if (message.message_type === 'image') {
-                bubble.appendChild(createImageMessage(message));
-            } else if (message.message_type === 'video') {
-                bubble.appendChild(createVideoMessage(message));
-            } else {
-                bubble.appendChild(createFileMessage(message));
-            }
-
-            // Add reactions if any
-            if (message.reactions && message.reactions.length > 0) {
-                bubble.appendChild(createReactionsElement(message.reactions));
-            }
-
-            // Add status and time
-            if (message.sender === String(myPhone)) {
-                bubble.appendChild(createStatusElement(message.status));
-            }
-            bubble.appendChild(createTimeElement());
-
-            return bubble;
-        }
-
-        function createReactionsElement(reactions) {
-            const container = document.createElement('div');
-            container.className = 'message-reactions';
-            
-            const reactionCounts = {};
-            reactions.forEach(reaction => {
-                if (!reactionCounts[reaction.emoji]) {
-                    reactionCounts[reaction.emoji] = 0;
-                }
-                reactionCounts[reaction.emoji]++;
-            });
-
-            Object.entries(reactionCounts).forEach(([emoji, count]) => {
-                const reactionElement = document.createElement('div');
-                reactionElement.className = 'reaction';
-                reactionElement.innerHTML = `
-                    <span class="reaction-emoji">${emoji}</span>
-                    <span class="reaction-count">${count}</span>
-                `;
-                container.appendChild(reactionElement);
-            });
-
-            return container;
-        }
-
-        function createStatusElement(status) {
-            const statusDiv = document.createElement('div');
-            statusDiv.className = 'status';
-            statusDiv.textContent = status === 'seen' ? "✓✓ Seen" : (status === 'delivered') ? "✓ Delivered" : "✓ Sent";
-            return statusDiv;
-        }
-
-        function createTimeElement() {
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            return timeDiv;
-        }
-
-        function createDeletedMessage(sender, messageId) {
-            const bubble = document.createElement('div');
-            bubble.className = `bubble ${sender === String(myPhone) ? 'sent' : 'received'} deleted-message`;
-            bubble.dataset.messageId = messageId;
-
-            const messageContent = document.createElement('div');
-            messageContent.textContent = 'This message was deleted';
-            messageContent.style.fontStyle = 'italic';
-            messageContent.style.color = '#999';
-            bubble.appendChild(messageContent);
-
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            bubble.appendChild(timeDiv);
-
-            return bubble;
-        }
-
-        // ==================== EVENT LISTENERS ====================
+        // Join chat room
+        socket.emit('join_chat', {
+            user: myPhone,
+            contact: contactPhone
+        });
         
-        // Click outside to close context menu
-        document.addEventListener('click', function(e) {
-            if (contextMenu.style.display === 'block' && !contextMenu.contains(e.target)) {
-                hideContextMenu();
-            }
-            if (emojiMenu.style.display === 'block' && !emojiMenu.contains(e.target)) {
-                hideEmojiMenu();
-            }
-        });
-
-        // Prevent context menu from closing when clicking inside it
-        contextMenu.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-
-        emojiMenu.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-
-        // Close modals when clicking outside
-        document.getElementById('deleteOptionsModal').addEventListener('click', function(e) {
-            if (e.target === this) closeDeleteOptions();
-        });
-
-        document.getElementById('saveModal').addEventListener('click', function(e) {
-            if (e.target === this) closeSaveModal();
-        });
-
-        document.getElementById('fileUploadModal').addEventListener('click', function(e) {
-            if (e.target === this) closeFileUploadModal();
-        });
-
-        // Escape key to close menus
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeFileUploadModal();
-                closeSaveModal();
-                closeDeleteOptions();
-                closeMediaViewer();
-                hideContextMenu();
-                hideEmojiMenu();
-            }
-        });
-
-        // Load messages from API
+        // Load messages on page load
+        window.addEventListener('load', loadMessages);
+        
         function loadMessages() {
-            fetch(`/api/get_messages?user_phone=${encodeURIComponent(myPhone)}&contact_phone=${encodeURIComponent(contactPhone)}&page=1&limit=50`)
-                .then(response => response.json())
+            fetch(`/api/get_messages?user_phone=${encodeURIComponent(myPhone)}&contact_phone=${encodeURIComponent(contactPhone)}`)
+                .then(res => res.json())
                 .then(messages => {
-                    chatDiv.innerHTML = '<div id="loadingIndicator" class="loading-indicator hidden">Loading more messages...</div>';
-                    messageGroups = {};
-                    lastSender = null;
-
-                    messages.forEach(m => {
-                        if (!m.is_deleted) {
-                            if (m.message_type === 'text') {
-                                addMessage(m.sender, m.message, m.status, m.id, m.can_delete_for_everyone, m.reactions);
-                            } else {
-                                addMediaMessage(m.sender, m.message_type, m.file_path, m.file_name, m.file_size, m.status, m.id, m.can_delete_for_everyone, m.reactions);
-                            }
-                        } else {
-                            addDeletedMessage(m.sender, m.id);
-                        }
+                    chatDiv.innerHTML = '';
+                    messages.forEach(msg => {
+                        addMessageToChat(msg, false);
                     });
-
-                    chatDiv.scrollTop = chatDiv.scrollHeight;
-                    
-                    // Initialize infinite scroll and context menu
-                    setupInfiniteScroll();
-                    setTimeout(initializeContextMenuSystem, 100);
-                })
-                .catch(error => {
-                    console.error('Error loading messages:', error);
-                    const oldMessages = {{ messages|tojson }};
-                    oldMessages.forEach(m => {
-                        if (m.message_type === 'text' || !m.message_type) {
-                            addMessage(m.sender, m.message, m.status, m.id, m.sender === String(myPhone), []);
-                        } else {
-                            addMediaMessage(m.sender, m.message_type, m.file_path, m.file_name, m.file_size, m.status, m.id, m.sender === String(myPhone), []);
-                        }
-                    });
+                    scrollToBottom();
                 });
         }
-
-        // Initial load
-        loadMessages();
-
-        var socket = io({
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionAttempts: 5
-        });
-
-        function updateConnectionStatus(connected) {
-            isConnected = connected;
-            if (connected) {
-                statusDot.className = 'status-dot status-online';
-                statusText.textContent = 'Connected';
-            } else {
-                statusDot.className = 'status-dot status-offline';
-                statusText.textContent = 'Offline';
-            }
-        }
-
-        socket.on('connect', () => {
-            console.log('✅ Connected to server');
-            updateConnectionStatus(true);
-            socket.emit('join', {user: myPhone, contact: contactPhone});
-            markAllMessagesAsSeen();
-        });
-
-        // Modern Bottom Sheet File Upload Functions
-        function openFileUploadModal() {
-            fileUploadModal.style.display = 'flex';
-        }
-
-        function closeFileUploadModal() {
-            fileUploadModal.style.display = 'none';
-            fileInput.value = '';
-        }
-
-        // Background-এ ক্লিক করলে মডাল বন্ধ হোক
-        fileUploadModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeFileUploadModal();
-            }
-        });
-
-        function triggerFileInput(fileType) {
-            let accept = '';
-            switch(fileType) {
-                case 'image':
-                    accept = 'image/*';
-                    break;
-                case 'video':
-                    accept = 'video/*';
-                    break;
-                case 'document':
-                    accept = '*/*';
-                    break;
-            }
-            fileInput.accept = accept;
-            fileInput.onchange = function() {
-                if (this.files.length > 0) {
-                    uploadFile(this.files[0], fileType);
-                }
-            };
-            fileInput.click();
-            closeFileUploadModal();
-        }
-
-        // Enhanced file type detection
-        function getFileIcon(fileType, fileName) {
-            const extension = fileName.split('.').pop()?.toLowerCase();
+        
+        function addMessageToChat(msg, isNew = true) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${msg.sender === myPhone ? 'sent' : 'received'}`;
+            messageDiv.dataset.messageId = msg.id;
             
-            if (fileType === 'image') return '🖼️';
-            if (fileType === 'video') return '🎬';
-            
-            // Document type icons
-            const docIcons = {
-                'pdf': '📕',
-                'doc': '📘',
-                'docx': '📘',
-                'txt': '📝',
-                'ppt': '📊',
-                'pptx': '📊',
-                'xls': '📈',
-                'xlsx': '📈',
-                'zip': '📦',
-                'rar': '📦'
-            };
-            
-            return docIcons[extension] || '📄';
-        }
-
-        function getFileTypeClass(fileType) {
-            switch(fileType) {
-                case 'image': return 'photo';
-                case 'video': return 'video';
-                default: return 'document';
-            }
-        }
-
-        function uploadFile(file, fileType) {
-            if (!file) return;
-
-            // ফাইল সাইজ চেক (16MB = 16 * 1024 * 1024)
-            const maxSize = 16 * 1024 * 1024;
-            if (file.size > maxSize) {
-                alert('File size too large. Maximum size is 16MB.');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('sender', myPhone);
-            formData.append('receiver', contactPhone);
-
-            // Show uploading indicator
-            const tempMessageId = 'temp_' + Date.now();
-            addTempMediaMessage(file);
-
-            fetch('/upload_file', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Remove temp message and add real one
-                    removeTempMessage(tempMessageId);
-                    addMediaMessage(myPhone, data.file_type, data.file_path, data.file_name, data.file_size, 'sent', data.message_id, true, []);
-                    
-                    // Emit socket event for real-time update
-                    socket.emit('send_file_message', {
-                        sender: String(myPhone),
-                        receiver: String(contactPhone),
-                        message_type: data.file_type,
-                        file_path: data.file_path,
-                        file_name: data.file_name,
-                        file_size: data.file_size,
-                        message_id: data.message_id,
-                        timestamp: new Date().toISOString()
-                    });
-                } else {
-                    throw new Error(data.error || 'Upload failed');
-                }
-            })
-            .catch(error => {
-                console.error('Upload error:', error);
-                removeTempMessage(tempMessageId);
-                alert('File upload failed: ' + error.message);
-            });
-        }
-
-        function addTempMediaMessage(file) {
-            const isSent = true;
-            const messageGroupId = 'sent';
-
-            if (!messageGroups[messageGroupId]) {
-                messageGroups[messageGroupId] = document.createElement('div');
-                messageGroups[messageGroupId].className = `message-group ${isSent ? 'sent-group' : 'received-group'}`;
-                chatDiv.appendChild(messageGroups[messageGroupId]);
-            }
-
-            const bubble = document.createElement('div');
-            bubble.className = `bubble ${isSent ? 'sent' : 'received'} message-appear`;
-            bubble.id = 'temp_' + Date.now();
-
-            const messageContent = document.createElement('div');
-            messageContent.textContent = `Uploading ${file.name}...`;
-            messageContent.style.fontStyle = 'italic';
-            messageContent.style.color = '#666';
-            bubble.appendChild(messageContent);
-
-            messageGroups[messageGroupId].appendChild(bubble);
-            chatDiv.scrollTop = chatDiv.scrollHeight;
-        }
-
-        function removeTempMessage(messageId) {
-            const tempElement = document.getElementById(messageId);
-            if (tempElement) {
-                tempElement.remove();
-            }
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        function downloadFile(filePath, fileName) {
-            const link = document.createElement('a');
-            link.href = `/uploads/${filePath}`;
-            link.download = fileName;
-            link.click();
-        }
-
-        function viewMedia(filePath, mediaType) {
-            const mediaUrl = `/uploads/${filePath}`;
-            
-            if (mediaType === 'image') {
-                viewerImage.src = mediaUrl;
-                viewerImage.style.display = 'block';
-                viewerVideo.style.display = 'none';
-            } else if (mediaType === 'video') {
-                viewerVideo.src = mediaUrl;
-                viewerVideo.style.display = 'block';
-                viewerImage.style.display = 'none';
-            }
-            
-            mediaViewer.style.display = 'flex';
-        }
-
-        function closeMediaViewer() {
-            mediaViewer.style.display = 'none';
-            viewerVideo.pause();
-        }
-
-        // Enhanced media message display
-        function addMediaMessage(sender, messageType, filePath, fileName, fileSize, status, messageId = null, canDeleteForEveryone = false, reactions = []) {
-            const isSent = sender === String(myPhone);
-            const messageGroupId = isSent ? 'sent' : 'received';
-
-            if (!messageGroups[messageGroupId]) {
-                messageGroups[messageGroupId] = document.createElement('div');
-                messageGroups[messageGroupId].className = `message-group ${isSent ? 'sent-group' : 'received-group'}`;
-                chatDiv.appendChild(messageGroups[messageGroupId]);
-            }
-
-            const bubble = document.createElement('div');
-            bubble.className = `bubble ${isSent ? 'sent' : 'received'} media-message message-appear`;
-            if (messageId) {
-                bubble.dataset.messageId = messageId;
-            } else {
-                // Generate temporary ID if none provided
-                bubble.dataset.messageId = 'temp_' + Date.now();
-            }
-
-            const fileIcon = getFileIcon(messageType, fileName);
-            const fileTypeClass = getFileTypeClass(messageType);
-
-            if (messageType === 'image') {
-                const mediaContainer = document.createElement('div');
-                mediaContainer.style.position = 'relative';
-                
-                const mediaPreview = document.createElement('div');
-                mediaPreview.className = 'media-preview';
-                mediaPreview.onclick = () => viewMedia(filePath, 'image');
-                
-                const img = document.createElement('img');
-                img.src = `/uploads/${filePath}`;
-                img.alt = fileName;
-                img.loading = 'lazy';
-                
-                mediaPreview.appendChild(img);
-                mediaContainer.appendChild(mediaPreview);
-                
-                const mediaInfo = document.createElement('div');
-                mediaInfo.className = 'media-info';
-                
-                const fileNameDiv = document.createElement('div');
-                fileNameDiv.className = 'media-filename';
-                fileNameDiv.textContent = fileName;
-                
-                const metadataDiv = document.createElement('div');
-                metadataDiv.className = 'media-metadata';
-                
-                const sizeDiv = document.createElement('div');
-                sizeDiv.className = 'media-size';
-                sizeDiv.textContent = formatFileSize(fileSize);
-                
-                const typeDiv = document.createElement('div');
-                typeDiv.className = 'media-type';
-                typeDiv.textContent = 'IMAGE';
-                
-                metadataDiv.appendChild(sizeDiv);
-                metadataDiv.appendChild(typeDiv);
-                
-                mediaInfo.appendChild(fileNameDiv);
-                mediaInfo.appendChild(metadataDiv);
-                mediaContainer.appendChild(mediaInfo);
-                
-                bubble.appendChild(mediaContainer);
-                
-            } else if (messageType === 'video') {
-                const mediaContainer = document.createElement('div');
-                mediaContainer.style.position = 'relative';
-                
-                const mediaPreview = document.createElement('div');
-                mediaPreview.className = 'media-preview';
-                mediaPreview.onclick = () => viewMedia(filePath, 'video');
-                
-                const video = document.createElement('video');
-                video.src = `/uploads/${filePath}`;
-                video.alt = fileName;
-                video.controls = false;
-                
-                // Add play icon overlay
-                const playOverlay = document.createElement('div');
-                playOverlay.style.cssText = `
-                    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                    background: rgba(0,0,0,0.7); border-radius: 50%; width: 50px; height: 50px;
-                    display: flex; align-items: center; justify-content: center; color: white;
-                    font-size: 20px; pointer-events: none;
+            // If message is deleted, show deleted placeholder
+            if (msg.is_deleted || msg.message === "This message was deleted") {
+                messageDiv.classList.add('deleted');
+                messageDiv.innerHTML = `
+                    <div style="color: #999; font-style: italic;">This message was deleted</div>
+                    <div style="font-size: 10px; color: #999; margin-top: 5px;">
+                        ${new Date(msg.timestamp).toLocaleTimeString()}
+                    </div>
                 `;
-                playOverlay.innerHTML = '▶';
-                
-                mediaPreview.appendChild(video);
-                mediaPreview.appendChild(playOverlay);
-                mediaContainer.appendChild(mediaPreview);
-                
-                const mediaInfo = document.createElement('div');
-                mediaInfo.className = 'media-info';
-                
-                const fileNameDiv = document.createElement('div');
-                fileNameDiv.className = 'media-filename';
-                fileNameDiv.textContent = fileName;
-                
-                const metadataDiv = document.createElement('div');
-                metadataDiv.className = 'media-metadata';
-                
-                const sizeDiv = document.createElement('div');
-                sizeDiv.className = 'media-size';
-                sizeDiv.textContent = formatFileSize(fileSize);
-                
-                const typeDiv = document.createElement('div');
-                typeDiv.className = 'media-type';
-                typeDiv.textContent = 'VIDEO';
-                
-                metadataDiv.appendChild(sizeDiv);
-                metadataDiv.appendChild(typeDiv);
-                
-                mediaInfo.appendChild(fileNameDiv);
-                mediaInfo.appendChild(metadataDiv);
-                mediaContainer.appendChild(mediaInfo);
-                
-                bubble.appendChild(mediaContainer);
-                
             } else {
-                // Document file with enhanced styling
-                const fileMessage = document.createElement('div');
-                fileMessage.className = 'file-message';
-                fileMessage.onclick = () => downloadFile(filePath, fileName);
+                // Normal message
+                messageDiv.innerHTML = `
+                    <div>${msg.message}</div>
+                    <div style="font-size: 10px; color: #666; margin-top: 5px; display: flex; justify-content: space-between;">
+                        <span>${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                        ${msg.sender === myPhone ? `<span>${msg.status === 'seen' ? '✓✓' : '✓'}</span>` : ''}
+                    </div>
+                `;
                 
-                const fileIconDiv = document.createElement('div');
-                fileIconDiv.className = `file-icon ${fileTypeClass}`;
-                fileIconDiv.innerHTML = fileIcon;
-                
-                const fileInfo = document.createElement('div');
-                fileInfo.className = 'file-info';
-                
-                const fileNameDiv = document.createElement('div');
-                fileNameDiv.className = 'file-name';
-                fileNameDiv.textContent = fileName;
-                
-                const fileDetails = document.createElement('div');
-                fileDetails.className = 'file-details';
-                
-                const fileSizeDiv = document.createElement('div');
-                fileSizeDiv.className = 'file-size';
-                fileSizeDiv.textContent = formatFileSize(fileSize);
-                
-                const fileTypeDiv = document.createElement('div');
-                fileTypeDiv.className = 'file-type';
-                fileTypeDiv.textContent = messageType.toUpperCase();
-                
-                fileDetails.appendChild(fileSizeDiv);
-                fileDetails.appendChild(fileTypeDiv);
-                
-                fileInfo.appendChild(fileNameDiv);
-                fileInfo.appendChild(fileDetails);
-                
-                const downloadBtn = document.createElement('button');
-                downloadBtn.className = 'download-btn';
-                downloadBtn.innerHTML = '📥 Download';
-                downloadBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    downloadFile(filePath, fileName);
-                };
-                
-                fileMessage.appendChild(fileIconDiv);
-                fileMessage.appendChild(fileInfo);
-                fileMessage.appendChild(downloadBtn);
-                
-                bubble.appendChild(fileMessage);
-            }
-
-            // Add reactions if any
-            if (reactions && reactions.length > 0) {
-                const reactionsContainer = document.createElement('div');
-                reactionsContainer.className = 'message-reactions';
-                
-                // Group reactions by emoji
-                const reactionCounts = {};
-                reactions.forEach(reaction => {
-                    if (!reactionCounts[reaction.emoji]) {
-                        reactionCounts[reaction.emoji] = 0;
-                    }
-                    reactionCounts[reaction.emoji]++;
-                });
-
-                // Create reaction elements
-                Object.entries(reactionCounts).forEach(([emoji, count]) => {
-                    const reactionElement = document.createElement('div');
-                    reactionElement.className = 'reaction';
-                    reactionElement.innerHTML = `
-                        <span class="reaction-emoji">${emoji}</span>
-                        <span class="reaction-count">${count}</span>
-                    `;
-                    reactionsContainer.appendChild(reactionElement);
-                });
-
-                bubble.appendChild(reactionsContainer);
-            }
-
-            if (isSent) {
-                const statusDiv = document.createElement('div');
-                statusDiv.className = 'status';
-                statusDiv.textContent = (status === 'seen') ? "✓✓ Seen" : (status === 'delivered') ? "✓ Delivered" : "✓ Sent";
-                bubble.appendChild(statusDiv);
-            }
-
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            const now = new Date();
-            timeDiv.textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            bubble.appendChild(timeDiv);
-
-            messageGroups[messageGroupId].appendChild(bubble);
-
-            if (lastSender !== sender) {
-                messageGroups = {};
-                messageGroups[messageGroupId] = document.createElement('div');
-                messageGroups[messageGroupId].className = `message-group ${isSent ? 'sent-group' : 'received-group'}`;
-                chatDiv.appendChild(messageGroups[messageGroupId]);
-                messageGroups[messageGroupId].appendChild(bubble);
-            }
-
-            lastSender = sender;
-            chatDiv.scrollTop = chatDiv.scrollHeight;
-
-            if (!isSent) {
-                setTimeout(() => {
-                    markAllMessagesAsSeen();
-                }, 500);
-            }
-        }
-
-        // Close media viewer when clicking outside
-        mediaViewer.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeMediaViewer();
-            }
-        });
-
-        // Delete message functions - FIXED VERSION
-        function deleteMessageForMe() {
-            if (!currentMessageToDelete) {
-                console.error('❌ No message to delete');
-                return;
-            }
-
-            console.log('🗑️ Deleting message for me:', currentMessageToDelete);
-
-            fetch('/api/delete_message', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message_id: currentMessageToDelete,
-                    user_phone: myPhone,
-                    delete_type: 'for_me'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('✅ Delete for me successful');
-                    // Remove message from UI immediately
-                    if (currentBubbleToDelete) {
-                        currentBubbleToDelete.remove();
-                    }
-                } else {
-                    console.error('❌ Delete failed:', data.error);
-                    alert('Error: ' + (data.error || 'Failed to delete message'));
-                }
-            })
-            .catch(error => {
-                console.error('❌ Error deleting message:', error);
-                alert('Error deleting message');
-            })
-            .finally(() => {
-                closeDeleteOptions();
-            });
-        }
-
-        function deleteMessageForEveryone() {
-            if (!currentMessageToDelete) {
-                console.error('❌ No message to delete');
-                return;
-            }
-
-            console.log('🗑️ Deleting message for everyone:', currentMessageToDelete);
-
-            fetch('/api/delete_message', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message_id: currentMessageToDelete,
-                    user_phone: myPhone,
-                    delete_type: 'for_everyone'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('✅ Delete for everyone successful');
-                    // Update UI to show deleted message
-                    if (currentBubbleToDelete) {
-                        currentBubbleToDelete.classList.add('deleted-message');
-                        const messageContent = currentBubbleToDelete.querySelector('div:first-child');
-                        if (messageContent) {
-                            messageContent.textContent = 'This message was deleted';
-                            messageContent.style.fontStyle = 'italic';
-                            messageContent.style.color = '#999';
-                        }
+                // Add right-click context menu for messages I sent
+                if (msg.sender === myPhone) {
+                    messageDiv.addEventListener('contextmenu', function(e) {
+                        e.preventDefault();
+                        currentDeleteMessageId = msg.id;
+                        currentDeleteMessageElement = this;
                         
-                        // Remove reactions
-                        const reactionsContainer = currentBubbleToDelete.querySelector('.message-reactions');
-                        if (reactionsContainer) {
-                            reactionsContainer.remove();
-                        }
+                        // Show delete for everyone button only for messages I sent
+                        document.getElementById('deleteForEveryoneBtn').style.display = 'block';
                         
-                        // Remove status indicator
-                        const statusDiv = currentBubbleToDelete.querySelector('.status');
-                        if (statusDiv) {
-                            statusDiv.remove();
-                        }
-                    }
-                } else {
-                    console.error('❌ Delete failed:', data.error);
-                    alert('Error: ' + (data.error || 'Failed to delete message'));
-                }
-            })
-            .catch(error => {
-                console.error('❌ Error deleting message:', error);
-                alert('Error deleting message');
-            })
-            .finally(() => {
-                closeDeleteOptions();
-            });
-        }
-
-        function closeDeleteOptions() {
-            document.getElementById('deleteOptionsModal').style.display = 'none';
-            currentMessageToDelete = null;
-            currentBubbleToDelete = null;
-        }
-
-        // Socket event listeners for real-time delete updates - FIXED VERSION
-        socket.on('delete_success', function(data) {
-            console.log('✅ Delete success received:', data);
-            
-            // Check if this delete event is for the current user
-            const isForMe = data.delete_type === 'for_me' && data.user_phone === myPhone;
-            const isForEveryone = data.delete_type === 'for_everyone';
-            
-            if (isForMe || isForEveryone) {
-                const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
-                
-                if (messageElement) {
-                    if (isForMe) {
-                        // Remove completely for "delete for me"
-                        messageElement.remove();
-                        console.log('🗑️ Message removed for me:', data.message_id);
-                    } else if (isForEveryone) {
-                        // Show "This message was deleted" for "delete for everyone"
-                        if (!messageElement.classList.contains('deleted-message')) {
-                            messageElement.classList.add('deleted-message');
-                            const messageContent = messageElement.querySelector('div:first-child');
-                            if (messageContent) {
-                                messageContent.textContent = 'This message was deleted';
-                                messageContent.style.fontStyle = 'italic';
-                                messageContent.style.color = '#999';
-                            }
-                            
-                            // Remove reactions from deleted message
-                            const reactionsContainer = messageElement.querySelector('.message-reactions');
-                            if (reactionsContainer) {
-                                reactionsContainer.remove();
-                            }
-                            
-                            // Remove status indicator
-                            const statusDiv = messageElement.querySelector('.status');
-                            if (statusDiv) {
-                                statusDiv.remove();
-                            }
-                            
-                            console.log('🗑️ Message marked as deleted for everyone:', data.message_id);
-                        }
-                    }
+                        const contextMenu = document.getElementById('contextMenu');
+                        contextMenu.style.left = e.pageX + 'px';
+                        contextMenu.style.top = e.pageY + 'px';
+                        contextMenu.style.display = 'block';
+                    });
                 }
             }
-        });
-
-        socket.on('disconnect', () => {
-            console.log('❌ Disconnected from server');
-            updateConnectionStatus(false);
-        });
-
-        socket.on('connect_error', (error) => {
-            console.error('Connection error:', error);
-            updateConnectionStatus(false);
-        });
-
-        messageInput.addEventListener('input', ()=>{
-            if(!isConnected) return;
-            socket.emit('typing', {actor: myPhone, target: contactPhone});
-            clearTimeout(typingTimeout);
-            typingTimeout = setTimeout(()=>{
-                socket.emit('stop_typing', {actor: myPhone, target: contactPhone});
-            }, 2000);
-        });
-
-        socket.on('typing', data=>{
-            if(data.actor === contactPhone) typingDiv.textContent = 'Typing...';
-        });
-
-        socket.on('stop_typing', data=>{
-            if(data.actor === contactPhone) typingDiv.textContent = '';
-        });
-
-        function addMessage(sender, msg, status, messageId = null, canDeleteForEveryone = false, reactions = []) {
-            const isSent = sender === String(myPhone);
-            const messageGroupId = isSent ? 'sent' : 'received';
-
-            if (!messageGroups[messageGroupId]) {
-                messageGroups[messageGroupId] = document.createElement('div');
-                messageGroups[messageGroupId].className = `message-group ${isSent ? 'sent-group' : 'received-group'}`;
-                chatDiv.appendChild(messageGroups[messageGroupId]);
-            }
-
-            const bubble = document.createElement('div');
-            bubble.className = `bubble ${isSent ? 'sent' : 'received'} message-appear`;
             
-            // CRITICAL: Ensure messageId is properly set for context menu
-            if (messageId) {
-                bubble.dataset.messageId = messageId;
+            if (isNew) {
+                messageDiv.style.animation = 'fadeIn 0.3s';
+                chatDiv.appendChild(messageDiv);
+                scrollToBottom();
             } else {
-                // Generate temporary ID if none provided
-                bubble.dataset.messageId = 'temp_' + Date.now();
+                chatDiv.appendChild(messageDiv);
             }
-
-            const messageContent = document.createElement('div');
-            messageContent.textContent = msg;
-            bubble.appendChild(messageContent);
-
-            // Add reactions if any
-            if (reactions && reactions.length > 0) {
-                const reactionsContainer = document.createElement('div');
-                reactionsContainer.className = 'message-reactions';
-                
-                // Group reactions by emoji
-                const reactionCounts = {};
-                reactions.forEach(reaction => {
-                    if (!reactionCounts[reaction.emoji]) {
-                        reactionCounts[reaction.emoji] = 0;
-                    }
-                    reactionCounts[reaction.emoji]++;
-                });
-
-                // Create reaction elements
-                Object.entries(reactionCounts).forEach(([emoji, count]) => {
-                    const reactionElement = document.createElement('div');
-                    reactionElement.className = 'reaction';
-                    reactionElement.innerHTML = `
-                        <span class="reaction-emoji">${emoji}</span>
-                        <span class="reaction-count">${count}</span>
-                    `;
-                    reactionsContainer.appendChild(reactionElement);
-                });
-
-                bubble.appendChild(reactionsContainer);
-            }
-
-            if (isSent) {
-                const statusDiv = document.createElement('div');
-                statusDiv.className = 'status';
-                statusDiv.textContent = (status === 'seen') ? "✓✓ Seen" : (status === 'delivered') ? "✓ Delivered" : "✓ Sent";
-                bubble.appendChild(statusDiv);
-            }
-
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            const now = new Date();
-            timeDiv.textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            bubble.appendChild(timeDiv);
-
-            messageGroups[messageGroupId].appendChild(bubble);
-
-            if (lastSender !== sender) {
-                messageGroups = {};
-                messageGroups[messageGroupId] = document.createElement('div');
-                messageGroups[messageGroupId].className = `message-group ${isSent ? 'sent-group' : 'received-group'}`;
-                chatDiv.appendChild(messageGroups[messageGroupId]);
-                messageGroups[messageGroupId].appendChild(bubble);
-            }
-
-            lastSender = sender;
+        }
+        
+        function scrollToBottom() {
             chatDiv.scrollTop = chatDiv.scrollHeight;
-
-            if (!isSent) {
-                setTimeout(() => {
-                    markAllMessagesAsSeen();
-                }, 500);
-            }
         }
-
-        function addDeletedMessage(sender, messageId) {
-            const isSent = sender === String(myPhone);
-            const messageGroupId = isSent ? 'sent' : 'received';
-
-            if (!messageGroups[messageGroupId]) {
-                messageGroups[messageGroupId] = document.createElement('div');
-                messageGroups[messageGroupId].className = `message-group ${isSent ? 'sent-group' : 'received-group'}`;
-                chatDiv.appendChild(messageGroups[messageGroupId]);
-            }
-
-            const bubble = document.createElement('div');
-            bubble.className = `bubble ${isSent ? 'sent' : 'received'} deleted-message`;
-            bubble.dataset.messageId = messageId;
-
-            const messageContent = document.createElement('div');
-            messageContent.textContent = 'This message was deleted';
-            messageContent.style.fontStyle = 'italic';
-            messageContent.style.color = '#999';
-            bubble.appendChild(messageContent);
-
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            bubble.appendChild(timeDiv);
-
-            messageGroups[messageGroupId].appendChild(bubble);
-        }
-
+        
+        // Message sending
         function sendMessage() {
-            const msg = messageInput.value.trim();
-            if(!msg) return;
-            if(!isConnected) {
-                alert('You are offline. Please check your internet connection.');
-                return;
-            }
+            const messageInput = document.getElementById('message');
+            const text = messageInput.value.trim();
+            
+            if (!text) return;
+            
+            // Add temporary message to UI
+            const tempMsg = {
+                id: 'temp_' + Date.now(),
+                sender: myPhone,
+                receiver: contactPhone,
+                message: text,
+                timestamp: new Date().toISOString(),
+                status: 'sent'
+            };
+            
+            addMessageToChat(tempMsg);
             messageInput.value = '';
-            resetTextareaHeight();
-            addMessage(String(myPhone), msg, 'sent');
-            try {
-                socket.emit('send_message', {
-                    sender: String(myPhone),
-                    receiver: String(contactPhone),
-                    message: msg,
-                    timestamp: new Date().toISOString()
-                });
-            } catch(error) {
-                console.error('Error sending message:', error);
-                alert('Failed to send message');
-            }
+            
+            // Send via socket
+            socket.emit('send_message', {
+                sender: myPhone,
+                receiver: contactPhone,
+                message: text
+            });
         }
-
-        messageInput.addEventListener('keydown', function(e) {
-            if(e.key === "Enter" && !e.shiftKey) {
+        
+        // Enter key to send
+        document.getElementById('message').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
         });
-
-        socket.on('receive_message', data => {
-            if(data.sender === String(contactPhone)) {
-                addMessage(data.sender, data.message, 'delivered', data.id, false, []);
-                setTimeout(() => {
-                    markAllMessagesAsSeen();
-                    // Re-initialize context menu for the new message
-                    initializeContextMenuSystem();
-                }, 100);
+        
+        // Receive messages via socket
+        socket.on('receive_message', function(data) {
+            if (data.sender === contactPhone) {
+                addMessageToChat({
+                    id: data.id || 'temp_' + Date.now(),
+                    sender: data.sender,
+                    receiver: data.receiver,
+                    message: data.message,
+                    timestamp: data.timestamp || new Date().toISOString(),
+                    status: 'delivered'
+                });
             }
         });
-
-        socket.on('receive_file_message', data => {
-            if(data.sender === String(contactPhone)) {
-                addMediaMessage(data.sender, data.message_type, data.file_path, data.file_name, data.file_size, 'delivered', data.message_id, false, []);
-                setTimeout(() => {
-                    markAllMessagesAsSeen();
-                    // Re-initialize context menu for the new message
-                    initializeContextMenuSystem();
-                }, 100);
-            }
-        });
-
-        // Handle reaction events from socket
-        socket.on('reaction_updated', function(data) {
-            // Reload messages to show updated reactions
-            loadMessages();
-        });
-
-        socket.on('message_seen_confirmation', data => {
-            if(data.receiver === String(myPhone)) {
-                updateAllSentMessagesStatus('seen');
-            }
+        
+        // ============= INSTANT DELETE SYSTEM =============
+        
+        function showDeleteOptions() {
+            document.getElementById('contextMenu').style.display = 'none';
+            document.getElementById('deleteModal').style.display = 'flex';
         }
-
-        function updateAllSentMessagesStatus(status) {
-            const sentMessages = document.querySelectorAll('#chat .bubble.sent');
-            sentMessages.forEach(bubble => {
-                const statusDiv = bubble.querySelector('.status');
-                if(statusDiv && !bubble.classList.contains('deleted-message')) {
-                    if(status === 'seen') {
-                        statusDiv.textContent = "✓✓ Seen";
-                    } else if(status === 'delivered') {
-                        statusDiv.textContent = "✓ Delivered";
-                    }
-                }
-            });
+        
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+            currentDeleteMessageId = null;
+            currentDeleteMessageElement = null;
         }
-
-        socket.on('error', data => {
-            console.error('Socket error:', data);
-            alert('An error occurred: ' + (data.message || 'Unknown error'));
-        });
-
-        function openSaveModal() {
-            document.getElementById("saveModal").style.display = "flex";
-        }
-
-        function closeSaveModal() {
-            document.getElementById("saveModal").style.display = "none";
-        }
-
-        // Contact save form handling
-        document.getElementById('saveContactForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const formData = new FormData(this);
-            const saveBtn = this.querySelector('.modal-btn.primary');
-            const originalText = saveBtn.textContent;
-
-            saveBtn.textContent = 'Saving...';
-            saveBtn.disabled = true;
-
-            fetch('/add_contact', {
+        
+        function deleteForMe() {
+            if (!currentDeleteMessageId || !currentDeleteMessageElement) return;
+            
+            console.log('🗑️ Deleting for me:', currentDeleteMessageId);
+            
+            // INSTANT UI UPDATE - Mark as deleted immediately
+            currentDeleteMessageElement.classList.add('deleted');
+            currentDeleteMessageElement.innerHTML = `
+                <div style="color: #999; font-style: italic;">This message was deleted</div>
+                <div style="font-size: 10px; color: #999; margin-top: 5px;">
+                    ${new Date().toLocaleTimeString()}
+                </div>
+            `;
+            
+            // Send delete request
+            fetch('/api/delete_message', {
                 method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message_id: currentDeleteMessageId,
+                    user_phone: myPhone,
+                    delete_type: 'for_me'
+                })
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    closeSaveModal();
-                    alert('Contact saved successfully!');
-                    const newName = formData.get('contact_name');
-                    updateContactNameInHeader(newName);
-                } else {
-                    throw new Error(data.error || 'Save failed');
-                }
-            })
-            .catch(error => {
-                console.error('Error saving contact:', error);
-                alert('Error saving contact: ' + error.message);
-            })
-            .finally(() => {
-                saveBtn.textContent = originalText;
-                saveBtn.disabled = false;
-            });
-        });
-
-        function updateContactNameInHeader(newName) {
-            const contactNameElement = document.querySelector('.contact-name');
-            const contactAvatar = document.querySelector('.contact-avatar');
-
-            if (contactNameElement) {
-                contactNameElement.textContent = newName;
-            }
-
-            if (contactAvatar) {
-                contactAvatar.textContent = newName[0].toUpperCase();
-            }
-
-            const saveBtn = document.getElementById('saveBtn');
-            if (saveBtn) {
-                saveBtn.style.display = 'none';
-            }
-        }
-
-        function markAllMessagesAsSeen() {
-            const receivedMessages = document.querySelectorAll('#chat .bubble.received');
-            if (receivedMessages.length > 0) {
-                const now = Date.now();
-                if (now - lastMarkedSeenTime > 1000) {
-                    socket.emit('mark_seen', {
-                        sender: contactPhone,
-                        receiver: myPhone
+                    console.log('✅ Delete successful');
+                    
+                    // Emit socket event for other user
+                    socket.emit('message_deleted', {
+                        message_id: currentDeleteMessageId,
+                        sender: data.sender,
+                        receiver: data.receiver,
+                        delete_type: 'for_me',
+                        deleted_by: myPhone
                     });
-                    lastMarkedSeenTime = now;
                 }
-            }
+            });
+            
+            closeDeleteModal();
         }
-
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden) {
-                markAllMessagesAsSeen();
-            }
-        });
-
-        chatDiv.addEventListener('scroll', function() {
-            markAllMessagesAsSeen();
-        });
-
-        chatDiv.addEventListener('click', markAllMessagesAsSeen);
-
-        // ==================== INITIALIZATION ====================
         
-        // Initialize everything on page load
-        window.addEventListener('load', function() {
-            console.log('🚀 Page loaded, initializing all systems...');
+        function deleteForEveryone() {
+            if (!currentDeleteMessageId || !currentDeleteMessageElement) return;
             
-            // Load messages first
-            loadMessages();
+            console.log('🗑️ Deleting for everyone:', currentDeleteMessageId);
             
-            // Then initialize context menu system and infinite scroll
-            setTimeout(() => {
-                initializeContextMenuSystem();
-                setupInfiniteScroll();
-                console.log('✅ All systems initialized successfully');
-                console.log('🎯 Single tap will NOT open context menu now!');
-            }, 500);
-        });
-
-        // Re-initialize when coming back from background (for mobile)
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden) {
-                setTimeout(initializeContextMenuSystem, 100);
+            // INSTANT UI UPDATE - Mark as deleted immediately for BOTH users
+            currentDeleteMessageElement.classList.add('deleted');
+            currentDeleteMessageElement.innerHTML = `
+                <div style="color: #999; font-style: italic;">This message was deleted</div>
+                <div style="font-size: 10px; color: #999; margin-top: 5px;">
+                    ${new Date().toLocaleTimeString()}
+                </div>
+            `;
+            
+            // Send delete request
+            fetch('/api/delete_message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message_id: currentDeleteMessageId,
+                    user_phone: myPhone,
+                    delete_type: 'for_everyone'
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('✅ Delete for everyone successful');
+                    
+                    // Emit socket event for other user
+                    socket.emit('message_deleted', {
+                        message_id: currentDeleteMessageId,
+                        sender: data.sender,
+                        receiver: data.receiver,
+                        delete_type: 'for_everyone',
+                        deleted_by: myPhone,
+                        room: data.room
+                    });
+                }
+            });
+            
+            closeDeleteModal();
+        }
+        
+        // Listen for delete events from other user
+        socket.on('message_deleted', function(data) {
+            console.log('⚡ Received delete event:', data);
+            
+            const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+            
+            if (messageElement) {
+                if (data.delete_type === 'for_everyone') {
+                    // Update UI INSTANTLY - no refresh needed
+                    messageElement.classList.add('deleted');
+                    messageElement.innerHTML = `
+                        <div style="color: #999; font-style: italic;">This message was deleted</div>
+                        <div style="font-size: 10px; color: #999; margin-top: 5px;">
+                            ${new Date().toLocaleTimeString()}
+                        </div>
+                    `;
+                    console.log('✅ UI updated instantly for other user!');
+                } else if (data.delete_type === 'for_me' && data.deleted_by === myPhone) {
+                    // Only remove if I deleted it for myself
+                    messageElement.remove();
+                }
+            } else {
+                console.log('⚠️ Message element not found, reloading messages...');
+                loadMessages();
             }
         });
-
+        
+        // Close context menu when clicking elsewhere
+        document.addEventListener('click', function() {
+            document.getElementById('contextMenu').style.display = 'none';
+        });
+        
+        function copyMessage() {
+            // Copy message text
+            document.getElementById('contextMenu').style.display = 'none';
+        }
+        
+        function goBack() {
+            window.history.back();
+        }
+        
         // Auto-resize textarea
-        setTimeout(autoResizeTextarea, 100);
-
-        console.log('✅ Fixed chat page loaded successfully');
+        document.getElementById('message').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+        
+        console.log('✅ INSTANT DELETE SYSTEM LOADED');
+        console.log('🔥 No refresh needed - updates happen instantly!');
+        console.log('✅ Both users will see delete immediately!');
     </script>
 </body>
 </html>"""
@@ -4559,373 +2171,151 @@ def chat_page(contact_phone):
             c = conn.cursor()
             c.execute("SELECT contact_name FROM contacts WHERE user_phone=? AND contact_phone=?", (phone, contact_phone))
             row = c.fetchone()
-            c.execute("""
-                SELECT id, sender, receiver, message, encrypted_message, status, timestamp,
-                       message_type, file_path, file_name, file_size, thumbnail_path
-                FROM messages
-                WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?)
-                ORDER BY timestamp ASC
-                LIMIT 100
-            """, (phone, contact_phone, contact_phone, phone))
-            messages_data = c.fetchall()
-
-            # Process messages
-            messages = []
-            for m in messages_data:
-                message_id, sender, receiver, plaintext, encrypted, status, timestamp, message_type, file_path, file_name, file_size, thumbnail_path = m
-
-                # Handle different message types
-                if message_type == 'text':
-                    # Use encrypted message if available, otherwise use plaintext
-                    if encrypted:
-                        try:
-                            decrypted_message = encryptor.decrypt_message(encrypted, sender, receiver)
-                            messages.append({
-                                "id": message_id,
-                                "sender": sender,
-                                "receiver": receiver,
-                                "message": decrypted_message,
-                                "status": status,
-                                "timestamp": timestamp,
-                                "message_type": "text"
-                            })
-                        except Exception as e:
-                            print(f"❌ Decryption failed for message {message_id}: {e}")
-                            messages.append({
-                                "id": message_id,
-                                "sender": sender,
-                                "receiver": receiver,
-                                "message": "🔒 [Encrypted message]",
-                                "status": status,
-                                "timestamp": timestamp,
-                                "message_type": "text"
-                            })
-                    else:
-                        messages.append({
-                            "id": message_id,
-                            "sender": sender,
-                            "receiver": receiver,
-                            "message": plaintext,
-                            "status": status,
-                            "timestamp": timestamp,
-                            "message_type": "text"
-                        })
-                else:
-                    # File message
-                    messages.append({
-                        "id": message_id,
-                        "sender": sender,
-                        "receiver": receiver,
-                        "message": f"Sent a {message_type}",
-                        "status": status,
-                        "timestamp": timestamp,
-                        "message_type": message_type,
-                        "file_path": file_path,
-                        "file_name": file_name,
-                        "file_size": file_size,
-                        "thumbnail_path": thumbnail_path
-                    })
-
+            
+            # Mark messages as seen
             c.execute("UPDATE messages SET status='seen' WHERE receiver=? AND sender=? AND status!='seen'", (phone, contact_phone))
             conn.commit()
         finally:
             return_db_connection(conn)
         contact_name = row[0] if row and row[0] else contact_phone
-        return render_template_string(chat_html, phone=phone, contact_phone=contact_phone, contact_name=contact_name, messages=messages)
+        return render_template_string(chat_html, phone=phone, contact_phone=contact_phone, contact_name=contact_name)
     except Exception as e:
         print(f"❌ Error in chat_page: {e}")
         return "An error occurred", 500
 
-# ----------------- Enhanced Socket.IO Events -----------------
-def get_room(user, contact):
-    return "_".join(sorted([str(user), str(contact)]))
+# ==================== SIMPLE SOCKET SYSTEM ====================
+active_rooms = {}
 
-connected_users = {}
+@socketio.on('connect')
+def handle_connect():
+    print(f"✅ Client connected: {request.sid}")
 
-@socketio.on('join')
-def on_join(data):
+@socketio.on('disconnect')
+def handle_disconnect():
+    print(f"❌ Client disconnected: {request.sid}")
+    # Remove from active rooms
+    for room, users in list(active_rooms.items()):
+        if request.sid in users:
+            users.remove(request.sid)
+            if not users:
+                del active_rooms[room]
+
+@socketio.on('join_chat')
+def handle_join_chat(data):
     try:
-        user = str(data['user'])
-        contact = str(data['contact'])
-        room = get_room(user, contact)
+        user = str(data.get('user'))
+        contact = str(data.get('contact'))
+        
+        # Create room ID
+        room = f"chat_{user}_{contact}" if user < contact else f"chat_{contact}_{user}"
+        
         join_room(room)
-        connected_users[request.sid] = {'phone': user, 'room': room}
-        if typing_status.get((user, contact)):
-            emit('typing', {'actor': contact}, room=request.sid)
+        
+        # Track active users in room
+        if room not in active_rooms:
+            active_rooms[room] = []
+        if request.sid not in active_rooms[room]:
+            active_rooms[room].append(request.sid)
+        
+        print(f"✅ User {user} joined room {room} (with {contact})")
+        print(f"📊 Active in room {room}: {len(active_rooms.get(room, []))} users")
+        
+        emit('joined_chat', {'room': room, 'success': True})
+        
     except Exception as e:
-        print(f"❌ Error in join: {e}")
-        emit('error', {'message': 'Failed to join room'})
+        print(f"❌ Error in join_chat: {e}")
+        emit('error', {'message': 'Failed to join chat'})
 
 @socketio.on('send_message')
-def handle_message(data):
+def handle_send_message(data):
     try:
-        sender = str(data.get('sender', ''))
-        receiver = str(data.get('receiver', ''))
+        sender = str(data.get('sender'))
+        receiver = str(data.get('receiver'))
         message = data.get('message', '').strip()
+        
         if not all([sender, receiver, message]):
-            emit('error', {'message': 'Invalid message data'})
+            emit('error', {'message': 'Invalid message'})
             return
-        if len(message) > 5000:
-            emit('error', {'message': 'Message too long'})
-            return
-
-        # Encrypt the message
+        
+        # Encrypt message
         encrypted_message = encryptor.encrypt_message(message, sender, receiver)
         if not encrypted_message:
-            emit('error', {'message': 'Failed to encrypt message'})
+            emit('error', {'message': 'Encryption failed'})
             return
-
+        
+        # Save to database
         now_iso = datetime.now().isoformat()
         conn = get_db_connection()
         try:
             c = conn.cursor()
-            c.execute("INSERT INTO messages(sender,receiver,message,encrypted_message,status,timestamp) VALUES(?,?,?,?,?,?)",
-                      (sender, receiver, message, encrypted_message, "sent", now_iso))
+            c.execute("INSERT INTO messages(sender, receiver, message, encrypted_message, status, timestamp) VALUES(?,?,?,?,?,?)",
+                     (sender, receiver, message, encrypted_message, "sent", now_iso))
             message_id = c.lastrowid
-            c.execute("INSERT OR IGNORE INTO users(phone,last_online) VALUES(?,?)", (receiver, now_iso))
-            c.execute("INSERT OR IGNORE INTO contacts(user_phone,contact_phone,contact_name,last_message) VALUES(?,?,?,?)",
-                      (sender, receiver, "", message))
+            
+            # Update contacts
+            c.execute("INSERT OR IGNORE INTO contacts(user_phone, contact_phone, contact_name, last_message) VALUES(?,?,?,?)",
+                     (sender, receiver, "", message))
             c.execute("UPDATE contacts SET last_message=?, timestamp=CURRENT_TIMESTAMP WHERE user_phone=? AND contact_phone=?",
-                      (message, sender, receiver))
-            c.execute("INSERT OR IGNORE INTO contacts(user_phone,contact_phone,contact_name,last_message) VALUES(?,?,?,?)",
-                      (receiver, sender, "", message))
+                     (message, sender, receiver))
+            
+            c.execute("INSERT OR IGNORE INTO contacts(user_phone, contact_phone, contact_name, last_message) VALUES(?,?,?,?)",
+                     (receiver, sender, "", message))
             c.execute("UPDATE contacts SET last_message=?, timestamp=CURRENT_TIMESTAMP WHERE user_phone=? AND contact_phone=?",
-                      (message, receiver, sender))
+                     (message, receiver, sender))
+            
             conn.commit()
         finally:
             return_db_connection(conn)
-        room = get_room(sender, receiver)
-        emit('receive_message', {'id': message_id, 'sender': sender, 'message': message}, room=room)
         
-        # Clear cache for this conversation
-        cache.clear_pattern(f"messages_{sender}_{receiver}")
-        cache.clear_pattern(f"messages_{receiver}_{sender}")
+        # Create room for broadcasting
+        room = f"chat_{sender}_{receiver}" if sender < receiver else f"chat_{receiver}_{sender}"
+        
+        # Broadcast to both users
+        emit('receive_message', {
+            'id': message_id,
+            'sender': sender,
+            'receiver': receiver,
+            'message': message,
+            'timestamp': now_iso
+        }, room=room)
+        
+        print(f"📩 Message {message_id} sent from {sender} to {receiver} in room {room}")
         
     except Exception as e:
         print(f"❌ Error in send_message: {e}")
         emit('error', {'message': 'Failed to send message'})
 
-@socketio.on('send_file_message')
-def handle_file_message(data):
-    try:
-        sender = str(data.get('sender', ''))
-        receiver = str(data.get('receiver', ''))
-        message_type = data.get('message_type', '')
-        file_path = data.get('file_path', '')
-        file_name = data.get('file_name', '')
-        file_size = data.get('file_size', 0)
-        message_id = data.get('message_id', '')
-
-        if not all([sender, receiver, message_type, file_path]):
-            emit('error', {'message': 'Invalid file message data'})
-            return
-
-        room = get_room(sender, receiver)
-        emit('receive_file_message', {
-            'id': message_id,
-            'sender': sender,
-            'message_type': message_type,
-            'file_path': file_path,
-            'file_name': file_name,
-            'file_size': file_size
-        }, room=room)
-
-        # Clear cache for this conversation
-        cache.clear_pattern(f"messages_{sender}_{receiver}")
-        cache.clear_pattern(f"messages_{receiver}_{sender}")
-
-    except Exception as e:
-        print(f"❌ Error in send_file_message: {e}")
-        emit('error', {'message': 'Failed to send file message'})
-
-@socketio.on('add_reaction')
-def handle_add_reaction(data):
+# ==================== INSTANT DELETE SOCKET EVENT ====================
+@socketio.on('message_deleted')
+def handle_message_deleted(data):
+    """Handle INSTANT delete notifications"""
     try:
         message_id = data.get('message_id')
-        emoji = data.get('emoji')
-        user_phone = data.get('user_phone')
-
-        if not all([message_id, emoji, user_phone]):
-            emit('error', {'message': 'Invalid reaction data'})
-            return
-
-        conn = get_db_connection()
-        try:
-            c = conn.cursor()
-            
-            # Check if message exists and get conversation participants
-            c.execute("SELECT sender, receiver FROM messages WHERE id=?", (message_id,))
-            message = c.fetchone()
-            if not message:
-                emit('error', {'message': 'Message not found'})
-                return
-
-            sender, receiver = message
-
-            # Check if user already has a reaction on this message
-            c.execute("SELECT emoji FROM message_reactions WHERE message_id=? AND user_phone=?", 
-                     (message_id, user_phone))
-            existing_reaction = c.fetchone()
-            
-            if existing_reaction:
-                # If clicking the same emoji, remove the reaction
-                if existing_reaction[0] == emoji:
-                    c.execute("DELETE FROM message_reactions WHERE message_id=? AND user_phone=?", 
-                             (message_id, user_phone))
-                    action = 'removed'
-                else:
-                    # If different emoji, update the reaction
-                    c.execute("UPDATE message_reactions SET emoji=? WHERE message_id=? AND user_phone=?", 
-                             (emoji, message_id, user_phone))
-                    action = 'updated'
-            else:
-                # Add new reaction
-                c.execute("INSERT INTO message_reactions (message_id, user_phone, emoji) VALUES (?, ?, ?)",
-                         (message_id, user_phone, emoji))
-                action = 'added'
-            
-            conn.commit()
-
-        finally:
-            return_db_connection(conn)
-
-        # Get updated reactions for this message
-        conn = get_db_connection()
-        try:
-            c = conn.cursor()
-            c.execute("SELECT user_phone, emoji FROM message_reactions WHERE message_id=?", (message_id,))
-            updated_reactions = c.fetchall()
-            
-            reactions_list = []
-            for reaction in updated_reactions:
-                reactions_list.append({
-                    'user_phone': reaction[0],
-                    'emoji': reaction[1]
-                })
-        finally:
-            return_db_connection(conn)
-
-        # Send to both users in the conversation
-        room = get_room(sender, receiver)
-        emit('reaction_updated', {
-            'message_id': message_id,
-            'user_phone': user_phone,
-            'emoji': emoji,
-            'action': action,
-            'reactions': reactions_list
-        }, room=room)
-
-        # Clear cache for this conversation
-        cache.clear_pattern(f"messages_{sender}_{receiver}")
-        cache.clear_pattern(f"messages_{receiver}_{sender}")
-
-        print(f"😊 Reaction {action} by {user_phone} on message {message_id}")
-
-    except Exception as e:
-        print(f"❌ Error in add_reaction: {e}")
-        emit('error', {'message': 'Failed to add reaction'})
-
-@socketio.on('mark_seen')
-def handle_mark_seen(data):
-    try:
-        sender = str(data.get('sender', ''))  # যার message দেখা হলো
-        receiver = str(data.get('receiver', ''))  # যে দেখলো
-
-        # Database তে status update করো
-        conn = get_db_connection()
-        try:
-            c = conn.cursor()
-            c.execute("UPDATE messages SET status='seen' WHERE sender=? AND receiver=? AND status!='seen'",
-                     (sender, receiver))
-            conn.commit()
-        finally:
-            return_db_connection(conn)
-
-        # Message যিনি পাঠিয়েছেন তাকে notify করো যে তার messages দেখা হয়েছে
-        room = get_room(sender, receiver)
-        emit('message_seen_confirmation', {
-            'receiver': sender,  # Message sender কে notify করছি
-            'status': 'seen'
-        }, room=room)
-
-        print(f"👀 Messages seen by {receiver}, notifying {sender}")
-
-    except Exception as e:
-        print(f"❌ Error in mark_seen: {e}")
-
-@socketio.on('delete_message')
-def handle_delete_message(data):
-    try:
-        message_id = data.get('message_id')
-        user_phone = data.get('user_phone')
+        sender = data.get('sender')
+        receiver = data.get('receiver')
         delete_type = data.get('delete_type')
-
-        print(f"🗑️ Delete request: message_id={message_id}, user={user_phone}, type={delete_type}")
-
-        conn = get_db_connection()
-        try:
-            c = conn.cursor()
-
-            # Message details get করুন
-            c.execute("SELECT sender, receiver FROM messages WHERE id=?", (message_id,))
-            message = c.fetchone()
-
-            if not message:
-                emit('error', {'message': 'Message not found'})
-                return
-
-            sender, receiver = message
-
-            if delete_type == "for_me":
-                if user_phone == sender:
-                    c.execute("UPDATE messages SET deleted_for_sender=1 WHERE id=?", (message_id,))
-                elif user_phone == receiver:
-                    c.execute("UPDATE messages SET deleted_for_receiver=1 WHERE id=?", (message_id,))
-                else:
-                    emit('error', {'message': 'User not authorized to delete this message'})
-                    return
-
-                c.execute("INSERT INTO deleted_messages (message_id, user_phone, delete_type) VALUES (?, ?, ?)",
-                         (message_id, user_phone, delete_type))
-
-                # Send success confirmation to both users
-                room = get_room(sender, receiver)
-                emit('delete_success', {
-                    'message_id': message_id, 
-                    'delete_type': delete_type,
-                    'user_phone': user_phone
-                }, room=room)
-
-            elif delete_type == "for_everyone":
-                if user_phone == sender:
-                    c.execute("UPDATE messages SET deleted_for_everyone=1 WHERE id=?", (message_id,))
-                    c.execute("INSERT INTO deleted_messages (message_id, user_phone, delete_type) VALUES (?, ?, ?)",
-                             (message_id, user_phone, delete_type))
-
-                    # Send to both users in the conversation
-                    room = get_room(sender, receiver)
-                    emit('delete_success', {
-                        'message_id': message_id,
-                        'delete_type': delete_type,
-                        'user_phone': user_phone
-                    }, room=room)
-                    
-                    print(f"✅ Message {message_id} deleted for everyone by {user_phone}")
-                else:
-                    emit('error', {'message': 'Only sender can delete for everyone'})
-                    return
-
-            conn.commit()
-        finally:
-            return_db_connection(conn)
-
-        # Clear cache for this conversation
-        cache.clear_pattern(f"messages_{sender}_{receiver}")
-        cache.clear_pattern(f"messages_{receiver}_{sender}")
-
+        deleted_by = data.get('deleted_by')
+        room = data.get('room')
+        
+        print(f"⚡ INSTANT DELETE EVENT: message_id={message_id}, delete_type={delete_type}, deleted_by={deleted_by}")
+        
+        # If room is provided, use it, otherwise create room
+        if not room:
+            room = f"chat_{sender}_{receiver}" if sender < receiver else f"chat_{receiver}_{sender}"
+        
+        # Broadcast delete event to BOTH users in the room
+        emit('message_deleted', {
+            'message_id': message_id,
+            'delete_type': delete_type,
+            'deleted_by': deleted_by
+        }, room=room)
+        
+        print(f"✅ Delete event broadcasted to room {room}")
+        print(f"✅ BOTH users will see delete instantly without refresh!")
+        
     except Exception as e:
-        print(f"❌ Error in handle_delete_message: {e}")
-        emit('error', {'message': 'Failed to delete message'})
+        print(f"❌ Error in message_deleted: {e}")
+        emit('error', {'message': 'Failed to process delete'})
 
 @socketio.on('typing')
 def handle_typing(data):
@@ -4934,8 +2324,8 @@ def handle_typing(data):
         target = str(data.get('target', ''))
         if not all([actor, target]):
             return
-        typing_status[(target, actor)] = True
-        room = get_room(actor, target)
+        
+        room = f"chat_{actor}_{target}" if actor < target else f"chat_{target}_{actor}"
         emit('typing', {'actor': actor}, room=room)
     except Exception as e:
         print(f"❌ Error in typing: {e}")
@@ -4947,128 +2337,31 @@ def handle_stop_typing(data):
         target = str(data.get('target', ''))
         if not all([actor, target]):
             return
-        typing_status[(target, actor)] = False
-        room = get_room(actor, target)
+        
+        room = f"chat_{actor}_{target}" if actor < target else f"chat_{target}_{actor}"
         emit('stop_typing', {'actor': actor}, room=room)
     except Exception as e:
         print(f"❌ Error in stop_typing: {e}")
 
-@socketio.on('disconnect')
-def on_disconnect():
-    try:
-        if request.sid in connected_users:
-            del connected_users[request.sid]
-        keys_to_remove = []
-        for key in typing_status:
-            if typing_status[key]:
-                keys_to_remove.append(key)
-        for key in keys_to_remove:
-            if key in typing_status:
-                del typing_status[key]
-        print(f"✅ Client disconnected: {request.sid}")
-    except Exception as e:
-        print(f"❌ Error in disconnect: {e}")
-
-@socketio.on_error_default
-def default_error_handler(e):
-    print(f"❌ SocketIO Error: {e}")
-    emit('error', {'message': 'An error occurred'})
-
-# ----------------- Security Information -----------------
-@app.route("/security")
-def security_info():
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Exomnia Security</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-            .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
-            h1 { color: #0E4950; }
-            .feature { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🔒 Exomnia Security Features</h1>
-
-            <div class="feature">
-                <h3>End-to-End Encryption</h3>
-                <p>All messages are encrypted with AES-256-GCM before being stored or transmitted.</p>
-            </div>
-
-            <div class="feature">
-                <h3>Secure Key Derivation</h3>
-                <p>Unique encryption keys are derived for each user using PBKDF2 with 100,000 iterations.</p>
-            </div>
-
-            <div class="feature">
-                <h3>Forward Secrecy</h3>
-                <p>Each conversation uses a unique key combination from both participants.</p>
-            </div>
-
-            <div class="feature">
-                <h3>Message Integrity</h3>
-                <p>AES-GCM provides authentication ensuring messages cannot be tampered with.</p>
-            </div>
-
-            <div class="feature">
-                <h3>Advanced Message Deletion</h3>
-                <p>Delete messages for yourself or for everyone with WhatsApp-style functionality.</p>
-            </div>
-
-            <div class="feature">
-                <h3>Message Reactions</h3>
-                <p>React to messages with emojis that are synced across all users in real-time.</p>
-            </div>
-
-            <div class="feature">
-                <h3>File Sharing</h3>
-                <p>Securely share images, videos, and documents with end-to-end encryption.</p>
-            </div>
-
-            <div class="feature">
-                <h3>Enhanced Performance</h3>
-                <p>Connection pooling, caching, and infinite scroll for optimal user experience.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-
 # ----------------- Run -----------------
-if __name__ == "__main__":
+if __name__=="__main__":
     init_db()
-    
-    # Get port from environment variable (Render provides this)
-    port = int(os.environ.get("PORT", 5000))
-    
-    print("🚀 Starting Exomnia Super App")
-    print(f"📱 Port: {port}")
-    print("🌍 Environment:", "RENDER" if 'RENDER' in os.environ else "LOCAL")
-    print("💬 Chat Login: /")
-    print("🔒 Security Info: /security")
-    print("✅ All systems integrated")
-    print("🔐 End-to-End Encryption Enabled")
-    print("🗑️ WhatsApp-style delete feature enabled")
-    print("😊 Message reactions enabled")
-    print("📁 Modern Bottom Sheet File sharing system enabled")
-    print("🎨 Premium UI/UX Design")
-    print("⚡ Performance Optimized")
-    print("🔧 Connection Pooling Enabled")
-    print("💾 Enhanced Caching System Active")
-    print("🚦 Rate Limiting Implemented")
-    print("✅ Real-time Delete System Active")
-    print("✅ FIXED Context Menu System")
-    print("✅ Infinite Scroll Implemented")
-    print("✅ Enhanced Message Grouping")
-    print("✅ Render Compatible")
+    print("=" * 80)
+    print("🚀 EXOMNIA - INSTANT DELETE SYSTEM")
+    print("=" * 80)
+    print("✅ NO REFRESH NEEDED - Updates happen instantly!")
+    print("✅ Both users see delete immediately!")
+    print("✅ WhatsApp-style experience")
+    print("=" * 80)
+    print("🔥 TEST INSTRUCTIONS:")
+    print("1. Open TWO browser tabs")
+    print("2. Login with two different phone numbers")
+    print("3. Add each other as contacts")
+    print("4. Send messages")
+    print("5. Delete a message - BOTH will see it instantly!")
+    print("=" * 80)
+    print("📱 Main App: http://localhost:5000/main")
+    print("🔑 Sign In: http://localhost:5000/")
+    print("=" * 80)
 
-    # Render-এ host 0.0.0.0 এবং environment variable থেকে port নিতে হবে
-    socketio.run(app, 
-                host="0.0.0.0", 
-                port=port, 
-                debug=False, 
-                allow_unsafe_werkzeug=True,
-                log_output=True)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
