@@ -1,9 +1,4 @@
 Flask
-Flask-SocketIO
-python-socketio
-python-engineio
-Werkzeug
-gunicorn
-gevent
-gevent-websocket
+flask-socketio
 cryptography
+gunicorn
