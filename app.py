@@ -10650,6 +10650,4 @@ def security_info():
     </html>
     """ with app.app_context():
     init_db()
-
-# ----------------- server Run koria ,sohoje browser e test koribartore-----------------
 if __name__=="__main__": scoketio.run(app)
