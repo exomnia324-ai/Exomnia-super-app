@@ -5323,6 +5323,6 @@ def security_info():
         </div>
     </body>
     </html>
-    """ with app.app_context():
+    """   with app.app_context():
     init_db()
 if __name__=="__main__": scoketio.run(app)
