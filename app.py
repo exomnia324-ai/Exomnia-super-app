@@ -33,7 +33,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 socketio = SocketIO(
     app, 
     cors_allowed_origins="*", 
-    async_mode='threading',
+    async_mode='eventlet',
     ping_timeout=60,
     ping_interval=25,
     max_http_buffer_size=16 * 1024 * 1024,  #pore barabo akhon 16 thak oto storage nei
@@ -196,6 +196,8 @@ encryptor = MessageEncryptor()
 
 # ----------------- Database Setup -----------------
 def init_db():
+    if os.path.exists(DB_NAME):
+        os.remove(DB_NAME)
     conn = get_db_connection()
     try:
         c = conn.cursor()
@@ -5323,6 +5325,14 @@ def security_info():
         </div>
     </body>
     </html>
-    """   with app.app_context():
+    """
+
+# ----------------- server Run koria ,sohoje browser e test koribartore-----------------
+if __name__=="__main__":
     init_db()
-if __name__=="__main__": scoketio.run(app)
+    print("Exomnia Super App on http://0.0.0.0:5000")
+    print("Main App: http://0.0.0.0:5000/main")
+    print("Chat Login: http://0.0.0.0:5000/")
+    print("Security Info: http://0.0.0.0:5000/security")
+    print("All systems integrated")
+    socketio.run(app, host="0.0.0.0", port=5000, debug=False, allow_unsafe_werkzeug=True)
