@@ -1,6 +1,8 @@
 from flask import Flask, render_template_string
 from flask_socketio import SocketIO, emit, join_room
 import os
+import random
+import string
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -11,19 +13,19 @@ HTML = """
 <html>
 <head>
 
-<title>Video Call</title>
+<title>Exomnia Video Call</title>
 
 <style>
 
 body{
 background:#111;
 color:white;
-text-align:center;
 font-family:Arial;
+text-align:center;
 }
 
 video{
-width:45%;
+width:40%;
 margin:10px;
 border:2px solid white;
 }
@@ -31,6 +33,7 @@ border:2px solid white;
 button{
 padding:10px;
 font-size:18px;
+margin:5px;
 }
 
 </style>
@@ -39,7 +42,7 @@ font-size:18px;
 
 <body>
 
-<h2>Real Time Video Call</h2>
+<h2>Exomnia Video Call</h2>
 
 <p>Room: <span id="room"></span></p>
 
@@ -47,6 +50,7 @@ font-size:18px;
 <video id="remoteVideo" autoplay></video>
 
 <br>
+
 <button onclick="startCall()">Start Call</button>
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -55,7 +59,7 @@ font-size:18px;
 
 const socket = io();
 
-let room = "exomnia";
+let room = window.location.pathname.replace("/","");
 document.getElementById("room").innerText = room;
 
 socket.emit("join",room);
@@ -130,7 +134,13 @@ await peer.setRemoteDescription(new RTCSessionDescription(data));
 """
 
 @app.route("/")
-def index():
+def home():
+
+    room = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    return f'<h2>Create Video Call</h2><a href="/{room}">Start Meeting</a>'
+
+@app.route("/<room>")
+def room(room):
     return render_template_string(HTML)
 
 @socketio.on("join")
