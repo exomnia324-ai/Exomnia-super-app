@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Space Shooting</title>
+
+<style>
+
+body{
+margin:0;
+background:black;
+overflow:hidden;
+font-family:Arial;
+}
+
+canvas{
+display:block;
+margin:auto;
+background:black;
+}
+
+#controls{
+position:fixed;
+bottom:15px;
+width:100%;
+display:flex;
+justify-content:space-between;
+padding:20px;
+box-sizing:border-box;
+}
+
+#joystick{
+width:120px;
+height:120px;
+background:rgba(255,255,255,0.1);
+border-radius:50%;
+position:relative;
+touch-action:none;
+}
+
+#stick{
+width:50px;
+height:50px;
+background:white;
+border-radius:50%;
+position:absolute;
+left:35px;
+top:35px;
+}
+
+#fire{
+width:90px;
+height:90px;
+background:red;
+border-radius:50%;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:20px;
+color:white;
+touch-action:none;
+}
+
+</style>
+</head>
+
+<body>
+
+<canvas id="game" width="400" height="600"></canvas>
+
+<div id="controls">
+
+<div id="joystick">
+<div id="stick"></div>
+</div>
+
+<div id="fire">FIRE</div>
+
+</div>
+
+<script>
+
+const canvas=document.getElementById("game")
+const ctx=canvas.getContext("2d")
+
+let player={
+x:180,
+y:520,
+w:40,
+h:40,
+speed:4,
+life:3
+}
+
+let bullets=[]
+let enemyBullets=[]
+let enemies=[]
+let explosions=[]
+let stars=[]
+
+let score=0
+let joystickX=0
+let joystickY=0
+let firing=false
+
+// stars
+for(let i=0;i<80;i++){
+
+stars.push({
+x:Math.random()*400,
+y:Math.random()*600,
+speed:Math.random()*2+1
+})
+
+}
+
+// enemy spawn
+setInterval(()=>{
+
+enemies.push({
+x:Math.random()*360,
+y:-20,
+w:30,
+h:30,
+speed:2
+})
+
+},1500)
+
+// enemy fire
+setInterval(()=>{
+
+for(let e of enemies){
+
+enemyBullets.push({
+x:e.x+e.w/2,
+y:e.y+e.h,
+speed:3
+})
+
+}
+
+},2000)
+
+function shoot(){
+
+bullets.push({
+x:player.x+18,
+y:player.y,
+speed:6
+})
+
+}
+
+function autoFire(){
+
+if(firing){
+
+shoot()
+setTimeout(autoFire,150)
+
+}
+
+}
+
+// stars
+function drawStars(){
+
+ctx.fillStyle="white"
+
+for(let s of stars){
+
+s.y+=s.speed
+
+if(s.y>600){
+s.y=0
+s.x=Math.random()*400
+}
+
+ctx.fillRect(s.x,s.y,2,2)
+
+}
+
+}
+
+function drawPlayer(){
+
+ctx.fillStyle="cyan"
+ctx.fillRect(player.x,player.y,player.w,player.h)
+
+}
+
+function drawBullets(){
+
+ctx.fillStyle="yellow"
+
+for(let i=bullets.length-1;i>=0;i--){
+
+let b=bullets[i]
+
+b.y-=b.speed
+
+ctx.fillRect(b.x,b.y,4,10)
+
+if(b.y<0) bullets.splice(i,1)
+
+}
+
+}
+
+function drawEnemyBullets(){
+
+ctx.fillStyle="red"
+
+for(let i=enemyBullets.length-1;i>=0;i--){
+
+let b=enemyBullets[i]
+
+b.y+=b.speed
+
+ctx.fillRect(b.x,b.y,4,10)
+
+if(b.y>600) enemyBullets.splice(i,1)
+
+}
+
+}
+
+function drawEnemies(){
+
+ctx.fillStyle="lime"
+
+for(let i=enemies.length-1;i>=0;i--){
+
+let e=enemies[i]
+
+e.y+=e.speed
+
+ctx.fillRect(e.x,e.y,e.w,e.h)
+
+if(e.y>620) enemies.splice(i,1)
+
+}
+
+}
+
+function drawExplosions(){
+
+ctx.fillStyle="orange"
+
+for(let i=explosions.length-1;i>=0;i--){
+
+let ex=explosions[i]
+
+ctx.beginPath()
+ctx.arc(ex.x,ex.y,ex.size,0,Math.PI*2)
+ctx.fill()
+
+ex.size+=1
+
+if(ex.size>15) explosions.splice(i,1)
+
+}
+
+}
+
+function bulletCollision(){
+
+for(let i=bullets.length-1;i>=0;i--){
+
+for(let j=enemies.length-1;j>=0;j--){
+
+let b=bullets[i]
+let e=enemies[j]
+
+if(
+b &&
+b.x < e.x+e.w &&
+b.x+4 > e.x &&
+b.y < e.y+e.h &&
+b.y+10 > e.y
+){
+
+explosions.push({x:e.x+15,y:e.y+15,size:2})
+
+score+=10
+
+bullets.splice(i,1)
+enemies.splice(j,1)
+
+break
+
+}
+
+}
+
+}
+
+}
+
+function bulletVsBullet(){
+
+for(let i=bullets.length-1;i>=0;i--){
+
+for(let j=enemyBullets.length-1;j>=0;j--){
+
+let b1=bullets[i]
+let b2=enemyBullets[j]
+
+if(
+b1 &&
+b2 &&
+b1.x < b2.x+4 &&
+b1.x+4 > b2.x &&
+b1.y < b2.y+10 &&
+b1.y+10 > b2.y
+){
+
+explosions.push({x:b1.x,y:b1.y,size:2})
+
+bullets.splice(i,1)
+enemyBullets.splice(j,1)
+
+break
+
+}
+
+}
+
+}
+
+}
+
+function shipCollision(){
+
+for(let i=enemies.length-1;i>=0;i--){
+
+let e=enemies[i]
+
+if(
+player.x < e.x + e.w &&
+player.x + player.w > e.x &&
+player.y < e.y + e.h &&
+player.y + player.h > e.y
+){
+
+explosions.push({x:player.x+20,y:player.y+20,size:2})
+explosions.push({x:e.x+15,y:e.y+15,size:2})
+
+enemies.splice(i,1)
+
+player.life--
+
+if(player.life<=0){
+
+alert("Game Over\nScore: "+score)
+location.reload()
+
+}
+
+}
+
+}
+
+}
+
+function updatePlayer(){
+
+player.x+=joystickX*player.speed
+player.y+=joystickY*player.speed
+
+player.x=Math.max(0,Math.min(360,player.x))
+player.y=Math.max(0,Math.min(560,player.y))
+
+}
+
+function gameLoop(){
+
+ctx.clearRect(0,0,400,600)
+
+drawStars()
+
+updatePlayer()
+
+drawPlayer()
+drawBullets()
+drawEnemyBullets()
+drawEnemies()
+drawExplosions()
+
+bulletCollision()
+bulletVsBullet()
+shipCollision()
+
+// title
+ctx.font="16px Arial"
+ctx.fillStyle="#0E4950"
+ctx.fillText("🚀 Space Shooting — Developed by Exomnia Team",20,20)
+
+ctx.fillStyle="white"
+ctx.fillText("Life: "+player.life,10,45)
+ctx.fillText("Score: "+score,320,45)
+
+requestAnimationFrame(gameLoop)
+
+}
+
+gameLoop()
+
+// joystick
+const joystick=document.getElementById("joystick")
+const stick=document.getElementById("stick")
+
+joystick.addEventListener("touchmove",e=>{
+
+let rect=joystick.getBoundingClientRect()
+
+let x=e.touches[0].clientX-rect.left-60
+let y=e.touches[0].clientY-rect.top-60
+
+joystickX=x/40
+joystickY=y/40
+
+stick.style.left=(35+x/2)+"px"
+stick.style.top=(35+y/2)+"px"
+
+})
+
+joystick.addEventListener("touchend",()=>{
+
+joystickX=0
+joystickY=0
+
+stick.style.left="35px"
+stick.style.top="35px"
+
+})
+
+// fire button
+const fire=document.getElementById("fire")
+
+fire.addEventListener("touchstart",()=>{
+
+firing=true
+shoot()
+autoFire()
+
+})
+
+fire.addEventListener("touchend",()=>{
+
+firing=false
+
+})
+
+</script>
+
+</body>
+</html>
