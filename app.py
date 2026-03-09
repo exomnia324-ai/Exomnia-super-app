@@ -1,11 +1,9 @@
 from flask import Flask, render_template_string, request
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 import os
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
-
-users = {}
 
 HTML = """
 
@@ -14,7 +12,7 @@ HTML = """
 
 <head>
 
-<title>Exomnia Call</title>
+<title>Video Call</title>
 
 <style>
 
@@ -26,7 +24,7 @@ text-align:center;
 }
 
 video{
-width:45%;
+width:40%;
 margin:10px;
 border:2px solid white;
 }
@@ -50,10 +48,15 @@ margin:5px;
 
 <h2>Video Call</h2>
 
-<p>Your ID: <span id="myid"></span></p>
+<p>Your Room ID:</p>
 
-<input id="friend" placeholder="Friend ID">
-<button onclick="call()">Call</button>
+<input id="myroom" placeholder="Enter your ID">
+
+<br><br>
+
+<input id="friend" placeholder="Friend Room ID">
+
+<button onclick="startCall()">Start Call</button>
 
 <br>
 
@@ -66,31 +69,36 @@ margin:5px;
 
 const socket = io();
 
-let myid = Math.random().toString(36).substring(2,8);
-document.getElementById("myid").innerText = myid;
-
-socket.emit("register",myid);
-
-let peer = new RTCPeerConnection({
-iceServers:[
-{urls:"stun:stun.l.google.com:19302"}
-]
-});
+let peer;
 
 let localVideo=document.getElementById("localVideo");
 let remoteVideo=document.getElementById("remoteVideo");
+
+let localStream;
 
 navigator.mediaDevices.getUserMedia({
 video:true,
 audio:true
 }).then(stream=>{
 
+localStream=stream;
+
 localVideo.srcObject=stream;
 
-stream.getTracks().forEach(track=>{
-peer.addTrack(track,stream);
 });
 
+function createPeer(){
+
+peer=new RTCPeerConnection({
+
+iceServers:[
+{urls:"stun:stun.l.google.com:19302"}
+]
+
+});
+
+localStream.getTracks().forEach(track=>{
+peer.addTrack(track,localStream);
 });
 
 peer.ontrack=e=>{
@@ -99,16 +107,27 @@ remoteVideo.srcObject=e.streams[0];
 
 peer.onicecandidate=e=>{
 if(e.candidate){
+
 socket.emit("candidate",{
 candidate:e.candidate,
-to:window.friend
+room:window.room
 });
+
 }
 };
 
-function call(){
+}
 
-window.friend=document.getElementById("friend").value;
+function startCall(){
+
+let myroom=document.getElementById("myroom").value;
+let friend=document.getElementById("friend").value;
+
+window.room=[myroom,friend].sort().join("-");
+
+socket.emit("join",window.room);
+
+createPeer();
 
 peer.createOffer().then(offer=>{
 
@@ -116,7 +135,7 @@ peer.setLocalDescription(offer);
 
 socket.emit("offer",{
 offer:offer,
-to:window.friend
+room:window.room
 });
 
 });
@@ -125,9 +144,9 @@ to:window.friend
 
 socket.on("offer",async data=>{
 
-window.friend=data.from;
+createPeer();
 
-await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+await peer.setRemoteDescription(new RTCSessionDescription(data));
 
 let answer=await peer.createAnswer();
 
@@ -135,19 +154,21 @@ await peer.setLocalDescription(answer);
 
 socket.emit("answer",{
 answer:answer,
-to:data.from
+room:window.room
 });
 
 });
 
 socket.on("answer",async data=>{
 
-await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+await peer.setRemoteDescription(new RTCSessionDescription(data));
 
 });
 
 socket.on("candidate",data=>{
-peer.addIceCandidate(new RTCIceCandidate(data.candidate));
+
+peer.addIceCandidate(new RTCIceCandidate(data));
+
 });
 
 </script>
@@ -161,27 +182,21 @@ peer.addIceCandidate(new RTCIceCandidate(data.candidate));
 def index():
     return render_template_string(HTML)
 
-@socketio.on("register")
-def register(id):
-    users[id]=request.sid
+@socketio.on("join")
+def join(room):
+    join_room(room)
 
 @socketio.on("offer")
 def offer(data):
-    sid=users.get(data["to"])
-    if sid:
-        emit("offer",{"offer":data["offer"],"from":request.sid},room=sid)
+    emit("offer",data["offer"],room=data["room"],include_self=False)
 
 @socketio.on("answer")
 def answer(data):
-    sid=users.get(data["to"])
-    if sid:
-        emit("answer",{"answer":data["answer"]},room=sid)
+    emit("answer",data["answer"],room=data["room"],include_self=False)
 
 @socketio.on("candidate")
 def candidate(data):
-    sid=users.get(data["to"])
-    if sid:
-        emit("candidate",{"candidate":data["candidate"]},room=sid)
+    emit("candidate",data["candidate"],room=data["room"],include_self=False)
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",10000))
