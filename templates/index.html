@@ -2,13 +2,15 @@
 <html>  
 <head>  
 <meta charset="UTF-8">  
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  
-<title>Space Shooting</title>  
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">  
+<title>Space Shooting — fullscreen</title>  
   
 <style>  
 * {  
     box-sizing: border-box;  
     -webkit-tap-highlight-color: transparent;  
+    margin: 0;  
+    padding: 0;  
 }  
   
 body{  
@@ -20,107 +22,135 @@ body{
     justify-content: center;  
     align-items: center;  
     min-height: 100vh;  
-    touch-action: pan-x pan-y;  
-}  
-  
-#gameContainer {  
-    position: relative;  
-    width: 100%;  
-    max-width: 400px;  
-    height: 100vh;  
-    max-height: 600px;  
-    margin: 0 auto;  
-}  
-  
-canvas{  
-    display:block;  
-    width: 100%;  
-    height: 100%;  
-    background:black;  
-    position: absolute;  
+    min-height: 100dvh; /* dynamic viewport for mobile */  
+    width: 100vw;  
+    width: 100dvw;  
+    touch-action: none; /* prevent pull-to-refresh, panning */  
+    position: fixed;  
     top: 0;  
     left: 0;  
 }  
   
+#gameContainer {  
+    position: relative;  
+    width: 100vw;  
+    height: 100vh;  
+    height: 100dvh;  
+    max-width: none;  
+    max-height: none;  
+    margin: 0;  
+    background: black;  
+    display: flex;  
+    justify-content: center;  
+    align-items: center;  
+}  
+
+/* canvas keeps 400x600 aspect ratio but fills container */  
+canvas{  
+    display:block;  
+    width: auto;  
+    height: auto;  
+    max-width: 100%;  
+    max-height: 100%;  
+    aspect-ratio: 400 / 600;  
+    background:black;  
+    object-fit: contain;  
+    position: relative;  
+    box-shadow: 0 0 0 2px #0a2a2a; /* optional subtle border */  
+}  
+
+/* controls overlay uses same canvas area */  
 #controls{  
     position: absolute;  
-    bottom: 15px;  
+    bottom: max(15px, env(safe-area-inset-bottom));  
     width: 100%;  
+    max-width: min(400px, 100vw);  
+    left: 50%;  
+    transform: translateX(-50%);  
     display:flex;  
     justify-content:space-between;  
-    padding: min(20px, 5vw);  
+    padding: 0 15px 15px 15px;  
     box-sizing:border-box;  
     pointer-events: none;  
     z-index: 10;  
+    gap: 20px;  
 }  
   
 #joystick{  
-    width: min(120px, 25vw);  
-    height: min(120px, 25vw);  
-    max-width: 120px;  
-    max-height: 120px;  
+    width: min(130px, 28vw, 28vh);  
+    height: min(130px, 28vw, 28vh);  
     background:rgba(255,255,255,0.2);  
     border-radius:50%;  
     position:relative;  
     touch-action:none;  
     pointer-events: auto;  
-    backdrop-filter: blur(2px);  
+    backdrop-filter: blur(3px);  
     border: 2px solid rgba(255,255,255,0.3);  
+    box-shadow: 0 0 15px rgba(0,255,255,0.3);  
 }  
   
 #stick{  
-    width: min(50px, 10vw);  
-    height: min(50px, 10vw);  
-    max-width: 50px;  
-    max-height: 50px;  
+    width: min(55px, 12vw, 12vh);  
+    height: min(55px, 12vw, 12vh);  
     background:white;  
     border-radius:50%;  
     position:absolute;  
     left: 50%;  
     top: 50%;  
     transform: translate(-50%, -50%);  
-    transition: all 0.05s ease;  
-    box-shadow: 0 0 10px rgba(255,255,255,0.5);  
+    transition: all 0.02s;  
+    box-shadow: 0 0 15px cyan;  
 }  
   
 #fire{  
-    width: min(90px, 20vw);  
-    height: min(90px, 20vw);  
-    max-width: 90px;  
-    max-height: 90px;  
-    background:rgba(255,0,0,0.8);  
+    width: min(100px, 22vw, 22vh);  
+    height: min(100px, 22vw, 22vh);  
+    background:rgba(255,40,40,0.9);  
     border-radius:50%;  
     display:flex;  
     align-items:center;  
     justify-content:center;  
-    font-size: min(20px, 5vw);  
+    font-size: min(24px, 6vw, 6vh);  
     color:white;  
     touch-action:none;  
     pointer-events: auto;  
-    backdrop-filter: blur(2px);  
-    border: 2px solid rgba(255,255,255,0.5);  
-    box-shadow: 0 0 15px rgba(255,0,0,0.5);  
+    backdrop-filter: blur(3px);  
+    border: 3px solid rgba(255,200,200,0.7);  
+    box-shadow: 0 0 25px red;  
     font-weight: bold;  
+    text-shadow: 0 0 8px darkred;  
 }  
 
 #score {  
     position: absolute;  
-    top: 10px;  
-    right: 10px;  
+    top: max(10px, env(safe-area-inset-top));  
+    right: max(10px, env(safe-area-inset-right));  
     color: white;  
-    font-size: min(16px, 4vw);  
-    z-index: 10;  
-    text-shadow: 0 0 5px black;  
+    font-size: min(18px, 5vw);  
+    z-index: 20;  
+    text-shadow: 0 0 8px black;  
+    background: rgba(0,0,0,0.5);  
+    padding: 4px 12px;  
+    border-radius: 40px;  
+    backdrop-filter: blur(2px);  
+    border: 1px solid cyan;  
+    white-space: nowrap;  
 }  
 
 #title {  
     position: absolute;  
-    top: 10px;  
-    left: 10px;  
-    color: #0E4950;  
-    font-size: min(14px, 3.5vw);  
-    z-index: 10;  
-    text-shadow: 0 0 5px black;  
+    top: max(10px, env(safe-area-inset-top));  
+    left: max(10px, env(safe-area-inset-left));  
+    color: #7ff0f0;  
+    font-size: min(14px, 4vw);  
+    z-index: 20;  
+    text-shadow: 0 0 8px darkcyan;  
+    background: rgba(0,40,40,0.6);  
+    padding: 4px 10px;  
+    border-radius: 40px;  
+    backdrop-filter: blur(2px);  
+    border: 1px solid teal;  
+    white-space: nowrap;  
 }  
 </style>  
 </head>  
@@ -129,40 +159,30 @@ canvas{
 <div id="gameContainer">  
     <canvas id="game"></canvas>  
     
-    <div id="title">🚀 Space Shooting —by Exomnia team</div>  
-    <div id="score">Life: 3 | Score: 0</div>  
+    <div id="title">🚀 SPACE SHOOTING — Exomnia</div>  
+    <div id="score">❤️ 3  |  🎯 0</div>  
     
     <div id="controls">  
         <div id="joystick">  
             <div id="stick"></div>  
         </div>  
-        <div id="fire">FIRE</div>  
+        <div id="fire">🔫 FIRE</div>  
     </div>  
 </div>  
 
 <script>  
+(function(){  
 const canvas = document.getElementById("game")  
 const ctx = canvas.getContext("2d")  
 
-// Set canvas size based on display size
-function resizeCanvas() {
-    const container = document.getElementById('gameContainer')
-    const containerWidth = container.clientWidth
-    const containerHeight = container.clientHeight
-    
-    canvas.width = 400  // Keep game logic at 400x600
-    canvas.height = 600
-    
-    // Scale canvas CSS to fit container
-    canvas.style.width = '100%'
-    canvas.style.height = '100%'
-    canvas.style.objectFit = 'contain'
-}
+// Force canvas logical size 400x600  
+canvas.width = 400  
+canvas.height = 600  
 
-window.addEventListener('resize', resizeCanvas)
-resizeCanvas()
+// No extra resize needed — CSS handles fullscreen fitting  
+// but we ensure body locks to screen  
 
-// SOUND (no download needed)  
+// SOUND  
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)()  
 
 function playShoot(){  
@@ -234,8 +254,8 @@ for(let i=0;i<80;i++){
     })  
 }  
 
-// Enemy spawn interval
-setInterval(()=>{  
+// Enemy spawn interval  
+let enemyInterval = setInterval(()=>{  
     enemies.push({  
         x:Math.random()*360,  
         y:-20,  
@@ -245,8 +265,8 @@ setInterval(()=>{
     })  
 },1500)  
 
-// Enemy shooting interval
-setInterval(()=>{  
+// Enemy shooting interval  
+let enemyShootInterval = setInterval(()=>{  
     for(let e of enemies){  
         enemyBullets.push({  
             x:e.x+e.w/2,  
@@ -425,10 +445,12 @@ function shipCollision(){
             player.life--  
             if(player.life<=0){  
                 playGameOver()  
+                clearInterval(enemyInterval)  
+                clearInterval(enemyShootInterval)  
                 setTimeout(()=>{  
-                    alert("Game Over\nScore: "+score)  
+                    alert("💥 GAME OVER\nYour score: "+score)  
                     location.reload()  
-                },500)  
+                },400)  
             }  
         }  
     }  
@@ -454,8 +476,8 @@ function gameLoop(){
     bulletVsBullet()  
     shipCollision()  
     
-    // Update score display
-    document.getElementById('score').innerHTML = `Life: ${player.life} | Score: ${score}`
+    // Update score display  
+    document.getElementById('score').innerHTML = `❤️ ${player.life}  |  🎯 ${score}`  
     
     requestAnimationFrame(gameLoop)  
 }  
@@ -466,39 +488,44 @@ const joystick=document.getElementById("joystick")
 const stick=document.getElementById("stick")  
 const fire=document.getElementById("fire")  
 
-// Touch events for joystick
-joystick.addEventListener("touchstart", (e) => {
-    e.preventDefault()
-    handleJoystickMove(e)
-})
+// Resume audio on first touch  
+function resumeAudio() {  
+    if (audioCtx.state === 'suspended') audioCtx.resume();  
+}  
 
-joystick.addEventListener("touchmove", (e) => {  
-    e.preventDefault()
-    handleJoystickMove(e)
+// Touch events for joystick  
+joystick.addEventListener("touchstart", (e) => {  
+    e.preventDefault()  
+    resumeAudio()  
+    handleJoystickMove(e)  
 })  
 
-function handleJoystickMove(e) {
+joystick.addEventListener("touchmove", (e) => {  
+    e.preventDefault()  
+    handleJoystickMove(e)  
+})  
+
+function handleJoystickMove(e) {  
     let rect=joystick.getBoundingClientRect()  
-    let joystickRadius = rect.width / 2
-    let stickRadius = stick.offsetWidth / 2
+    let joystickRadius = rect.width / 2  
+    let stickRadius = stick.offsetWidth / 2  
     
     let x=e.touches[0].clientX-rect.left-joystickRadius  
     let y=e.touches[0].clientY-rect.top-joystickRadius  
     
-    // Limit stick movement
-    let maxMove = joystickRadius - stickRadius
-    let distance = Math.sqrt(x*x + y*y)
-    if (distance > maxMove) {
-        x = x * maxMove / distance
-        y = y * maxMove / distance
-    }
+    let maxMove = joystickRadius - stickRadius  
+    let distance = Math.sqrt(x*x + y*y)  
+    if (distance > maxMove) {  
+        x = x * maxMove / distance  
+        y = y * maxMove / distance  
+    }  
     
-    joystickX = x / maxMove
-    joystickY = y / maxMove
+    joystickX = x / maxMove  
+    joystickY = y / maxMove  
     
-    stick.style.left = (x + joystickRadius - stickRadius) + "px"
-    stick.style.top = (y + joystickRadius - stickRadius) + "px"
-}
+    stick.style.left = (x + joystickRadius - stickRadius) + "px"  
+    stick.style.top = (y + joystickRadius - stickRadius) + "px"  
+}  
 
 joystick.addEventListener("touchend",()=>{  
     joystickX=0  
@@ -508,77 +535,84 @@ joystick.addEventListener("touchend",()=>{
     stick.style.transform = "translate(-50%, -50%)"  
 })  
 
-// Mouse support for testing on desktop
-joystick.addEventListener("mousedown", (e) => {
-    e.preventDefault()
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
-})
+// Mouse desktop support  
+joystick.addEventListener("mousedown", (e) => {  
+    e.preventDefault()  
+    resumeAudio()  
+    document.addEventListener("mousemove", handleMouseMove)  
+    document.addEventListener("mouseup", handleMouseUp)  
+})  
 
-function handleMouseMove(e) {
+function handleMouseMove(e) {  
     let rect=joystick.getBoundingClientRect()  
-    let joystickRadius = rect.width / 2
-    let stickRadius = stick.offsetWidth / 2
+    let joystickRadius = rect.width / 2  
+    let stickRadius = stick.offsetWidth / 2  
     
     let x=e.clientX-rect.left-joystickRadius  
     let y=e.clientY-rect.top-joystickRadius  
     
-    // Limit stick movement
-    let maxMove = joystickRadius - stickRadius
-    let distance = Math.sqrt(x*x + y*y)
-    if (distance > maxMove) {
-        x = x * maxMove / distance
-        y = y * maxMove / distance
-    }
+    let maxMove = joystickRadius - stickRadius  
+    let distance = Math.sqrt(x*x + y*y)  
+    if (distance > maxMove) {  
+        x = x * maxMove / distance  
+        y = y * maxMove / distance  
+    }  
     
-    joystickX = x / maxMove
-    joystickY = y / maxMove
+    joystickX = x / maxMove  
+    joystickY = y / maxMove  
     
-    stick.style.left = (x + joystickRadius - stickRadius) + "px"
-    stick.style.top = (y + joystickRadius - stickRadius) + "px"
-}
+    stick.style.left = (x + joystickRadius - stickRadius) + "px"  
+    stick.style.top = (y + joystickRadius - stickRadius) + "px"  
+}  
 
-function handleMouseUp() {
+function handleMouseUp() {  
     joystickX=0  
     joystickY=0  
     stick.style.left = "50%"  
     stick.style.top = "50%"  
-    stick.style.transform = "translate(-50%, -50%)"
-    document.removeEventListener("mousemove", handleMouseMove)
-    document.removeEventListener("mouseup", handleMouseUp)
-}
+    stick.style.transform = "translate(-50%, -50%)"  
+    document.removeEventListener("mousemove", handleMouseMove)  
+    document.removeEventListener("mouseup", handleMouseUp)  
+}  
 
-// Fire button events
+// Fire button events  
 fire.addEventListener("touchstart", (e) => {  
-    e.preventDefault()
-    audioCtx.resume() // Resume audio context on user interaction
+    e.preventDefault()  
+    resumeAudio()  
     firing=true  
     shoot()  
     autoFire()  
 })  
 
 fire.addEventListener("touchend", (e) => {  
-    e.preventDefault()
+    e.preventDefault()  
     firing=false  
 })  
 
-// Mouse events for fire button (desktop testing)
-fire.addEventListener("mousedown", (e) => {
-    e.preventDefault()
-    audioCtx.resume()
+fire.addEventListener("mousedown", (e) => {  
+    e.preventDefault()  
+    resumeAudio()  
     firing=true  
     shoot()  
     autoFire()  
-})
+})  
 
-fire.addEventListener("mouseup", () => {
+fire.addEventListener("mouseup", () => {  
     firing=false  
-})
+})  
 
-fire.addEventListener("mouseleave", () => {
+fire.addEventListener("mouseleave", () => {  
     firing=false  
-})
+})  
 
+// Prevent body scroll on any touch  
+document.body.addEventListener('touchmove', (e) => {  
+    e.preventDefault()  
+}, { passive: false })  
+
+// Ensure fullscreen on orientation change (just a safety)  
+window.addEventListener('resize', () => {})  
+})();  
 </script>  
 
 </body>  
