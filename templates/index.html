@@ -3,154 +3,205 @@
 <head>  
 <meta charset="UTF-8">  
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">  
-<title>Space Shooting — fullscreen</title>  
+<title>Space Shooting</title>  
   
 <style>  
 * {  
-    box-sizing: border-box;  
-    -webkit-tap-highlight-color: transparent;  
     margin: 0;  
     padding: 0;  
+    box-sizing: border-box;  
+    -webkit-tap-highlight-color: transparent;  
+    user-select: none;  
+    -webkit-user-select: none;  
 }  
   
-body{  
-    margin:0;  
-    background:black;  
-    overflow:hidden;  
-    font-family:Arial;  
+html, body {  
+    width: 100%;  
+    height: 100%;  
+    overflow: hidden;  
+    position: fixed;  
+    background: black;  
+}  
+  
+body {  
     display: flex;  
     justify-content: center;  
     align-items: center;  
-    min-height: 100vh;  
-    min-height: 100dvh; /* dynamic viewport for mobile */  
-    width: 100vw;  
-    width: 100dvw;  
-    touch-action: none; /* prevent pull-to-refresh, panning */  
-    position: fixed;  
-    top: 0;  
-    left: 0;  
+    font-family: Arial, sans-serif;  
 }  
   
 #gameContainer {  
     position: relative;  
-    width: 100vw;  
-    height: 100vh;  
-    height: 100dvh;  
-    max-width: none;  
-    max-height: none;  
-    margin: 0;  
+    width: 100%;  
+    max-width: 400px;  
+    height: 100%;  
+    max-height: 600px;  
+    aspect-ratio: 2 / 3;  
+    margin: auto;  
     background: black;  
+    overflow: hidden;  
+    border: 2px solid #333;  
+    box-shadow: 0 0 20px rgba(0,255,255,0.2);  
+}  
+  
+canvas {  
+    position: absolute;  
+    top: 0;  
+    left: 0;  
+    width: 100% !important;  
+    height: 100% !important;  
+    display: block;  
+    background: black;  
+    z-index: 1;  
+}  
+  
+#uiOverlay {  
+    position: absolute;  
+    top: 0;  
+    left: 0;  
+    width: 100%;  
+    height: 100%;  
+    z-index: 2;  
+    pointer-events: none;  
+    padding: 12px 15px;  
+    display: flex;  
+    flex-direction: column;  
+    justify-content: space-between;  
+}  
+  
+#topBar {  
+    display: flex;  
+    justify-content: space-between;  
+    align-items: center;  
+    width: 100%;  
+    pointer-events: none;  
+    text-shadow: 0 0 5px rgba(0,0,0,0.8);  
+    font-size: clamp(14px, 4vw, 18px);  
+}  
+  
+#titleText {  
+    color: #0ff;  
+    background: rgba(0,50,50,0.7);  
+    padding: 6px 12px;  
+    border-radius: 20px;  
+    border: 1px solid #0ff;  
+    backdrop-filter: blur(2px);  
+    font-weight: bold;  
+    letter-spacing: 1px;  
+    box-shadow: 0 0 10px rgba(0,255,255,0.3);  
+}  
+  
+#statsText {  
+    color: white;  
+    background: rgba(0,0,0,0.7);  
+    padding: 6px 12px;  
+    border-radius: 20px;  
+    border: 1px solid #ff0;  
+    backdrop-filter: blur(2px);  
+    font-weight: bold;  
+    display: flex;  
+    gap: 15px;  
+}  
+  
+.life { color: #ff5555; }  
+.score { color: #ffff55; }  
+  
+#controls {  
+    position: absolute;  
+    bottom: 15px;  
+    left: 0;  
+    width: 100%;  
+    display: flex;  
+    justify-content: space-between;  
+    align-items: flex-end;  
+    padding: 0 15px 10px 15px;  
+    z-index: 3;  
+    pointer-events: none;  
+    box-sizing: border-box;  
+}  
+  
+#joystick {  
+    width: min(120px, 30vw);  
+    height: min(120px, 30vw);  
+    max-width: 120px;  
+    max-height: 120px;  
+    min-width: 80px;  
+    min-height: 80px;  
+    background: rgba(30, 30, 30, 0.7);  
+    border-radius: 50%;  
+    position: relative;  
+    touch-action: none;  
+    pointer-events: auto;  
+    backdrop-filter: blur(4px);  
+    border: 2px solid rgba(255, 255, 255, 0.3);  
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);  
     display: flex;  
     justify-content: center;  
     align-items: center;  
 }  
-
-/* canvas keeps 400x600 aspect ratio but fills container */  
-canvas{  
-    display:block;  
-    width: auto;  
-    height: auto;  
-    max-width: 100%;  
-    max-height: 100%;  
-    aspect-ratio: 400 / 600;  
-    background:black;  
-    object-fit: contain;  
-    position: relative;  
-    box-shadow: 0 0 0 2px #0a2a2a; /* optional subtle border */  
-}  
-
-/* controls overlay uses same canvas area */  
-#controls{  
+  
+#stick {  
+    width: min(50px, 12vw);  
+    height: min(50px, 12vw);  
+    max-width: 50px;  
+    max-height: 50px;  
+    min-width: 35px;  
+    min-height: 35px;  
+    background: white;  
+    border-radius: 50%;  
     position: absolute;  
-    bottom: max(15px, env(safe-area-inset-bottom));  
-    width: 100%;  
-    max-width: min(400px, 100vw);  
-    left: 50%;  
-    transform: translateX(-50%);  
-    display:flex;  
-    justify-content:space-between;  
-    padding: 0 15px 15px 15px;  
-    box-sizing:border-box;  
-    pointer-events: none;  
-    z-index: 10;  
-    gap: 20px;  
-}  
-  
-#joystick{  
-    width: min(130px, 28vw, 28vh);  
-    height: min(130px, 28vw, 28vh);  
-    background:rgba(255,255,255,0.2);  
-    border-radius:50%;  
-    position:relative;  
-    touch-action:none;  
-    pointer-events: auto;  
-    backdrop-filter: blur(3px);  
-    border: 2px solid rgba(255,255,255,0.3);  
-    box-shadow: 0 0 15px rgba(0,255,255,0.3);  
-}  
-  
-#stick{  
-    width: min(55px, 12vw, 12vh);  
-    height: min(55px, 12vw, 12vh);  
-    background:white;  
-    border-radius:50%;  
-    position:absolute;  
     left: 50%;  
     top: 50%;  
     transform: translate(-50%, -50%);  
-    transition: all 0.02s;  
-    box-shadow: 0 0 15px cyan;  
+    transition: all 0.03s ease;  
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);  
+    border: 2px solid #0ff;  
 }  
   
-#fire{  
-    width: min(100px, 22vw, 22vh);  
-    height: min(100px, 22vw, 22vh);  
-    background:rgba(255,40,40,0.9);  
-    border-radius:50%;  
-    display:flex;  
-    align-items:center;  
-    justify-content:center;  
-    font-size: min(24px, 6vw, 6vh);  
-    color:white;  
-    touch-action:none;  
-    pointer-events: auto;  
-    backdrop-filter: blur(3px);  
-    border: 3px solid rgba(255,200,200,0.7);  
-    box-shadow: 0 0 25px red;  
+#fire {  
+    width: min(90px, 22vw);  
+    height: min(90px, 22vw);  
+    max-width: 90px;  
+    max-height: 90px;  
+    min-width: 70px;  
+    min-height: 70px;  
+    background: linear-gradient(145deg, #ff3333, #cc0000);  
+    border-radius: 50%;  
+    display: flex;  
+    align-items: center;  
+    justify-content: center;  
+    font-size: min(24px, 6vw);  
     font-weight: bold;  
-    text-shadow: 0 0 8px darkred;  
-}  
-
-#score {  
-    position: absolute;  
-    top: max(10px, env(safe-area-inset-top));  
-    right: max(10px, env(safe-area-inset-right));  
     color: white;  
-    font-size: min(18px, 5vw);  
-    z-index: 20;  
-    text-shadow: 0 0 8px black;  
-    background: rgba(0,0,0,0.5);  
-    padding: 4px 12px;  
-    border-radius: 40px;  
-    backdrop-filter: blur(2px);  
-    border: 1px solid cyan;  
-    white-space: nowrap;  
+    touch-action: none;  
+    pointer-events: auto;  
+    backdrop-filter: blur(4px);  
+    border: 3px solid rgba(255, 255, 255, 0.6);  
+    box-shadow: 0 0 25px rgba(255, 0, 0, 0.6), 0 5px 0 #990000;  
+    text-transform: uppercase;  
+    letter-spacing: 2px;  
+    text-shadow: 0 2px 0 #990000;  
+    transition: all 0.05s ease;  
 }  
 
-#title {  
+#fire:active {  
+    transform: translateY(4px);  
+    box-shadow: 0 0 30px rgba(255, 0, 0, 0.8), 0 1px 0 #990000;  
+}  
+
+/* Loading message */  
+#loading {  
     position: absolute;  
-    top: max(10px, env(safe-area-inset-top));  
-    left: max(10px, env(safe-area-inset-left));  
-    color: #7ff0f0;  
-    font-size: min(14px, 4vw);  
-    z-index: 20;  
-    text-shadow: 0 0 8px darkcyan;  
-    background: rgba(0,40,40,0.6);  
-    padding: 4px 10px;  
-    border-radius: 40px;  
-    backdrop-filter: blur(2px);  
-    border: 1px solid teal;  
-    white-space: nowrap;  
+    top: 50%;  
+    left: 50%;  
+    transform: translate(-50%, -50%);  
+    color: #0ff;  
+    font-size: 20px;  
+    z-index: 10;  
+    background: rgba(0,0,0,0.8);  
+    padding: 20px;  
+    border-radius: 10px;  
+    border: 2px solid #0ff;  
 }  
 </style>  
 </head>  
@@ -159,312 +210,377 @@ canvas{
 <div id="gameContainer">  
     <canvas id="game"></canvas>  
     
-    <div id="title">🚀 SPACE SHOOTING — Exomnia</div>  
-    <div id="score">❤️ 3  |  🎯 0</div>  
+    <div id="uiOverlay">  
+        <div id="topBar">  
+            <div id="titleText">🚀 SPACE SHOOTING</div>  
+            <div id="statsText">  
+                <span class="life">❤️ <span id="lifeValue">3</span></span>  
+                <span class="score">🎁 <span id="scoreValue">0</span></span>  
+            </div>  
+        </div>  
+    </div>  
     
     <div id="controls">  
         <div id="joystick">  
             <div id="stick"></div>  
         </div>  
-        <div id="fire">🔫 FIRE</div>  
+        <div id="fire">FIRE</div>  
     </div>  
 </div>  
 
+<div id="loading">Loading...</div>  
+
 <script>  
-(function(){  
+// Hide loading when ready  
+window.addEventListener('load', () => {  
+    document.getElementById('loading').style.display = 'none'  
+})  
+
 const canvas = document.getElementById("game")  
 const ctx = canvas.getContext("2d")  
 
-// Force canvas logical size 400x600  
-canvas.width = 400  
-canvas.height = 600  
+// Fixed game resolution (400x600 for game logic)  
+const GAME_WIDTH = 400  
+const GAME_HEIGHT = 600  
 
-// No extra resize needed — CSS handles fullscreen fitting  
-// but we ensure body locks to screen  
-
-// SOUND  
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)()  
-
-function playShoot(){  
-    if (!audioCtx) return
-    let osc = audioCtx.createOscillator()  
-    let gain = audioCtx.createGain()  
-    osc.type="square"  
-    osc.frequency.value=600  
-    gain.gain.value=0.1  
-    osc.connect(gain)  
-    gain.connect(audioCtx.destination)  
-    osc.start()  
-    osc.stop(audioCtx.currentTime+0.05)  
+function resizeCanvas() {  
+    canvas.width = GAME_WIDTH  
+    canvas.height = GAME_HEIGHT  
 }  
 
-function playExplosion(){  
-    if (!audioCtx) return
-    let osc = audioCtx.createOscillator()  
-    let gain = audioCtx.createGain()  
-    osc.type="sawtooth"  
-    osc.frequency.setValueAtTime(200,audioCtx.currentTime)  
-    osc.frequency.exponentialRampToValueAtTime(50,audioCtx.currentTime+0.3)  
-    gain.gain.value=0.2  
-    osc.connect(gain)  
-    gain.connect(audioCtx.destination)  
-    osc.start()  
-    osc.stop(audioCtx.currentTime+0.3)  
-}  
+resizeCanvas()  
+window.addEventListener('resize', resizeCanvas)  
 
-function playGameOver(){  
-    if (!audioCtx) return
-    let osc = audioCtx.createOscillator()  
-    let gain = audioCtx.createGain()  
-    osc.type="triangle"  
-    osc.frequency.setValueAtTime(300,audioCtx.currentTime)  
-    osc.frequency.exponentialRampToValueAtTime(80,audioCtx.currentTime+0.6)  
-    gain.gain.value=0.2  
-    osc.connect(gain)  
-    gain.connect(audioCtx.destination)  
-    osc.start()  
-    osc.stop(audioCtx.currentTime+0.6)  
-}  
+// SOUND setup  
+let audioCtx = null  
 
-let player={  
-    x:180,  
-    y:520,  
-    w:40,  
-    h:40,  
-    speed:4,  
-    life:3  
-}  
-
-let bullets=[]  
-let enemyBullets=[]  
-let enemies=[]  
-let explosions=[]  
-let stars=[]  
-
-let score=0  
-let joystickX=0  
-let joystickY=0  
-let firing=false  
-
-for(let i=0;i<80;i++){  
-    stars.push({  
-        x:Math.random()*400,  
-        y:Math.random()*600,  
-        speed:Math.random()*2+1  
-    })  
-}  
-
-// Enemy spawn interval  
-let enemyInterval = setInterval(()=>{  
-    enemies.push({  
-        x:Math.random()*360,  
-        y:-20,  
-        w:30,  
-        h:30,  
-        speed:2  
-    })  
-},1500)  
-
-// Enemy shooting interval  
-let enemyShootInterval = setInterval(()=>{  
-    for(let e of enemies){  
-        enemyBullets.push({  
-            x:e.x+e.w/2,  
-            y:e.y+e.h,  
-            speed:3  
-        })  
+function initAudio() {  
+    if (audioCtx) return  
+    try {  
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)()  
+    } catch(e) {  
+        console.log("Web Audio API not supported")  
     }  
-},2000)  
+}  
 
-function shoot(){  
+function playShoot() {  
+    if (!audioCtx) return  
+    try {  
+        let osc = audioCtx.createOscillator()  
+        let gain = audioCtx.createGain()  
+        osc.type = "square"  
+        osc.frequency.value = 600  
+        gain.gain.value = 0.1  
+        osc.connect(gain)  
+        gain.connect(audioCtx.destination)  
+        osc.start()  
+        osc.stop(audioCtx.currentTime + 0.05)  
+    } catch(e) {}  
+}  
+
+function playExplosion() {  
+    if (!audioCtx) return  
+    try {  
+        let osc = audioCtx.createOscillator()  
+        let gain = audioCtx.createGain()  
+        osc.type = "sawtooth"  
+        osc.frequency.setValueAtTime(200, audioCtx.currentTime)  
+        osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.3)  
+        gain.gain.value = 0.2  
+        osc.connect(gain)  
+        gain.connect(audioCtx.destination)  
+        osc.start()  
+        osc.stop(audioCtx.currentTime + 0.3)  
+    } catch(e) {}  
+}  
+
+function playGameOver() {  
+    if (!audioCtx) return  
+    try {  
+        let osc = audioCtx.createOscillator()  
+        let gain = audioCtx.createGain()  
+        osc.type = "triangle"  
+        osc.frequency.setValueAtTime(300, audioCtx.currentTime)  
+        osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.6)  
+        gain.gain.value = 0.2  
+        osc.connect(gain)  
+        gain.connect(audioCtx.destination)  
+        osc.start()  
+        osc.stop(audioCtx.currentTime + 0.6)  
+    } catch(e) {}  
+}  
+
+// Game state  
+let player = {  
+    x: 180,  
+    y: 520,  
+    w: 40,  
+    h: 40,  
+    speed: 4,  
+    life: 3  
+}  
+
+let bullets = []  
+let enemyBullets = []  
+let enemies = []  
+let explosions = []  
+let stars = []  
+
+let score = 0  
+let joystickX = 0  
+let joystickY = 0  
+let firing = false  
+let gameActive = true  
+
+// Create stars  
+for (let i = 0; i < 80; i++) {  
+    stars.push({  
+        x: Math.random() * GAME_WIDTH,  
+        y: Math.random() * GAME_HEIGHT,  
+        speed: Math.random() * 2 + 1  
+    })  
+}  
+
+// Game intervals  
+let enemyInterval, enemyShootInterval  
+
+function startGameIntervals() {  
+    enemyInterval = setInterval(() => {  
+        if (gameActive) {  
+            enemies.push({  
+                x: Math.random() * (GAME_WIDTH - 40),  
+                y: -20,  
+                w: 30,  
+                h: 30,  
+                speed: 2  
+            })  
+        }  
+    }, 1500)  
+
+    enemyShootInterval = setInterval(() => {  
+        if (gameActive) {  
+            for (let e of enemies) {  
+                if (e && e.x && e.y) {  
+                    enemyBullets.push({  
+                        x: e.x + e.w / 2,  
+                        y: e.y + e.h,  
+                        speed: 3  
+                    })  
+                }  
+            }  
+        }  
+    }, 2000)  
+}  
+
+startGameIntervals()  
+
+function shoot() {  
+    if (!gameActive) return  
     playShoot()  
     bullets.push({  
-        x:player.x+18,  
-        y:player.y,  
-        speed:6  
+        x: player.x + 18,  
+        y: player.y,  
+        speed: 6  
     })  
 }  
 
-function autoFire(){  
-    if(firing){  
+function autoFire() {  
+    if (firing && gameActive) {  
         shoot()  
-        setTimeout(autoFire,150)  
+        setTimeout(autoFire, 150)  
     }  
 }  
 
-function drawStars(){  
-    ctx.fillStyle="white"  
-    for(let s of stars){  
-        s.y+=s.speed  
-        if(s.y>600){  
-            s.y=0  
-            s.x=Math.random()*400  
+function drawStars() {  
+    ctx.fillStyle = "white"  
+    for (let s of stars) {  
+        s.y += s.speed  
+        if (s.y > GAME_HEIGHT) {  
+            s.y = 0  
+            s.x = Math.random() * GAME_WIDTH  
         }  
-        ctx.fillRect(s.x,s.y,2,2)  
+        ctx.fillRect(s.x, s.y, 2, 2)  
     }  
 }  
 
-function drawPlayer(){  
+function drawPlayer() {  
     ctx.save()  
-    ctx.translate(player.x+20,player.y+20)  
-    ctx.fillStyle="#00e5ff"  
+    ctx.translate(player.x + 20, player.y + 20)  
+    
+    // Wings  
+    ctx.fillStyle = "#00e5ff"  
     ctx.beginPath()  
-    ctx.moveTo(-20,10)  
-    ctx.lineTo(-5,-15)  
-    ctx.lineTo(-5,15)  
+    ctx.moveTo(-20, 10)  
+    ctx.lineTo(-5, -15)  
+    ctx.lineTo(-5, 15)  
     ctx.fill()  
     ctx.beginPath()  
-    ctx.moveTo(20,10)  
-    ctx.lineTo(5,-15)  
-    ctx.lineTo(5,15)  
+    ctx.moveTo(20, 10)  
+    ctx.lineTo(5, -15)  
+    ctx.lineTo(5, 15)  
     ctx.fill()  
-    ctx.fillStyle="#0ff"  
+    
+    // Body  
+    ctx.fillStyle = "#0ff"  
     ctx.beginPath()  
-    ctx.moveTo(0,-20)  
-    ctx.lineTo(10,10)  
-    ctx.lineTo(-10,10)  
+    ctx.moveTo(0, -20)  
+    ctx.lineTo(10, 10)  
+    ctx.lineTo(-10, 10)  
     ctx.closePath()  
     ctx.fill()  
-    ctx.fillStyle="blue"  
+    
+    // Cockpit  
+    ctx.fillStyle = "blue"  
     ctx.beginPath()  
-    ctx.arc(0,-5,5,0,Math.PI*2)  
+    ctx.arc(0, -5, 5, 0, Math.PI * 2)  
     ctx.fill()  
-    ctx.fillStyle="orange"  
+    
+    // Engine  
+    ctx.fillStyle = "orange"  
     ctx.beginPath()  
-    ctx.moveTo(-6,10)  
-    ctx.lineTo(0,20)  
-    ctx.lineTo(6,10)  
+    ctx.moveTo(-6, 10)  
+    ctx.lineTo(0, 20)  
+    ctx.lineTo(6, 10)  
     ctx.fill()  
+    
     ctx.restore()  
 }  
 
-function drawBullets(){  
-    ctx.fillStyle="yellow"  
-    for(let i=bullets.length-1;i>=0;i--){  
-        let b=bullets[i]  
-        b.y-=b.speed  
-        ctx.fillRect(b.x,b.y,4,10)  
-        if(b.y<0) bullets.splice(i,1)  
+function drawBullets() {  
+    ctx.fillStyle = "yellow"  
+    for (let i = bullets.length - 1; i >= 0; i--) {  
+        let b = bullets[i]  
+        b.y -= b.speed  
+        ctx.fillRect(b.x, b.y, 4, 10)  
+        if (b.y < 0) bullets.splice(i, 1)  
     }  
 }  
 
-function drawEnemyBullets(){  
-    ctx.fillStyle="red"  
-    for(let i=enemyBullets.length-1;i>=0;i--){  
-        let b=enemyBullets[i]  
-        b.y+=b.speed  
-        ctx.fillRect(b.x,b.y,4,10)  
-        if(b.y>600) enemyBullets.splice(i,1)  
+function drawEnemyBullets() {  
+    ctx.fillStyle = "red"  
+    for (let i = enemyBullets.length - 1; i >= 0; i--) {  
+        let b = enemyBullets[i]  
+        b.y += b.speed  
+        ctx.fillRect(b.x, b.y, 4, 10)  
+        if (b.y > GAME_HEIGHT) enemyBullets.splice(i, 1)  
     }  
 }  
 
-function drawEnemies(){  
-    ctx.fillStyle="lime"  
-    for(let i=enemies.length-1;i>=0;i--){  
-        let e=enemies[i]  
-        e.y+=e.speed  
+function drawEnemies() {  
+    ctx.fillStyle = "lime"  
+    for (let i = enemies.length - 1; i >= 0; i--) {  
+        let e = enemies[i]  
+        e.y += e.speed  
         ctx.beginPath()  
-        ctx.moveTo(e.x+15,e.y)  
-        ctx.lineTo(e.x+30,e.y+30)  
-        ctx.lineTo(e.x,e.y+30)  
+        ctx.moveTo(e.x + 15, e.y)  
+        ctx.lineTo(e.x + 30, e.y + 30)  
+        ctx.lineTo(e.x, e.y + 30)  
         ctx.closePath()  
         ctx.fill()  
-        if(e.y>620) enemies.splice(i,1)  
+        if (e.y > GAME_HEIGHT + 20) enemies.splice(i, 1)  
     }  
 }  
 
-function drawExplosions(){  
-    ctx.fillStyle="orange"  
-    for(let i=explosions.length-1;i>=0;i--){  
-        let ex=explosions[i]  
+function drawExplosions() {  
+    ctx.fillStyle = "orange"  
+    for (let i = explosions.length - 1; i >= 0; i--) {  
+        let ex = explosions[i]  
         ctx.beginPath()  
-        ctx.arc(ex.x,ex.y,ex.size,0,Math.PI*2)  
+        ctx.arc(ex.x, ex.y, ex.size, 0, Math.PI * 2)  
         ctx.fill()  
-        ex.size+=1  
-        if(ex.size>15) explosions.splice(i,1)  
+        ex.size += 1  
+        if (ex.size > 15) explosions.splice(i, 1)  
     }  
 }  
 
-function bulletCollision(){  
-    for(let i=bullets.length-1;i>=0;i--){  
-        for(let j=enemies.length-1;j>=0;j--){  
-            let b=bullets[i]  
-            let e=enemies[j]  
-            if(  
-                b &&  
-                b.x < e.x+e.w &&  
-                b.x+4 > e.x &&  
-                b.y < e.y+e.h &&  
-                b.y+10 > e.y  
-            ){  
-                explosions.push({x:e.x+15,y:e.y+15,size:2})  
+function updateUI() {  
+    document.getElementById('lifeValue').textContent = player.life  
+    document.getElementById('scoreValue').textContent = score  
+}  
+
+function bulletCollision() {  
+    for (let i = bullets.length - 1; i >= 0; i--) {  
+        for (let j = enemies.length - 1; j >= 0; j--) {  
+            let b = bullets[i]  
+            let e = enemies[j]  
+            if (  
+                b && e &&  
+                b.x < e.x + e.w &&  
+                b.x + 4 > e.x &&  
+                b.y < e.y + e.h &&  
+                b.y + 10 > e.y  
+            ) {  
+                explosions.push({ x: e.x + 15, y: e.y + 15, size: 2 })  
                 playExplosion()  
-                score+=10  
-                bullets.splice(i,1)  
-                enemies.splice(j,1)  
+                score += 10  
+                bullets.splice(i, 1)  
+                enemies.splice(j, 1)  
+                updateUI()  
                 break  
             }  
         }  
     }  
 }  
 
-function bulletVsBullet(){  
-    for(let i=bullets.length-1;i>=0;i--){  
-        for(let j=enemyBullets.length-1;j>=0;j--){  
-            let b1=bullets[i]  
-            let b2=enemyBullets[j]  
-            if(  
-                b1 &&  
-                b2 &&  
-                b1.x < b2.x+4 &&  
-                b1.x+4 > b2.x &&  
-                b1.y < b2.y+10 &&  
-                b1.y+10 > b2.y  
-            ){  
-                explosions.push({x:b1.x,y:b1.y,size:2})  
+function bulletVsBullet() {  
+    for (let i = bullets.length - 1; i >= 0; i--) {  
+        for (let j = enemyBullets.length - 1; j >= 0; j--) {  
+            let b1 = bullets[i]  
+            let b2 = enemyBullets[j]  
+            if (  
+                b1 && b2 &&  
+                b1.x < b2.x + 4 &&  
+                b1.x + 4 > b2.x &&  
+                b1.y < b2.y + 10 &&  
+                b1.y + 10 > b2.y  
+            ) {  
+                explosions.push({ x: b1.x, y: b1.y, size: 2 })  
                 playExplosion()  
-                bullets.splice(i,1)  
-                enemyBullets.splice(j,1)  
+                bullets.splice(i, 1)  
+                enemyBullets.splice(j, 1)  
                 break  
             }  
         }  
     }  
 }  
 
-function shipCollision(){  
-    for(let i=enemies.length-1;i>=0;i--){  
-        let e=enemies[i]  
-        if(  
+function shipCollision() {  
+    for (let i = enemies.length - 1; i >= 0; i--) {  
+        let e = enemies[i]  
+        if (  
             player.x < e.x + e.w &&  
             player.x + player.w > e.x &&  
             player.y < e.y + e.h &&  
             player.y + player.h > e.y  
-        ){  
-            explosions.push({x:player.x+20,y:player.y+20,size:2})  
-            enemies.splice(i,1)  
+        ) {  
+            explosions.push({ x: player.x + 20, y: player.y + 20, size: 2 })  
+            enemies.splice(i, 1)  
             player.life--  
-            if(player.life<=0){  
+            updateUI()  
+            
+            if (player.life <= 0) {  
+                gameActive = false  
                 playGameOver()  
-                clearInterval(enemyInterval)  
-                clearInterval(enemyShootInterval)  
-                setTimeout(()=>{  
-                    alert("💥 GAME OVER\nYour score: "+score)  
+                setTimeout(() => {  
+                    alert("Game Over\nScore: " + score)  
                     location.reload()  
-                },400)  
+                }, 500)  
             }  
         }  
     }  
 }  
 
-function updatePlayer(){  
-    player.x+=joystickX*player.speed  
-    player.y+=joystickY*player.speed  
-    player.x=Math.max(0,Math.min(360,player.x))  
-    player.y=Math.max(0,Math.min(560,player.y))  
+function updatePlayer() {  
+    player.x += joystickX * player.speed  
+    player.y += joystickY * player.speed  
+    player.x = Math.max(0, Math.min(GAME_WIDTH - player.w, player.x))  
+    player.y = Math.max(0, Math.min(GAME_HEIGHT - player.h, player.y))  
 }  
 
-function gameLoop(){  
-    ctx.clearRect(0,0,400,600)  
+function gameLoop() {  
+    if (!gameActive) return  
+    
+    ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT)  
     drawStars()  
     updatePlayer()  
     drawPlayer()  
@@ -476,143 +592,138 @@ function gameLoop(){
     bulletVsBullet()  
     shipCollision()  
     
-    // Update score display  
-    document.getElementById('score').innerHTML = `❤️ ${player.life}  |  🎯 ${score}`  
-    
     requestAnimationFrame(gameLoop)  
 }  
 
 gameLoop()  
 
-const joystick=document.getElementById("joystick")  
-const stick=document.getElementById("stick")  
-const fire=document.getElementById("fire")  
+// Touch controls  
+const joystick = document.getElementById("joystick")  
+const stick = document.getElementById("stick")  
+const fire = document.getElementById("fire")  
 
-// Resume audio on first touch  
-function resumeAudio() {  
-    if (audioCtx.state === 'suspended') audioCtx.resume();  
+function handleJoystickStart(e) {  
+    e.preventDefault()  
+    initAudio()  
 }  
-
-// Touch events for joystick  
-joystick.addEventListener("touchstart", (e) => {  
-    e.preventDefault()  
-    resumeAudio()  
-    handleJoystickMove(e)  
-})  
-
-joystick.addEventListener("touchmove", (e) => {  
-    e.preventDefault()  
-    handleJoystickMove(e)  
-})  
 
 function handleJoystickMove(e) {  
-    let rect=joystick.getBoundingClientRect()  
-    let joystickRadius = rect.width / 2  
-    let stickRadius = stick.offsetWidth / 2  
-    
-    let x=e.touches[0].clientX-rect.left-joystickRadius  
-    let y=e.touches[0].clientY-rect.top-joystickRadius  
-    
-    let maxMove = joystickRadius - stickRadius  
-    let distance = Math.sqrt(x*x + y*y)  
-    if (distance > maxMove) {  
-        x = x * maxMove / distance  
-        y = y * maxMove / distance  
-    }  
-    
-    joystickX = x / maxMove  
-    joystickY = y / maxMove  
-    
-    stick.style.left = (x + joystickRadius - stickRadius) + "px"  
-    stick.style.top = (y + joystickRadius - stickRadius) + "px"  
-}  
-
-joystick.addEventListener("touchend",()=>{  
-    joystickX=0  
-    joystickY=0  
-    stick.style.left = "50%"  
-    stick.style.top = "50%"  
-    stick.style.transform = "translate(-50%, -50%)"  
-})  
-
-// Mouse desktop support  
-joystick.addEventListener("mousedown", (e) => {  
     e.preventDefault()  
-    resumeAudio()  
-    document.addEventListener("mousemove", handleMouseMove)  
-    document.addEventListener("mouseup", handleMouseUp)  
-})  
-
-function handleMouseMove(e) {  
-    let rect=joystick.getBoundingClientRect()  
-    let joystickRadius = rect.width / 2  
-    let stickRadius = stick.offsetWidth / 2  
+    let rect = joystick.getBoundingClientRect()  
+    let touch = e.touches ? e.touches[0] : e  
     
-    let x=e.clientX-rect.left-joystickRadius  
-    let y=e.clientY-rect.top-joystickRadius  
+    let centerX = rect.left + rect.width / 2  
+    let centerY = rect.top + rect.height / 2  
+    let maxRadius = rect.width / 2 - stick.offsetWidth / 2  
     
-    let maxMove = joystickRadius - stickRadius  
-    let distance = Math.sqrt(x*x + y*y)  
-    if (distance > maxMove) {  
-        x = x * maxMove / distance  
-        y = y * maxMove / distance  
+    let x = touch.clientX - centerX  
+    let y = touch.clientY - centerY  
+    
+    // Limit to circle
+    let distance = Math.sqrt(x * x + y * y)  
+    if (distance > maxRadius) {  
+        x = x * maxRadius / distance  
+        y = y * maxRadius / distance  
     }  
     
-    joystickX = x / maxMove  
-    joystickY = y / maxMove  
+    joystickX = x / maxRadius  
+    joystickY = y / maxRadius  
     
-    stick.style.left = (x + joystickRadius - stickRadius) + "px"  
-    stick.style.top = (y + joystickRadius - stickRadius) + "px"  
+    stick.style.left = (x + rect.width / 2 - stick.offsetWidth / 2) + "px"  
+    stick.style.top = (y + rect.height / 2 - stick.offsetHeight / 2) + "px"  
 }  
 
-function handleMouseUp() {  
-    joystickX=0  
-    joystickY=0  
+function handleJoystickEnd(e) {  
+    e.preventDefault()  
+    joystickX = 0  
+    joystickY = 0  
     stick.style.left = "50%"  
     stick.style.top = "50%"  
     stick.style.transform = "translate(-50%, -50%)"  
-    document.removeEventListener("mousemove", handleMouseMove)  
-    document.removeEventListener("mouseup", handleMouseUp)  
 }  
 
-// Fire button events  
+// Touch events  
+joystick.addEventListener("touchstart", handleJoystickStart)  
+joystick.addEventListener("touchmove", handleJoystickMove)  
+joystick.addEventListener("touchend", handleJoystickEnd)  
+joystick.addEventListener("touchcancel", handleJoystickEnd)  
+
+// Fire button  
 fire.addEventListener("touchstart", (e) => {  
     e.preventDefault()  
-    resumeAudio()  
-    firing=true  
+    initAudio()  
+    if (audioCtx && audioCtx.state === 'suspended') {  
+        audioCtx.resume()  
+    }  
+    firing = true  
     shoot()  
     autoFire()  
 })  
 
 fire.addEventListener("touchend", (e) => {  
     e.preventDefault()  
-    firing=false  
+    firing = false  
+})  
+
+fire.addEventListener("touchcancel", (e) => {  
+    e.preventDefault()  
+    firing = false  
+})  
+
+// Mouse controls for testing  
+joystick.addEventListener("mousedown", (e) => {  
+    e.preventDefault()  
+    initAudio()  
+    handleJoystickMove(e)  
+    
+    function onMouseMove(e) {  
+        e.preventDefault()  
+        handleJoystickMove(e)  
+    }  
+    
+    function onMouseUp(e) {  
+        e.preventDefault()  
+        handleJoystickEnd(e)  
+        document.removeEventListener("mousemove", onMouseMove)  
+        document.removeEventListener("mouseup", onMouseUp)  
+    }  
+    
+    document.addEventListener("mousemove", onMouseMove)  
+    document.addEventListener("mouseup", onMouseUp)  
 })  
 
 fire.addEventListener("mousedown", (e) => {  
     e.preventDefault()  
-    resumeAudio()  
-    firing=true  
+    initAudio()  
+    if (audioCtx && audioCtx.state === 'suspended') {  
+        audioCtx.resume()  
+    }  
+    firing = true  
     shoot()  
     autoFire()  
 })  
 
 fire.addEventListener("mouseup", () => {  
-    firing=false  
+    firing = false  
 })  
 
 fire.addEventListener("mouseleave", () => {  
-    firing=false  
+    firing = false  
 })  
 
-// Prevent body scroll on any touch  
-document.body.addEventListener('touchmove', (e) => {  
-    e.preventDefault()  
+// Prevent default touch actions on the whole page  
+document.body.addEventListener("touchstart", (e) => {  
+    if (e.target === canvas) {  
+        e.preventDefault()  
+    }  
 }, { passive: false })  
 
-// Ensure fullscreen on orientation change (just a safety)  
-window.addEventListener('resize', () => {})  
-})();  
+document.body.addEventListener("touchmove", (e) => {  
+    if (e.target === canvas || e.target === joystick || e.target === fire) {  
+        e.preventDefault()  
+    }  
+}, { passive: false })  
+
 </script>  
 
 </body>  
