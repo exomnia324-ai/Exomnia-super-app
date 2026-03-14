@@ -3,7 +3,7 @@
 <head>  
 <meta charset="UTF-8">  
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">  
-<title>Space Shooting - ULTIMATE</title>  
+<title>Space Shooting - ULTIMATE EDITION</title>  
   
 <style>  
 * {  
@@ -121,6 +121,8 @@ canvas {
     display: flex;
     gap: 10px;
     pointer-events: none;
+    flex-wrap: wrap;
+    max-width: 200px;
 }
 
 .powerup-icon {
@@ -603,6 +605,23 @@ function playSpecialAttack() {
     } catch(e) {}
 }
 
+function playLevelUp() {
+    if (!audioCtx) return
+    try {
+        let osc = audioCtx.createOscillator()
+        let gain = audioCtx.createGain()
+        osc.type = "sine"
+        osc.frequency.setValueAtTime(400, audioCtx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.2)
+        osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.4)
+        gain.gain.value = 0.2
+        osc.connect(gain)
+        gain.connect(audioCtx.destination)
+        osc.start()
+        osc.stop(audioCtx.currentTime + 0.4)
+    } catch(e) {}
+}
+
 // Game state  
 let player = {  
     x: 180,  
@@ -617,11 +636,22 @@ let player = {
         spreadShot: false,
         shield: false,
         tripleShot: false,
-        homingMissile: false
+        homingMissile: false,
+        laserBeam: false,
+        timeSlow: false
     },
     powerupTimers: {},
     specialMeter: 0,
-    maxSpecial: 100
+    maxSpecial: 100,
+    experience: 0,
+    level: 1,
+    skillPoints: 0,
+    skills: {
+        damage: 1,
+        fireRate: 1,
+        speed: 1,
+        critical: 0
+    }
 }  
 
 let bullets = []  
@@ -632,6 +662,10 @@ let powerups = []
 let stars = []  
 let missiles = []  
 let particles = []  
+let laserBeams = []  
+let blackHoles = []  
+let satellites = []  
+let mines = []  
 
 let score = 0  
 let joystickX = 0  
@@ -646,6 +680,11 @@ let combo = 0
 let comboTimeout = null  
 let bossActive = false  
 let boss = null  
+let timeSlowActive = false  
+let timeSlowTimer = null  
+let achievements = []  
+let dailyChallenges = []
+let highScore = localStorage.getItem('highScore') ? parseInt(localStorage.getItem('highScore')) : 0
 
 // Powerup types  
 const POWERUP_TYPES = {
@@ -654,8 +693,21 @@ const POWERUP_TYPES = {
     SHIELD: { color: '#00ffff', symbol: '🛡️', duration: 5000 },
     TRIPLE_SHOT: { color: '#ffff00', symbol: '🔱', duration: 5000 },
     HOMING_MISSILE: { color: '#ff8800', symbol: '🎯', duration: 5000 },
+    LASER_BEAM: { color: '#ff00aa', symbol: '⚡', duration: 4000 },
+    TIME_SLOW: { color: '#00aaff', symbol: '⏱️', duration: 3000 },
     HEALTH: { color: '#ff5555', symbol: '❤️', duration: 0 },
-    SPECIAL: { color: '#aa44ff', symbol: '✨', duration: 0 }
+    SPECIAL: { color: '#aa44ff', symbol: '✨', duration: 0 },
+    NUKE: { color: '#ffaa00', symbol: '💣', duration: 0 },
+    BLACK_HOLE: { color: '#aa00aa', symbol: '🕳️', duration: 0 }
+}
+
+// Achievement definitions  
+const ACHIEVEMENTS = {
+    FIRST_BLOOD: { name: 'First Blood', requirement: 'Kill first enemy', reward: 100 },
+    COMBO_MASTER: { name: 'Combo Master', requirement: 'Get 20x combo', reward: 500 },
+    BOSS_SLAYER: { name: 'Boss Slayer', requirement: 'Defeat first boss', reward: 1000 },
+    SURVIVOR: { name: 'Survivor', requirement: 'Reach wave 10', reward: 2000 },
+    COLLECTOR: { name: 'Collector', requirement: 'Collect 50 powerups', reward: 1000 }
 }
 
 // Create stars with parallax effect  
@@ -671,7 +723,7 @@ for (let i = 0; i < 150; i++) {
 }  
 
 // Game intervals  
-let enemyInterval, enemyShootInterval, powerupInterval  
+let enemyInterval, enemyShootInterval, powerupInterval, satelliteInterval  
 
 function startGameIntervals() {  
     // Enemy spawn with wave difficulty  
@@ -681,37 +733,7 @@ function startGameIntervals() {
             for (let i = 0; i < enemyCount; i++) {  
                 setTimeout(() => {  
                     if (gameActive && !gamePaused && !bossActive) {  
-                        let type = 'normal'
-                        let rand = Math.random()
-                        if (rand < 0.1) type = 'elite'
-                        else if (rand < 0.3) type = 'fast'
-                        
-                        let enemy = {  
-                            x: Math.random() * (GAME_WIDTH - 40),  
-                            y: -20 - Math.random() * 50,  
-                            w: 30,  
-                            h: 30,  
-                            speed: 2 + wave * 0.3,
-                            hp: 1,
-                            type: type,
-                            pattern: Math.floor(Math.random() * 3),
-                            angle: 0
-                        }
-                        
-                        if (type === 'fast') {
-                            enemy.speed = 4 + wave * 0.3
-                            enemy.color = '#ffaa00'
-                        } else if (type === 'elite') {
-                            enemy.hp = 3
-                            enemy.speed = 1.5 + wave * 0.2
-                            enemy.color = '#ff5555'
-                            enemy.w = 40
-                            enemy.h = 40
-                        } else {
-                            enemy.color = 'lime'
-                        }
-                        
-                        enemies.push(enemy)  
+                        spawnEnemy()  
                     }  
                 }, i * 200)  
             }  
@@ -723,18 +745,7 @@ function startGameIntervals() {
         if (gameActive && !gamePaused) {  
             for (let e of enemies) {  
                 if (e && Math.random() < 0.6) {  
-                    let bulletCount = 1
-                    if (e.type === 'elite') bulletCount = 3
-                    else if (wave > 5) bulletCount = 2
-                    
-                    for (let i = 0; i < bulletCount; i++) {  
-                        enemyBullets.push({  
-                            x: e.x + e.w / 2 + (i - 1) * 15,  
-                            y: e.y + e.h,  
-                            speed: 3 + wave * 0.2,
-                            pattern: i % 2 === 0 ? 'straight' : 'aimed'
-                        })  
-                    }  
+                    enemyShoot(e)  
                 }  
             }  
         }  
@@ -743,27 +754,159 @@ function startGameIntervals() {
     // Powerup spawn  
     powerupInterval = setInterval(() => {  
         if (gameActive && !gamePaused && Math.random() < 0.4) {  
-            let types = Object.keys(POWERUP_TYPES)  
-            let type = types[Math.floor(Math.random() * types.length)]  
-            powerups.push({  
-                x: Math.random() * (GAME_WIDTH - 20),  
-                y: -20,  
-                size: 20,  
-                type: type,  
-                speed: 2,  
-                active: true,  
-                angle: 0  
-            })  
+            spawnPowerup()  
         }  
     }, 4000)  
+
+    // Satellite spawn (support units)  
+    satelliteInterval = setInterval(() => {  
+        if (gameActive && !gamePaused && wave > 3 && Math.random() < 0.3) {  
+            spawnSatellite()  
+        }  
+    }, 8000)
 }  
 
 startGameIntervals()  
+
+// Spawn functions  
+function spawnEnemy() {  
+    let type = 'normal'
+    let rand = Math.random()
+    if (rand < 0.1) type = 'elite'
+    else if (rand < 0.3) type = 'fast'
+    else if (rand < 0.4 && wave > 2) type = 'shielded'
+    else if (rand < 0.5 && wave > 4) type = 'kamikaze'
+    
+    let enemy = {  
+        x: Math.random() * (GAME_WIDTH - 40),  
+        y: -20 - Math.random() * 50,  
+        w: 30,  
+        h: 30,  
+        speed: 2 + wave * 0.3,
+        hp: 1,
+        maxHp: 1,
+        type: type,
+        pattern: Math.floor(Math.random() * 3),
+        angle: 0,
+        shield: 0,
+        shieldRegen: 0,
+        // New properties for realistic ship design
+        design: Math.floor(Math.random() * 5), // Different ship designs
+        engineGlow: 0,
+        wingAngle: 0
+    }
+    
+    if (type === 'fast') {
+        enemy.speed = 4 + wave * 0.3
+        enemy.color = '#ffaa00'
+        enemy.design = 1 // Interceptor design
+    } else if (type === 'elite') {
+        enemy.hp = 3
+        enemy.maxHp = 3
+        enemy.speed = 1.5 + wave * 0.2
+        enemy.color = '#ff5555'
+        enemy.w = 40
+        enemy.h = 40
+        enemy.design = 2 // Heavy cruiser design
+    } else if (type === 'shielded') {
+        enemy.hp = 2
+        enemy.maxHp = 2
+        enemy.speed = 1.8 + wave * 0.2
+        enemy.color = '#00aaff'
+        enemy.shield = 2
+        enemy.shieldRegen = 0.1
+        enemy.design = 3 // Shielded frigate design
+    } else if (type === 'kamikaze') {
+        enemy.speed = 5 + wave * 0.4
+        enemy.color = '#ff4400'
+        enemy.damage = 2
+        enemy.design = 4 // Suicide drone design
+    } else {
+        enemy.color = 'lime'
+        enemy.design = 0 // Standard fighter design
+    }
+    
+    enemies.push(enemy)  
+}
+
+function spawnPowerup() {  
+    let types = Object.keys(POWERUP_TYPES)  
+    let type = types[Math.floor(Math.random() * types.length)]  
+    powerups.push({  
+        x: Math.random() * (GAME_WIDTH - 20),  
+        y: -20,  
+        size: 20,  
+        type: type,  
+        speed: 2,  
+        active: true,  
+        angle: 0  
+    })  
+}
+
+function spawnSatellite() {  
+    satellites.push({  
+        x: player.x,  
+        y: player.y,  
+        angle: Math.random() * Math.PI * 2,  
+        distance: 50,  
+        speed: 0.02,  
+        damage: 2,  
+        active: true  
+    })  
+}
+
+function spawnBlackHole(x, y) {  
+    blackHoles.push({  
+        x: x,  
+        y: y,  
+        radius: 30,  
+        maxRadius: 80,  
+        strength: 2,  
+        life: 200,  
+        pullSpeed: 1  
+    })  
+}
+
+function spawnMine(x, y) {  
+    mines.push({  
+        x: x,  
+        y: y,  
+        radius: 15,  
+        damage: 3,  
+        active: true,  
+        armTime: 30  
+    })  
+}
+
+function enemyShoot(e) {  
+    let bulletCount = 1
+    if (e.type === 'elite') bulletCount = 3
+    else if (e.type === 'shielded') bulletCount = 2
+    else if (wave > 5) bulletCount = 2
+    
+    for (let i = 0; i < bulletCount; i++) {  
+        let pattern = i % 2 === 0 ? 'straight' : 'aimed'
+        if (e.type === 'elite') pattern = 'spread'
+        else if (e.type === 'kamikaze') pattern = 'homing'
+        
+        enemyBullets.push({  
+            x: e.x + e.w / 2 + (i - 1) * 15,  
+            y: e.y + e.h,  
+            speed: 3 + wave * 0.2,
+            pattern: pattern,
+            damage: 1,
+            angle: 0
+        })  
+    }  
+}
 
 // Boss system  
 function spawnBoss() {  
     bossActive = true  
     playBossWarning()  
+    
+    let bossTypes = ['DESTROYER', 'ANNIHILATOR', 'OBLIVION', 'NEMESIS']
+    let bossType = bossTypes[Math.floor(Math.random() * bossTypes.length)]
     
     boss = {  
         x: GAME_WIDTH / 2 - 50,  
@@ -776,13 +919,17 @@ function spawnBoss() {
         phase: 1,  
         attackTimer: 0,  
         pattern: 0,  
-        angle: 0  
+        angle: 0,
+        type: bossType,
+        specialAttack: Math.floor(Math.random() * 3),
+        minions: []
     }  
     
     enemies = [] // Clear regular enemies  
     
     document.getElementById('bossHealthBar').style.display = 'block'  
     document.getElementById('bossName').style.display = 'block'  
+    document.getElementById('bossName').textContent = `🚀 BOSS: ${boss.type}`  
     document.getElementById('bossHealthFill').style.width = '100%'  
 }  
 
@@ -793,20 +940,33 @@ function updateBoss() {
     if (boss.y < 50) {  
         boss.y += boss.speed  
     } else {  
-        // Sinusoidal movement  
-        boss.x += Math.sin(Date.now() / 500) * 2  
+        // Advanced movement patterns  
+        if (boss.phase === 1) {  
+            boss.x += Math.sin(Date.now() / 500) * 2  
+        } else if (boss.phase === 2) {  
+            boss.x += Math.sin(Date.now() / 300) * 3  
+            boss.y += Math.cos(Date.now() / 400) * 1  
+        } else {  
+            boss.x += Math.sin(Date.now() / 200) * 4  
+            boss.y += Math.sin(Date.now() / 250) * 2  
+        }  
         boss.x = Math.max(0, Math.min(GAME_WIDTH - boss.w, boss.x))  
+        boss.y = Math.max(30, Math.min(200, boss.y))  
     }  
     
     // Boss attacks  
     boss.attackTimer++  
-    if (boss.attackTimer > 60 - boss.phase * 10) {  
+    let attackSpeed = 60 - boss.phase * 10  
+    if (boss.specialAttack === 0) attackSpeed *= 0.8  
+    else if (boss.specialAttack === 1) attackSpeed *= 1.2  
+    
+    if (boss.attackTimer > attackSpeed) {  
         boss.attackTimer = 0  
         
         if (boss.phase === 1) {  
             // Phase 1: Spread shot  
             for (let i = 0; i < 5; i++) {  
-                let angle = (i / 5) * Math.PI * 2  
+                let angle = (i / 5) * Math.PI * 2 + Date.now() / 1000  
                 enemyBullets.push({  
                     x: boss.x + boss.w / 2,  
                     y: boss.y + boss.h / 2,  
@@ -817,7 +977,7 @@ function updateBoss() {
                 })  
             }  
         } else if (boss.phase === 2) {  
-            // Phase 2: Aimed shots  
+            // Phase 2: Aimed shots + mines  
             for (let i = 0; i < 3; i++) {  
                 let dx = (player.x + 20) - (boss.x + boss.w / 2)  
                 let dy = (player.y + 20) - (boss.y + boss.h / 2)  
@@ -834,8 +994,13 @@ function updateBoss() {
                     pattern: 'aimed'  
                 })  
             }  
+            
+            // Drop mines  
+            if (Math.random() < 0.3) {  
+                spawnMine(boss.x + boss.w/2, boss.y + boss.h)  
+            }  
         } else {  
-            // Phase 3: Spiral  
+            // Phase 3: Spiral + black holes  
             boss.angle += 0.2  
             for (let i = 0; i < 8; i++) {  
                 let angle = boss.angle + (i / 8) * Math.PI * 2  
@@ -848,6 +1013,25 @@ function updateBoss() {
                     pattern: 'spiral'  
                 })  
             }  
+            
+            // Create black hole  
+            if (Math.random() < 0.1) {  
+                spawnBlackHole(boss.x + boss.w/2, boss.y + boss.h/2)  
+            }  
+        }  
+        
+        // Special attacks based on boss type  
+        if (boss.specialAttack === 0 && boss.phase === 3) {  
+            // Laser sweep  
+            laserBeams.push({  
+                x: boss.x + boss.w/2,  
+                y: boss.y + boss.h/2,  
+                angle: 0,  
+                length: GAME_HEIGHT,  
+                width: 20,  
+                damage: 2,  
+                active: true  
+            })  
         }  
     }  
     
@@ -865,20 +1049,34 @@ function shoot() {
     if (!gameActive || gamePaused) return  
     playShoot()  
     
-    let bulletSpeed = 7
-    let damage = 1
+    let bulletSpeed = 7 * (1 + player.skills.speed * 0.1)
+    let damage = 1 * (1 + player.skills.damage * 0.2)
     
-    if (player.powerups.tripleShot) {
-        bullets.push({ x: player.x + 8, y: player.y, speed: bulletSpeed, damage: damage })
-        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage })
-        bullets.push({ x: player.x + 28, y: player.y, speed: bulletSpeed, damage: damage })
+    // Critical hit chance  
+    let isCritical = Math.random() < (player.skills.critical * 0.1)
+    if (isCritical) damage *= 2
+    
+    if (player.powerups.laserBeam) {
+        laserBeams.push({  
+            x: player.x + 18,  
+            y: player.y,  
+            width: 30,  
+            damage: damage * 2,  
+            active: true,  
+            life: 20  
+        })
+    }
+    else if (player.powerups.tripleShot) {
+        bullets.push({ x: player.x + 8, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+        bullets.push({ x: player.x + 28, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
     }
     else if (player.powerups.spreadShot) {
-        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage })
-        bullets.push({ x: player.x + 10, y: player.y + 5, speed: bulletSpeed, damage: damage })
-        bullets.push({ x: player.x + 26, y: player.y + 5, speed: bulletSpeed, damage: damage })
+        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+        bullets.push({ x: player.x + 10, y: player.y + 5, speed: bulletSpeed * 0.8, damage: damage * 0.7, critical: isCritical })
+        bullets.push({ x: player.x + 26, y: player.y + 5, speed: bulletSpeed * 0.8, damage: damage * 0.7, critical: isCritical })
     } else {
-        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage })
+        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
     }
     
     // Homing missiles
@@ -889,15 +1087,30 @@ function shoot() {
             speed: 5,
             target: null,
             angle: 0,
-            damage: 2
+            damage: damage * 2,
+            critical: isCritical
         })
     }
+    
+    // Satellite support  
+    for (let s of satellites) {  
+        if (s.active) {  
+            bullets.push({  
+                x: s.x,  
+                y: s.y,  
+                speed: bulletSpeed,  
+                damage: s.damage * (1 + player.skills.damage * 0.1),  
+                critical: isCritical  
+            })  
+        }  
+    }  
 }  
 
 function autoFire() {  
     if (firing && gameActive && !gamePaused) {  
         shoot()  
-        let delay = player.powerups.rapidFire ? 80 : 150  
+        let baseDelay = player.powerups.rapidFire ? 80 : 150  
+        let delay = baseDelay / (1 + player.skills.fireRate * 0.2)  
         setTimeout(autoFire, delay)  
     }  
 }  
@@ -910,17 +1123,35 @@ function useSpecial() {
     player.specialMeter = 0  
     updateUI()  
     
-    // Screen clear explosion  
-    for (let e of enemies) {  
-        explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 5 })  
-        score += 20 * wave  
-    }  
-    for (let b of enemyBullets) {  
-        explosions.push({ x: b.x, y: b.y, size: 2 })  
-    }  
+    // Choose random special effect  
+    let specialType = Math.floor(Math.random() * 4)  
     
-    enemies = []  
-    enemyBullets = []  
+    if (specialType === 0) {  
+        // Nuke - screen clear  
+        for (let e of enemies) {  
+            explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 5 })  
+            score += 20 * wave  
+            player.experience += 10  
+        }  
+        for (let b of enemyBullets) {  
+            explosions.push({ x: b.x, y: b.y, size: 2 })  
+        }  
+        enemies = []  
+        enemyBullets = []  
+    } else if (specialType === 1) {  
+        // Black hole  
+        spawnBlackHole(GAME_WIDTH/2, GAME_HEIGHT/2)  
+    } else if (specialType === 2) {  
+        // Time slow  
+        timeSlowActive = true  
+        if (timeSlowTimer) clearTimeout(timeSlowTimer)  
+        timeSlowTimer = setTimeout(() => {  
+            timeSlowActive = false  
+        }, 3000)  
+    } else {  
+        // Health restore  
+        player.life = Math.min(player.life + 2, player.maxLife)  
+    }  
     
     // Add particles  
     for (let i = 0; i < 30; i++) {  
@@ -935,6 +1166,31 @@ function useSpecial() {
         })  
     }  
 }  
+
+// Level up system  
+function levelUp() {  
+    player.level++  
+    player.skillPoints++  
+    playLevelUp()  
+    
+    // Show level up message  
+    let message = document.createElement('div')  
+    message.style.position = 'absolute'  
+    message.style.top = '50%'  
+    message.style.left = '50%'  
+    message.style.transform = 'translate(-50%, -50%)'  
+    message.style.color = '#0ff'  
+    message.style.fontSize = '32px'  
+    message.style.fontWeight = 'bold'  
+    message.style.textShadow = '0 0 20px #0ff'  
+    message.style.zIndex = '1000'  
+    message.textContent = `LEVEL UP! (${player.level})`  
+    document.body.appendChild(message)  
+    
+    setTimeout(() => {  
+        document.body.removeChild(message)  
+    }, 2000)  
+}
 
 // Draw functions  
 function drawStars() {  
@@ -964,6 +1220,11 @@ function drawPlayer() {
         ctx.setLineDash([])  
     }  
     
+    // Level indicator  
+    ctx.fillStyle = '#fff'  
+    ctx.font = '10px Arial'  
+    ctx.fillText(`Lvl ${player.level}`, -10, -30)  
+    
     // Wings  
     ctx.fillStyle = "#00e5ff"  
     ctx.beginPath()  
@@ -977,8 +1238,13 @@ function drawPlayer() {
     ctx.lineTo(5, 15)  
     ctx.fill()  
     
-    // Body  
-    ctx.fillStyle = player.powerups.rapidFire ? '#ff00ff' : '#0ff'  
+    // Body - color based on active powerups  
+    let bodyColor = '#0ff'  
+    if (player.powerups.rapidFire) bodyColor = '#ff00ff'  
+    if (player.powerups.laserBeam) bodyColor = '#ff00aa'  
+    if (player.powerups.timeSlow) bodyColor = '#00aaff'  
+    
+    ctx.fillStyle = bodyColor  
     ctx.beginPath()  
     ctx.moveTo(0, -20)  
     ctx.lineTo(10, 10)  
@@ -992,13 +1258,25 @@ function drawPlayer() {
     ctx.arc(0, -5, 5, 0, Math.PI * 2)  
     ctx.fill()  
     
-    // Engine  
+    // Engine glow  
     ctx.fillStyle = "orange"  
     ctx.beginPath()  
     ctx.moveTo(-6, 10)  
-    ctx.lineTo(0, 20)  
+    ctx.lineTo(0, 20 + (firing ? 10 : 0))  
     ctx.lineTo(6, 10)  
     ctx.fill()  
+    
+    // Satellites  
+    for (let s of satellites) {  
+        s.angle += s.speed  
+        s.x = player.x + 20 + Math.cos(s.angle) * s.distance  
+        s.y = player.y + 20 + Math.sin(s.angle) * s.distance  
+        
+        ctx.fillStyle = '#aa44ff'  
+        ctx.beginPath()  
+        ctx.arc(s.x - (player.x + 20), s.y - (player.y + 20), 5, 0, Math.PI * 2)  
+        ctx.fill()  
+    }  
     
     ctx.restore()  
 }  
@@ -1008,7 +1286,13 @@ function drawBullets() {
     for (let i = bullets.length - 1; i >= 0; i--) {  
         let b = bullets[i]  
         b.y -= b.speed  
-        ctx.fillRect(b.x, b.y, 4, 10)  
+        if (b.critical) {  
+            ctx.fillStyle = "#ffaa00"  
+            ctx.fillRect(b.x - 2, b.y - 2, 8, 14)  
+        } else {  
+            ctx.fillStyle = "yellow"  
+            ctx.fillRect(b.x, b.y, 4, 10)  
+        }  
         if (b.y < 0) bullets.splice(i, 1)  
     }  
 }  
@@ -1047,6 +1331,7 @@ function drawMissiles() {
         ctx.save()  
         ctx.translate(m.x, m.y)  
         ctx.rotate(Math.atan2(-m.speed, 0))  
+        ctx.fillStyle = m.critical ? "#ffaa00" : "#ff8800"  
         ctx.fillRect(-2, -5, 4, 10)  
         ctx.fillStyle = "#ffaa00"  
         ctx.fillRect(-1, -8, 2, 5)  
@@ -1056,19 +1341,142 @@ function drawMissiles() {
     }  
 }  
 
+function drawLaserBeams() {  
+    for (let i = laserBeams.length - 1; i >= 0; i--) {  
+        let l = laserBeams[i]  
+        l.life--  
+        
+        ctx.save()  
+        ctx.translate(l.x, l.y)  
+        ctx.rotate(l.angle)  
+        
+        // Laser effect  
+        ctx.fillStyle = `rgba(255, 0, 255, ${l.life / 20})`  
+        ctx.shadowColor = '#ff00ff'  
+        ctx.shadowBlur = 20  
+        ctx.fillRect(-2, 0, 4, -l.length)  
+        
+        ctx.restore()  
+        
+        if (l.life <= 0) laserBeams.splice(i, 1)  
+    }  
+}
+
+function drawBlackHoles() {  
+    for (let i = blackHoles.length - 1; i >= 0; i--) {  
+        let bh = blackHoles[i]  
+        bh.life--  
+        bh.radius = Math.min(bh.radius + 0.5, bh.maxRadius)  
+        
+        // Draw black hole  
+        ctx.save()  
+        ctx.translate(bh.x, bh.y)  
+        
+        // Event horizon  
+        let gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, bh.radius)  
+        gradient.addColorStop(0, 'black')  
+        gradient.addColorStop(0.5, '#aa00aa')  
+        gradient.addColorStop(1, 'transparent')  
+        
+        ctx.fillStyle = gradient  
+        ctx.beginPath()  
+        ctx.arc(0, 0, bh.radius, 0, Math.PI * 2)  
+        ctx.fill()  
+        
+        // Accretion disk  
+        ctx.strokeStyle = '#ff00ff'  
+        ctx.lineWidth = 2  
+        ctx.setLineDash([10, 10])  
+        ctx.beginPath()  
+        ctx.arc(0, 0, bh.radius * 0.8, 0, Math.PI * 2)  
+        ctx.stroke()  
+        
+        ctx.restore()  
+        
+        // Pull enemies  
+        for (let e of enemies) {  
+            let dx = e.x + e.w/2 - bh.x  
+            let dy = e.y + e.h/2 - bh.y  
+            let dist = Math.sqrt(dx * dx + dy * dy)  
+            
+            if (dist < bh.radius * 2) {  
+                e.x += (dx / dist) * bh.pullSpeed  
+                e.y += (dy / dist) * bh.pullSpeed  
+            }  
+        }  
+        
+        // Pull player  
+        let dx = player.x + 20 - bh.x  
+        let dy = player.y + 20 - bh.y  
+        let dist = Math.sqrt(dx * dx + dy * dy)  
+        
+        if (dist < bh.radius * 2) {  
+            player.x += (dx / dist) * bh.pullSpeed  
+            player.y += (dy / dist) * bh.pullSpeed  
+        }  
+        
+        if (bh.life <= 0) blackHoles.splice(i, 1)  
+    }  
+}
+
+function drawMines() {  
+    for (let i = mines.length - 1; i >= 0; i--) {  
+        let m = mines[i]  
+        m.y += 1  
+        
+        if (m.armTime > 0) {  
+            ctx.fillStyle = '#ffaa00'  
+        } else {  
+            ctx.fillStyle = '#ff0000'  
+        }  
+        
+        ctx.beginPath()  
+        ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2)  
+        ctx.fill()  
+        
+        ctx.fillStyle = '#ffff00'  
+        ctx.font = '12px Arial'  
+        ctx.fillText('💣', m.x - 8, m.y + 4)  
+        
+        if (m.y > GAME_HEIGHT) mines.splice(i, 1)  
+    }  
+}
+
 function drawEnemyBullets() {  
     for (let i = enemyBullets.length - 1; i >= 0; i--) {  
         let b = enemyBullets[i]  
         
+        // Time slow effect  
+        let speedMultiplier = timeSlowActive ? 0.3 : 1  
+        
         if (b.vx !== undefined) {  
-            b.x += b.vx  
-            b.y += b.vy  
+            b.x += b.vx * speedMultiplier  
+            b.y += b.vy * speedMultiplier  
         } else {  
-            b.y += b.speed  
+            if (b.pattern === 'homing') {  
+                let dx = player.x + 20 - b.x  
+                let dy = player.y + 20 - b.y  
+                let dist = Math.sqrt(dx * dx + dy * dy)  
+                if (dist > 5) {  
+                    b.x += (dx / dist) * b.speed * 0.5 * speedMultiplier  
+                    b.y += (dy / dist) * b.speed * 0.5 * speedMultiplier  
+                }  
+            } else {  
+                b.y += b.speed * speedMultiplier  
+            }  
         }  
         
-        ctx.fillStyle = "red"  
-        ctx.fillRect(b.x, b.y, 4, 10)  
+        // Draw bullet based on pattern  
+        if (b.pattern === 'spread') {  
+            ctx.fillStyle = "#ff00ff"  
+            ctx.fillRect(b.x, b.y, 6, 12)  
+        } else if (b.pattern === 'aimed') {  
+            ctx.fillStyle = "#ffaa00"  
+            ctx.fillRect(b.x, b.y, 5, 10)  
+        } else {  
+            ctx.fillStyle = "red"  
+            ctx.fillRect(b.x, b.y, 4, 10)  
+        }  
         
         if (b.y > GAME_HEIGHT || b.y < 0 || b.x < 0 || b.x > GAME_WIDTH) {  
             enemyBullets.splice(i, 1)  
@@ -1076,8 +1484,18 @@ function drawEnemyBullets() {
     }  
 }  
 
+// REDESIGNED ENEMY DRAW FUNCTION - REALISTIC SPACESHIPS
 function drawEnemies() {  
     for (let e of enemies) {  
+        // Update engine glow
+        e.engineGlow = (e.engineGlow + 0.1) % (Math.PI * 2)
+        
+        // Update wing angle for some ships
+        if (e.type === 'fast') {
+            e.wingAngle = Math.sin(Date.now() / 200) * 0.1
+        }
+        
+        // Movement patterns
         if (e.pattern === 1) {  
             // Sine wave movement  
             e.x += Math.sin(Date.now() / 200 + e.y) * 2  
@@ -1087,23 +1505,192 @@ function drawEnemies() {
             e.x += Math.cos(e.angle) * 2  
         }  
         
-        e.y += e.speed  
+        // Time slow effect  
+        let speedMultiplier = timeSlowActive ? 0.3 : 1  
+        e.y += e.speed * speedMultiplier  
         e.x = Math.max(0, Math.min(GAME_WIDTH - e.w, e.x))  
         
-        // Draw enemy  
-        ctx.fillStyle = e.color || "lime"  
-        ctx.beginPath()  
-        ctx.moveTo(e.x + e.w/2, e.y)  
-        ctx.lineTo(e.x + e.w, e.y + e.h)  
-        ctx.lineTo(e.x, e.y + e.h)  
-        ctx.closePath()  
-        ctx.fill()  
+        // Shield regeneration  
+        if (e.shield > 0 && e.shieldRegen > 0) {  
+            e.shield = Math.min(e.shield + e.shieldRegen, e.maxHp)  
+        }  
+        
+        ctx.save()
+        ctx.translate(e.x + e.w/2, e.y + e.h/2)
+        
+        // Draw ship based on design
+        if (e.design === 0) { // Standard Fighter
+            // Main body
+            ctx.fillStyle = e.color || '#0f0'
+            ctx.beginPath()
+            ctx.moveTo(0, -15)
+            ctx.lineTo(10, 10)
+            ctx.lineTo(5, 15)
+            ctx.lineTo(0, 10)
+            ctx.lineTo(-5, 15)
+            ctx.lineTo(-10, 10)
+            ctx.closePath()
+            ctx.fill()
+            
+            // Cockpit
+            ctx.fillStyle = '#00ffff'
+            ctx.beginPath()
+            ctx.arc(0, -8, 4, 0, Math.PI * 2)
+            ctx.fill()
+            
+            // Wings
+            ctx.fillStyle = e.color || '#0f0'
+            ctx.fillRect(-15, -5, 5, 15)
+            ctx.fillRect(10, -5, 5, 15)
+            
+            // Engine glow
+            let glowIntensity = Math.sin(e.engineGlow) * 0.5 + 0.5
+            ctx.fillStyle = `rgba(255, 100, 0, ${glowIntensity})`
+            ctx.fillRect(-3, 10, 6, 8)
+            
+        } else if (e.design === 1) { // Interceptor (Fast)
+            // Sleek body
+            ctx.fillStyle = e.color || '#ffaa00'
+            ctx.beginPath()
+            ctx.moveTo(0, -18)
+            ctx.lineTo(12, 12)
+            ctx.lineTo(8, 15)
+            ctx.lineTo(0, 10)
+            ctx.lineTo(-8, 15)
+            ctx.lineTo(-12, 12)
+            ctx.closePath()
+            ctx.fill()
+            
+            // Forward swept wings
+            ctx.fillStyle = e.color || '#ffaa00'
+            ctx.save()
+            ctx.rotate(e.wingAngle)
+            ctx.fillRect(-20, -8, 6, 20)
+            ctx.fillRect(14, -8, 6, 20)
+            ctx.restore()
+            
+            // Dual cockpits
+            ctx.fillStyle = '#00ffff'
+            ctx.beginPath()
+            ctx.arc(-3, -10, 3, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.beginPath()
+            ctx.arc(3, -10, 3, 0, Math.PI * 2)
+            ctx.fill()
+            
+            // Afterburner effect
+            ctx.fillStyle = `rgba(255, 200, 0, ${Math.random() * 0.8 + 0.2})`
+            ctx.fillRect(-4, 12, 8, 12)
+            
+        } else if (e.design === 2) { // Heavy Cruiser (Elite)
+            // Main hull
+            ctx.fillStyle = e.color || '#ff5555'
+            ctx.fillRect(-15, -12, 30, 24)
+            
+            // Bridge
+            ctx.fillStyle = '#aaa'
+            ctx.fillRect(-6, -18, 12, 8)
+            ctx.fillStyle = '#00ffff'
+            ctx.fillRect(-3, -20, 6, 4)
+            
+            // Side turrets
+            ctx.fillStyle = '#888'
+            ctx.fillRect(-22, -5, 8, 10)
+            ctx.fillRect(14, -5, 8, 10)
+            
+            // Main cannons
+            ctx.fillStyle = '#666'
+            ctx.fillRect(-10, -25, 4, 15)
+            ctx.fillRect(6, -25, 4, 15)
+            
+            // Engine array
+            for (let i = -8; i <= 8; i += 4) {
+                ctx.fillStyle = `rgba(255, 100, 0, ${Math.sin(e.engineGlow + i) * 0.5 + 0.5})`
+                ctx.fillRect(i, 12, 2, 8)
+            }
+            
+        } else if (e.design === 3) { // Shielded Frigate
+            // Main body with shield generator rings
+            ctx.fillStyle = e.color || '#00aaff'
+            ctx.beginPath()
+            ctx.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2)
+            ctx.fill()
+            
+            // Shield generator rings
+            ctx.strokeStyle = '#00ffff'
+            ctx.lineWidth = 2
+            ctx.setLineDash([5, 5])
+            ctx.beginPath()
+            ctx.ellipse(0, 0, 22, 16, 0, 0, Math.PI * 2)
+            ctx.stroke()
+            ctx.setLineDash([])
+            
+            // Command pod
+            ctx.fillStyle = '#fff'
+            ctx.beginPath()
+            ctx.arc(0, -8, 6, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.fillStyle = '#00aaff'
+            ctx.beginPath()
+            ctx.arc(0, -8, 4, 0, Math.PI * 2)
+            ctx.fill()
+            
+            // Shield emitters
+            for (let i = 0; i < 4; i++) {
+                let angle = (i / 4) * Math.PI * 2
+                ctx.fillStyle = '#00ffff'
+                ctx.beginPath()
+                ctx.arc(Math.cos(angle) * 20, Math.sin(angle) * 14, 3, 0, Math.PI * 2)
+                ctx.fill()
+            }
+            
+            // Engine glow
+            ctx.fillStyle = `rgba(0, 255, 255, ${Math.sin(e.engineGlow) * 0.5 + 0.5})`
+            ctx.fillRect(-6, 8, 12, 6)
+            
+        } else if (e.design === 4) { // Kamikaze Drone
+            // Small, aggressive design
+            ctx.fillStyle = e.color || '#ff4400'
+            ctx.beginPath()
+            ctx.moveTo(0, -10)
+            ctx.lineTo(12, 8)
+            ctx.lineTo(8, 12)
+            ctx.lineTo(0, 4)
+            ctx.lineTo(-8, 12)
+            ctx.lineTo(-12, 8)
+            ctx.closePath()
+            ctx.fill()
+            
+            // Warhead (glowing)
+            ctx.fillStyle = `rgba(255, 255, 0, ${Math.sin(e.engineGlow * 2) * 0.7 + 0.3})`
+            ctx.beginPath()
+            ctx.arc(0, 0, 6, 0, Math.PI * 2)
+            ctx.fill()
+            
+            // Small wings
+            ctx.fillStyle = e.color || '#ff4400'
+            ctx.fillRect(-16, -2, 6, 4)
+            ctx.fillRect(10, -2, 6, 4)
+            
+            // Suicide burn
+            ctx.fillStyle = `rgba(255, 100, 0, ${Math.random() * 0.9 + 0.1})`
+            ctx.fillRect(-4, 8, 8, 10)
+        }
+        
+        ctx.restore()
         
         // Show HP for stronger enemies  
         if (e.hp > 1) {  
             ctx.fillStyle = "white"  
             ctx.font = "12px Arial"  
-            ctx.fillText(e.hp, e.x + e.w/2 - 5, e.y + 20)  
+            ctx.fillText(e.hp, e.x + e.w/2 - 5, e.y - 5)  
+        }  
+        
+        // Show shield  
+        if (e.shield > 0) {  
+            ctx.fillStyle = "rgba(0, 170, 255, 0.5)"  
+            ctx.font = "10px Arial"  
+            ctx.fillText('🛡️' + Math.floor(e.shield), e.x + e.w/2 - 10, e.y - 15)  
         }  
     }  
     
@@ -1121,6 +1708,8 @@ function drawBoss() {
     
     // Boss body  
     ctx.fillStyle = '#ff0000'  
+    ctx.shadowColor = '#ff0000'  
+    ctx.shadowBlur = 30  
     ctx.beginPath()  
     ctx.moveTo(0, -50)  
     ctx.lineTo(40, 30)  
@@ -1130,7 +1719,8 @@ function drawBoss() {
     ctx.closePath()  
     ctx.fill()  
     
-    // Eyes  
+    // Eyes based on phase  
+    ctx.shadowBlur = 0  
     ctx.fillStyle = 'white'  
     ctx.beginPath()  
     ctx.arc(-15, -20, 8, 0, Math.PI * 2)  
@@ -1146,6 +1736,11 @@ function drawBoss() {
     ctx.beginPath()  
     ctx.arc(15 + (boss.phase === 3 ? -2 : 0), -20, 4, 0, Math.PI * 2)  
     ctx.fill()  
+    
+    // Phase indicator  
+    ctx.fillStyle = '#fff'  
+    ctx.font = '14px Arial'  
+    ctx.fillText(`PHASE ${boss.phase}`, -25, -60)  
     
     ctx.restore()  
 }  
@@ -1175,6 +1770,13 @@ function drawPowerups() {
         ctx.fillStyle = "white"  
         ctx.font = "16px Arial"  
         ctx.fillText(type.symbol, -8, 6)  
+        
+        // Duration indicator for temporary powerups  
+        if (type.duration > 0) {  
+            ctx.fillStyle = '#fff'  
+            ctx.font = '8px Arial'  
+            ctx.fillText(`${type.duration/1000}s`, -6, 18)  
+        }  
         
         ctx.restore()  
     }  
@@ -1235,12 +1837,47 @@ function drawSpecialMeter() {
     ctx.fillStyle = '#fff'  
     ctx.font = '10px Arial'  
     ctx.fillText('SPECIAL', meterX, meterY - 2)  
+}
+
+function drawExperienceBar() {  
+    let expNeeded = player.level * 100  
+    let expX = 120  
+    let expY = 160  
+    let expWidth = 80  
+    let expHeight = 10  
+    
+    ctx.fillStyle = '#333'  
+    ctx.fillRect(expX, expY, expWidth, expHeight)  
+    
+    ctx.fillStyle = '#00ff00'  
+    ctx.fillRect(expX, expY, (player.experience / expNeeded) * expWidth, expHeight)  
+    
+    ctx.strokeStyle = '#fff'  
+    ctx.strokeRect(expX, expY, expWidth, expHeight)  
+    
+    ctx.fillStyle = '#fff'  
+    ctx.font = '8px Arial'  
+    ctx.fillText('EXP', expX, expY - 2)  
+}  
+
+function drawSkillPoints() {  
+    if (player.skillPoints > 0) {  
+        ctx.fillStyle = '#ffff00'  
+        ctx.font = 'bold 16px Arial'  
+        ctx.fillText(`✨ ${player.skillPoints}`, 10, 190)  
+    }  
 }  
 
 function updateUI() {  
     document.getElementById('lifeValue').textContent = player.life  
     document.getElementById('scoreValue').textContent = score  
     document.getElementById('waveNumber').textContent = wave  
+    
+    // Update high score  
+    if (score > highScore) {  
+        highScore = score  
+        localStorage.setItem('highScore', highScore.toString())  
+    }  
     
     // Update powerup icons  
     let powerupDiv = document.getElementById('powerups')  
@@ -1301,14 +1938,35 @@ function bulletCollision() {
                 explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 2 })  
                 playExplosion()  
                 
-                e.hp -= b.damage || 1  
+                let damage = b.damage || 1  
+                
+                // Check shield first  
+                if (e.shield > 0) {  
+                    e.shield -= damage  
+                } else {  
+                    e.hp -= damage  
+                }  
+                
                 bullets.splice(i, 1)  
                 
                 if (e.hp <= 0) {  
                     score += 10 * wave  
+                    player.experience += 10  
+                    
+                    // Level up check  
+                    if (player.experience >= player.level * 100) {  
+                        player.experience -= player.level * 100  
+                        levelUp()  
+                    }  
+                    
                     enemies.splice(j, 1)  
                     enemiesKilled++  
                     addCombo()  
+                    
+                    // Chance to drop powerup  
+                    if (Math.random() < 0.2) {  
+                        spawnPowerup()  
+                    }  
                     
                     // Wave progression  
                     if (enemiesKilled >= enemiesForNextWave) {  
@@ -1344,11 +2002,19 @@ function missileCollision() {
                 explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 5 })  
                 playExplosion()  
                 
-                e.hp -= m.damage || 2  
+                let damage = m.damage || 2  
+                
+                if (e.shield > 0) {  
+                    e.shield -= damage  
+                } else {  
+                    e.hp -= damage  
+                }  
+                
                 missiles.splice(i, 1)  
                 
                 if (e.hp <= 0) {  
                     score += 15 * wave  
+                    player.experience += 15  
                     enemies.splice(j, 1)  
                     enemiesKilled++  
                     addCombo()  
@@ -1356,6 +2022,99 @@ function missileCollision() {
                 
                 updateUI()  
                 break  
+            }  
+        }  
+    }  
+}  
+
+function laserCollision() {  
+    for (let i = laserBeams.length - 1; i >= 0; i--) {  
+        let l = laserBeams[i]  
+        for (let j = enemies.length - 1; j >= 0; j--) {  
+            let e = enemies[j]  
+            if (  
+                l.y < e.y + e.h &&  
+                l.y > e.y &&  
+                Math.abs(l.x - (e.x + e.w/2)) < l.width/2  
+            ) {  
+                explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 3 })  
+                
+                if (e.shield > 0) {  
+                    e.shield -= l.damage  
+                } else {  
+                    e.hp -= l.damage  
+                }  
+                
+                if (e.hp <= 0) {  
+                    score += 10 * wave  
+                    player.experience += 10  
+                    enemies.splice(j, 1)  
+                    enemiesKilled++  
+                    addCombo()  
+                }  
+            }  
+        }  
+    }  
+}  
+
+function mineCollision() {  
+    for (let i = mines.length - 1; i >= 0; i--) {  
+        let m = mines[i]  
+        if (m.armTime > 0) continue  
+        
+        for (let j = enemies.length - 1; j >= 0; j--) {  
+            let e = enemies[j]  
+            let dx = m.x - (e.x + e.w/2)  
+            let dy = m.y - (e.y + e.h/2)  
+            let dist = Math.sqrt(dx * dx + dy * dy)  
+            
+            if (dist < m.radius + e.w/2) {  
+                explosions.push({ x: m.x, y: m.y, size: 10 })  
+                playExplosion()  
+                
+                if (e.shield > 0) {  
+                    e.shield -= m.damage  
+                } else {  
+                    e.hp -= m.damage  
+                }  
+                
+                mines.splice(i, 1)  
+                
+                if (e.hp <= 0) {  
+                    score += 15 * wave  
+                    enemies.splice(j, 1)  
+                    enemiesKilled++  
+                    addCombo()  
+                }  
+                break  
+            }  
+        }  
+        
+        // Player collision with mines  
+        let dx = m.x - (player.x + 20)  
+        let dy = m.y - (player.y + 20)  
+        let dist = Math.sqrt(dx * dx + dy * dy)  
+        
+        if (dist < m.radius + 15) {  
+            explosions.push({ x: player.x + 20, y: player.y + 20, size: 5 })  
+            
+            if (player.powerups.shield) {  
+                player.powerups.shield = false  
+                clearTimeout(player.powerupTimers.shield)  
+            } else {  
+                player.life -= m.damage  
+            }  
+            
+            mines.splice(i, 1)  
+            updateUI()  
+            
+            if (player.life <= 0) {  
+                gameActive = false  
+                playGameOver()  
+                setTimeout(() => {  
+                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
+                    location.reload()  
+                }, 500)  
             }  
         }  
     }  
@@ -1377,11 +2136,13 @@ function bossCollision() {
             boss.hp -= b.damage || 1  
             bullets.splice(i, 1)  
             player.specialMeter = Math.min(player.specialMeter + 2, player.maxSpecial)  
+            player.experience += 5  
             
             if (boss.hp <= 0) {  
                 explosions.push({ x: boss.x + boss.w/2, y: boss.y + boss.h/2, size: 20 })  
                 playExplosion()  
                 score += 500 * wave  
+                player.experience += 200  
                 bossActive = false  
                 boss = null  
                 
@@ -1389,20 +2150,32 @@ function bossCollision() {
                 document.getElementById('bossName').style.display = 'none'  
                 
                 // Reward powerups  
-                for (let i = 0; i < 3; i++) {  
-                    powerups.push({  
-                        x: boss.x + boss.w/2 + (i - 1) * 30,  
-                        y: boss.y + boss.h/2,  
-                        size: 20,  
-                        type: 'SPECIAL',  
-                        speed: 1,  
-                        angle: 0  
-                    })  
+                for (let i = 0; i < 5; i++) {  
+                    spawnPowerup()  
                 }  
+                
+                // Check achievement  
+                checkAchievement('BOSS_SLAYER')  
             }  
             
             updateUI()  
             break  
+        }  
+    }  
+    
+    // Missiles vs boss  
+    for (let i = missiles.length - 1; i >= 0; i--) {  
+        let m = missiles[i]  
+        if (  
+            m.x < boss.x + boss.w &&  
+            m.x + 4 > boss.x &&  
+            m.y < boss.y + boss.h &&  
+            m.y + 10 > boss.y  
+        ) {  
+            explosions.push({ x: m.x, y: m.y, size: 5 })  
+            boss.hp -= m.damage || 2  
+            missiles.splice(i, 1)  
+            player.specialMeter += 3  
         }  
     }  
     
@@ -1428,11 +2201,7 @@ function bossCollision() {
             gameActive = false  
             playGameOver()  
             setTimeout(() => {  
-                alert("💀 GAME OVER\n\n" +  
-                      "Final Score: " + score + "\n" +  
-                      "Waves Completed: " + wave + "\n" +  
-                      "Enemies Destroyed: " + (enemiesKilled + (wave-1)*10) + "\n\n" +  
-                      "✨ Play Again?")  
+                alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
                 location.reload()  
             }, 500)  
         }  
@@ -1471,13 +2240,19 @@ function shipCollision() {
             player.y + player.h > e.y  
         ) {  
             explosions.push({ x: player.x + 20, y: player.y + 20, size: 5 })  
-            enemies.splice(i, 1)  
             
-            if (player.powerups.shield) {  
-                player.powerups.shield = false  
-                clearTimeout(player.powerupTimers.shield)  
+            if (e.type === 'kamikaze') {  
+                player.life -= 2  
+                enemies.splice(i, 1)  
             } else {  
-                player.life--  
+                enemies.splice(i, 1)  
+                
+                if (player.powerups.shield) {  
+                    player.powerups.shield = false  
+                    clearTimeout(player.powerupTimers.shield)  
+                } else {  
+                    player.life--  
+                }  
             }  
             
             updateUI()  
@@ -1486,11 +2261,7 @@ function shipCollision() {
                 gameActive = false  
                 playGameOver()  
                 setTimeout(() => {  
-                    alert("💀 GAME OVER\n\n" +  
-                          "Final Score: " + score + "\n" +  
-                          "Waves Completed: " + wave + "\n" +  
-                          "Enemies Destroyed: " + (enemiesKilled + (wave-1)*10) + "\n\n" +  
-                          "✨ Play Again?")  
+                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
                     location.reload()  
                 }, 500)  
             }  
@@ -1514,7 +2285,7 @@ function playerBulletCollision() {
                 player.powerups.shield = false  
                 clearTimeout(player.powerupTimers.shield)  
             } else {  
-                player.life--  
+                player.life -= b.damage || 1  
             }  
             
             updateUI()  
@@ -1523,10 +2294,7 @@ function playerBulletCollision() {
                 gameActive = false  
                 playGameOver()  
                 setTimeout(() => {  
-                    alert("💀 GAME OVER\n\n" +  
-                          "Final Score: " + score + "\n" +  
-                          "Waves Completed: " + wave + "\n\n" +  
-                          "✨ Play Again?")  
+                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
                     location.reload()  
                 }, 500)  
             }  
@@ -1551,6 +2319,15 @@ function powerupCollision() {
                 }  
             } else if (p.type === 'SPECIAL') {  
                 player.specialMeter = Math.min(player.specialMeter + 30, player.maxSpecial)  
+            } else if (p.type === 'NUKE') {  
+                for (let e of enemies) {  
+                    explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 5 })  
+                    score += 20 * wave  
+                }  
+                enemies = []  
+                enemyBullets = []  
+            } else if (p.type === 'BLACK_HOLE') {  
+                spawnBlackHole(GAME_WIDTH/2, GAME_HEIGHT/2)  
             } else {  
                 // Activate powerup  
                 let key = p.type.toLowerCase()  
@@ -1572,9 +2349,34 @@ function powerupCollision() {
     }  
 }  
 
+function checkAchievement(achievementId) {  
+    if (!achievements.includes(achievementId)) {  
+        achievements.push(achievementId)  
+        score += ACHIEVEMENTS[achievementId].reward  
+        
+        // Show achievement message  
+        let msg = document.createElement('div')  
+        msg.style.position = 'absolute'  
+        msg.style.top = '30%'  
+        msg.style.left = '50%'  
+        msg.style.transform = 'translateX(-50%)'  
+        msg.style.color = '#ffaa00'  
+        msg.style.fontSize = '18px'  
+        msg.style.fontWeight = 'bold'  
+        msg.style.textShadow = '0 0 20px #ffaa00'  
+        msg.style.zIndex = '1000'  
+        msg.innerHTML = `🏆 ACHIEVEMENT: ${ACHIEVEMENTS[achievementId].name}<br>+${ACHIEVEMENTS[achievementId].reward} pts`  
+        document.body.appendChild(msg)  
+        
+        setTimeout(() => {  
+            document.body.removeChild(msg)  
+        }, 3000)  
+    }  
+}  
+
 function updatePlayer() {  
-    player.x += joystickX * player.speed  
-    player.y += joystickY * player.speed  
+    player.x += joystickX * player.speed * (1 + player.skills.speed * 0.1)  
+    player.y += joystickY * player.speed * (1 + player.skills.speed * 0.1)  
     player.x = Math.max(0, Math.min(GAME_WIDTH - player.w, player.x))  
     player.y = Math.max(0, Math.min(GAME_HEIGHT - player.h, player.y))  
     
@@ -1623,17 +2425,24 @@ function gameLoop() {
     drawPlayer()  
     drawBullets()  
     drawMissiles()  
+    drawLaserBeams()  
     drawEnemyBullets()  
     drawEnemies()  
     drawBoss()  
     drawPowerups()  
+    drawBlackHoles()  
+    drawMines()  
     drawExplosions()  
     drawParticles()  
     drawSpecialMeter()  
+    drawExperienceBar()  
+    drawSkillPoints()  
     
     if (!gamePaused) {  
         bulletCollision()  
         missileCollision()  
+        laserCollision()  
+        mineCollision()  
         bossCollision()  
         bulletVsBullet()  
         shipCollision()  
@@ -1790,6 +2599,18 @@ document.addEventListener('keydown', (e) => {
         case 'P':  
             gamePaused = !gamePaused  
             document.getElementById('pauseMenu').style.display = gamePaused ? 'flex' : 'none'  
+            break  
+        case '1':  
+        case '2':  
+        case '3':  
+            // Skill allocation  
+            if (player.skillPoints > 0) {  
+                let skill = parseInt(e.key) - 1  
+                if (skill === 0) player.skills.damage++  
+                else if (skill === 1) player.skills.fireRate++  
+                else if (skill === 2) player.skills.speed++  
+                player.skillPoints--  
+            }  
             break  
     }  
 })  
