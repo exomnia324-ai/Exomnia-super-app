@@ -3,7 +3,7 @@
 <head>  
 <meta charset="UTF-8">  
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">  
-<title>Space Shooting - ULTIMATE EDITION</title>  
+<title>Space Shooting - ULTIMATE EDITION V2.0</title>  
   
 <style>  
 * {  
@@ -423,7 +423,8 @@ canvas {
     
     <div id="uiOverlay">  
         <div id="topBar">  
-            <div id="titleText">🚀 SPACE SHOOTING</div>  
+            <div id="titleText">Exomnia aircraft
+</div>  
             <div id="statsText">  
                 <span class="life">❤️ <span id="lifeValue">3</span></span>  
                 <span class="score">🎁 <span id="scoreValue">0</span></span>  
@@ -619,6 +620,37 @@ function playLevelUp() {
     } catch(e) {}
 }
 
+function playHit() {
+    if (!audioCtx) return
+    try {
+        let osc = audioCtx.createOscillator()
+        let gain = audioCtx.createGain()
+        osc.type = "sine"
+        osc.frequency.value = 200
+        gain.gain.value = 0.05
+        osc.connect(gain)
+        gain.connect(audioCtx.destination)
+        osc.start()
+        osc.stop(audioCtx.currentTime + 0.05)
+    } catch(e) {}
+}
+
+function playNewWave() {
+    if (!audioCtx) return
+    try {
+        let osc = audioCtx.createOscillator()
+        let gain = audioCtx.createGain()
+        osc.type = "triangle"
+        osc.frequency.setValueAtTime(300, audioCtx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.3)
+        gain.gain.value = 0.2
+        osc.connect(gain)
+        gain.connect(audioCtx.destination)
+        osc.start()
+        osc.stop(audioCtx.currentTime + 0.3)
+    } catch(e) {}
+}
+
 // Game state  
 let player = {  
     x: 180,  
@@ -635,7 +667,11 @@ let player = {
         tripleShot: false,
         homingMissile: false,
         laserBeam: false,
-        timeSlow: false
+        timeSlow: false,
+        vampire: false,
+        chainLightning: false,
+        drone: false,
+        phaseShift: false
     },
     powerupTimers: {},
     specialMeter: 0,
@@ -647,8 +683,13 @@ let player = {
         damage: 1,
         fireRate: 1,
         speed: 1,
-        critical: 0
-    }
+        critical: 0,
+        lifesteal: 0,
+        multishot: 0
+    },
+    drones: [],
+    phaseShiftActive: false,
+    phaseShiftTimer: null
 }  
 
 let bullets = []  
@@ -663,6 +704,11 @@ let laserBeams = []
 let blackHoles = []  
 let satellites = []  
 let mines = []  
+let chainLightning = []  
+let asteroids = []  
+let wormholes = []  
+let debris = []  
+let forceField = null
 
 let score = 0  
 let joystickX = 0  
@@ -682,6 +728,10 @@ let timeSlowTimer = null
 let achievements = []  
 let dailyChallenges = []
 let highScore = localStorage.getItem('highScore') ? parseInt(localStorage.getItem('highScore')) : 0
+let totalKills = 0
+let totalPlayTime = 0
+let lastTimestamp = 0
+let difficultyMultiplier = 1
 
 // Powerup types  
 const POWERUP_TYPES = {
@@ -692,10 +742,16 @@ const POWERUP_TYPES = {
     HOMING_MISSILE: { color: '#ff8800', symbol: '🎯', duration: 5000 },
     LASER_BEAM: { color: '#ff00aa', symbol: '⚡', duration: 4000 },
     TIME_SLOW: { color: '#00aaff', symbol: '⏱️', duration: 3000 },
+    VAMPIRE: { color: '#880000', symbol: '🧛', duration: 5000 },
+    CHAIN_LIGHTNING: { color: '#ffff00', symbol: '⚡⚡', duration: 5000 },
+    DRONE: { color: '#00aa00', symbol: '🚁', duration: 8000 },
+    PHASE_SHIFT: { color: '#aa00aa', symbol: '👻', duration: 3000 },
     HEALTH: { color: '#ff5555', symbol: '❤️', duration: 0 },
     SPECIAL: { color: '#aa44ff', symbol: '✨', duration: 0 },
     NUKE: { color: '#ffaa00', symbol: '💣', duration: 0 },
-    BLACK_HOLE: { color: '#aa00aa', symbol: '🕳️', duration: 0 }
+    BLACK_HOLE: { color: '#aa00aa', symbol: '🕳️', duration: 0 },
+    REPAIR: { color: '#00ff00', symbol: '🔧', duration: 0 },
+    SCORE_BOOST: { color: '#ffff00', symbol: '💰', duration: 10000 }
 }
 
 // Achievement definitions  
@@ -704,63 +760,90 @@ const ACHIEVEMENTS = {
     COMBO_MASTER: { name: 'Combo Master', requirement: 'Get 20x combo', reward: 500 },
     BOSS_SLAYER: { name: 'Boss Slayer', requirement: 'Defeat first boss', reward: 1000 },
     SURVIVOR: { name: 'Survivor', requirement: 'Reach wave 10', reward: 2000 },
-    COLLECTOR: { name: 'Collector', requirement: 'Collect 50 powerups', reward: 1000 }
+    COLLECTOR: { name: 'Collector', requirement: 'Collect 50 powerups', reward: 1000 },
+    SHARPSHOOTER: { name: 'Sharpshooter', requirement: 'Get 1000 kills', reward: 5000 },
+    INVINCIBLE: { name: 'Invincible', requirement: 'Reach wave 5 without losing life', reward: 3000 },
+    VETERAN: { name: 'Veteran', requirement: 'Reach level 10', reward: 4000 },
+    PERFECTIONIST: { name: 'Perfectionist', requirement: 'Get 50x combo', reward: 10000 }
 }
 
 // Create stars with parallax effect  
-for (let i = 0; i < 150; i++) {  
+for (let i = 0; i < 200; i++) {  
     stars.push({  
         x: Math.random() * GAME_WIDTH,  
         y: Math.random() * GAME_HEIGHT,  
         speed: Math.random() * 3 + 0.5,  
         size: Math.random() * 3 + 1,
         brightness: Math.random() * 0.5 + 0.5,
-        layer: Math.floor(Math.random() * 3) // Parallax layers
+        layer: Math.floor(Math.random() * 3), // Parallax layers
+        color: Math.random() < 0.8 ? '#ffffff' : ['#ffaa00', '#00aaff', '#ff5555'][Math.floor(Math.random() * 3)]
+    })  
+}  
+
+// Create asteroids for environmental hazard  
+for (let i = 0; i < 5; i++) {  
+    asteroids.push({  
+        x: Math.random() * GAME_WIDTH,  
+        y: Math.random() * GAME_HEIGHT,  
+        radius: Math.random() * 15 + 10,  
+        speedX: (Math.random() - 0.5) * 2,  
+        speedY: Math.random() * 2 + 1,  
+        angle: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.1,
+        health: Math.floor(Math.random() * 3) + 2,
+        color: '#886644'
     })  
 }  
 
 // Game intervals  
-let enemyInterval, enemyShootInterval, powerupInterval, satelliteInterval  
+let enemyInterval, enemyShootInterval, powerupInterval, satelliteInterval, asteroidInterval  
 
 function startGameIntervals() {  
     // Enemy spawn with wave difficulty  
     enemyInterval = setInterval(() => {  
         if (gameActive && !gamePaused && !bossActive) {  
-            let enemyCount = Math.min(3 + Math.floor(wave / 2), 8)  
+            let enemyCount = Math.min(3 + Math.floor(wave / 1.5), 12)  
             for (let i = 0; i < enemyCount; i++) {  
                 setTimeout(() => {  
                     if (gameActive && !gamePaused && !bossActive) {  
                         spawnEnemy()  
                     }  
-                }, i * 200)  
+                }, i * 150)  
             }  
         }  
-    }, 2000 - Math.min(wave * 100, 1000))  
+    }, 2000 - Math.min(wave * 80, 1200))  
 
     // Enemy shooting with wave difficulty  
     enemyShootInterval = setInterval(() => {  
         if (gameActive && !gamePaused) {  
             for (let e of enemies) {  
-                if (e && Math.random() < 0.6) {  
+                if (e && Math.random() < 0.7 + wave * 0.02) {  
                     enemyShoot(e)  
                 }  
             }  
         }  
-    }, 1800 - Math.min(wave * 50, 1000))  
+    }, 1800 - Math.min(wave * 40, 1200))  
 
     // Powerup spawn  
     powerupInterval = setInterval(() => {  
-        if (gameActive && !gamePaused && Math.random() < 0.4) {  
+        if (gameActive && !gamePaused && Math.random() < 0.5) {  
             spawnPowerup()  
         }  
-    }, 4000)  
+    }, 3000)  
 
     // Satellite spawn (support units)  
     satelliteInterval = setInterval(() => {  
-        if (gameActive && !gamePaused && wave > 3 && Math.random() < 0.3) {  
+        if (gameActive && !gamePaused && wave > 3 && Math.random() < 0.4) {  
             spawnSatellite()  
         }  
-    }, 8000)
+    }, 7000)
+    
+    // Asteroid spawn  
+    asteroidInterval = setInterval(() => {  
+        if (gameActive && !gamePaused && wave > 2 && Math.random() < 0.3) {  
+            spawnAsteroid()  
+        }  
+    }, 5000)
 }  
 
 startGameIntervals()  
@@ -773,6 +856,8 @@ function spawnEnemy() {
     else if (rand < 0.3) type = 'fast'
     else if (rand < 0.4 && wave > 2) type = 'shielded'
     else if (rand < 0.5 && wave > 4) type = 'kamikaze'
+    else if (rand < 0.6 && wave > 6) type = 'stealth'
+    else if (rand < 0.7 && wave > 8) type = 'healer'
     
     let enemy = {  
         x: Math.random() * (GAME_WIDTH - 40),  
@@ -783,47 +868,84 @@ function spawnEnemy() {
         hp: 1,
         maxHp: 1,
         type: type,
-        pattern: Math.floor(Math.random() * 3),
+        pattern: Math.floor(Math.random() * 4),
         angle: 0,
         shield: 0,
         shieldRegen: 0,
-        // New properties for realistic ship design
-        design: Math.floor(Math.random() * 5), // Different ship designs
+        design: Math.floor(Math.random() * 8), // More ship designs
         engineGlow: 0,
-        wingAngle: 0
+        wingAngle: 0,
+        stealthAlpha: 1,
+        healTimer: 0,
+        experienceValue: 10
     }
     
     if (type === 'fast') {
         enemy.speed = 4 + wave * 0.3
         enemy.color = '#ffaa00'
-        enemy.design = 1 // Interceptor design
+        enemy.design = 1
+        enemy.experienceValue = 15
     } else if (type === 'elite') {
-        enemy.hp = 3
-        enemy.maxHp = 3
+        enemy.hp = 3 + Math.floor(wave / 3)
+        enemy.maxHp = enemy.hp
         enemy.speed = 1.5 + wave * 0.2
         enemy.color = '#ff5555'
         enemy.w = 40
         enemy.h = 40
-        enemy.design = 2 // Heavy cruiser design
+        enemy.design = 2
+        enemy.experienceValue = 30
     } else if (type === 'shielded') {
-        enemy.hp = 2
-        enemy.maxHp = 2
+        enemy.hp = 2 + Math.floor(wave / 4)
+        enemy.maxHp = enemy.hp
         enemy.speed = 1.8 + wave * 0.2
         enemy.color = '#00aaff'
-        enemy.shield = 2
+        enemy.shield = 3
         enemy.shieldRegen = 0.1
-        enemy.design = 3 // Shielded frigate design
+        enemy.design = 3
+        enemy.experienceValue = 25
     } else if (type === 'kamikaze') {
         enemy.speed = 5 + wave * 0.4
         enemy.color = '#ff4400'
         enemy.damage = 2
-        enemy.design = 4 // Suicide drone design
+        enemy.design = 4
+        enemy.experienceValue = 20
+    } else if (type === 'stealth') {
+        enemy.speed = 3 + wave * 0.2
+        enemy.color = '#aa00aa'
+        enemy.design = 5
+        enemy.stealthAlpha = 0.3
+        enemy.experienceValue = 35
+    } else if (type === 'healer') {
+        enemy.speed = 1.5 + wave * 0.1
+        enemy.hp = 2 + Math.floor(wave / 2)
+        enemy.maxHp = enemy.hp
+        enemy.color = '#00ff88'
+        enemy.design = 6
+        enemy.healTimer = 0
+        enemy.experienceValue = 40
     } else {
         enemy.color = 'lime'
-        enemy.design = 0 // Standard fighter design
+        enemy.design = 0
+        enemy.experienceValue = 10
     }
     
     enemies.push(enemy)  
+}
+
+function spawnAsteroid() {
+    asteroids.push({  
+        x: Math.random() * GAME_WIDTH,  
+        y: -20,  
+        radius: Math.random() * 20 + 15,  
+        speedX: (Math.random() - 0.5) * 1.5,  
+        speedY: Math.random() * 2 + 2,  
+        angle: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.1,
+        health: Math.floor(Math.random() * 5) + 3,
+        maxHealth: Math.floor(Math.random() * 5) + 3,
+        color: '#886644',
+        cracked: false
+    })  
 }
 
 function spawnPowerup() {  
@@ -836,7 +958,8 @@ function spawnPowerup() {
         type: type,  
         speed: 2,  
         active: true,  
-        angle: 0  
+        angle: 0,
+        pulsePhase: 0
     })  
 }
 
@@ -848,7 +971,8 @@ function spawnSatellite() {
         distance: 50,  
         speed: 0.02,  
         damage: 2,  
-        active: true  
+        active: true,
+        fireTimer: 0
     })  
 }
 
@@ -857,10 +981,12 @@ function spawnBlackHole(x, y) {
         x: x,  
         y: y,  
         radius: 30,  
-        maxRadius: 80,  
+        maxRadius: 100,  
         strength: 2,  
-        life: 200,  
-        pullSpeed: 1  
+        life: 300,  
+        pullSpeed: 1.5,
+        damage: 1,
+        damageTimer: 0
     })  
 }
 
@@ -871,8 +997,23 @@ function spawnMine(x, y) {
         radius: 15,  
         damage: 3,  
         active: true,  
-        armTime: 30  
+        armTime: 30,
+        proximityRadius: 40
     })  
+}
+
+function spawnWormhole() {
+    wormholes.push({
+        x: Math.random() * (GAME_WIDTH - 100) + 50,
+        y: Math.random() * (GAME_HEIGHT - 100) + 50,
+        radius: 40,
+        active: true,
+        life: 500,
+        teleportTimer: 0,
+        targetX: Math.random() * (GAME_WIDTH - 100) + 50,
+        targetY: Math.random() * (GAME_HEIGHT - 100) + 50,
+        color: '#aa44ff'
+    })
 }
 
 function enemyShoot(e) {  
@@ -880,20 +1021,27 @@ function enemyShoot(e) {
     if (e.type === 'elite') bulletCount = 3
     else if (e.type === 'shielded') bulletCount = 2
     else if (wave > 5) bulletCount = 2
+    else if (e.type === 'stealth') bulletCount = 4
     
     for (let i = 0; i < bulletCount; i++) {  
         let pattern = i % 2 === 0 ? 'straight' : 'aimed'
         if (e.type === 'elite') pattern = 'spread'
         else if (e.type === 'kamikaze') pattern = 'homing'
+        else if (e.type === 'stealth') pattern = 'invisible'
+        else if (wave > 7) pattern = Math.random() < 0.3 ? 'wave' : pattern
         
-        enemyBullets.push({  
+        let bullet = {  
             x: e.x + e.w / 2 + (i - 1) * 15,  
             y: e.y + e.h,  
             speed: 3 + wave * 0.2,
             pattern: pattern,
-            damage: 1,
-            angle: 0
-        })  
+            damage: e.type === 'elite' ? 2 : 1,
+            angle: 0,
+            wavePhase: 0,
+            invisible: pattern === 'invisible' ? 0.3 : 1
+        }  
+        
+        enemyBullets.push(bullet)  
     }  
 }
 
@@ -902,24 +1050,28 @@ function spawnBoss() {
     bossActive = true  
     playBossWarning()  
     
-    let bossTypes = ['DESTROYER', 'ANNIHILATOR', 'OBLIVION', 'NEMESIS']
+    let bossTypes = ['DESTROYER', 'ANNIHILATOR', 'OBLIVION', 'NEMESIS', 'REAPER', 'VOID']
     let bossType = bossTypes[Math.floor(Math.random() * bossTypes.length)]
     
     boss = {  
         x: GAME_WIDTH / 2 - 50,  
         y: -80,  
-        w: 100,  
-        h: 100,  
-        hp: 50 + wave * 20,  
-        maxHp: 50 + wave * 20,  
-        speed: 1,  
+        w: 120,  
+        h: 120,  
+        hp: 100 + wave * 30,  
+        maxHp: 100 + wave * 30,  
+        speed: 1.5,  
         phase: 1,  
         attackTimer: 0,  
         pattern: 0,  
         angle: 0,
         type: bossType,
-        specialAttack: Math.floor(Math.random() * 3),
-        minions: []
+        specialAttack: Math.floor(Math.random() * 4),
+        minions: [],
+        rageMode: false,
+        rageThreshold: 0.3,
+        attackPattern: 0,
+        patternTimer: 0
     }  
     
     enemies = [] // Clear regular enemies  
@@ -937,8 +1089,12 @@ function updateBoss() {
     if (boss.y < 50) {  
         boss.y += boss.speed  
     } else {  
-        // Advanced movement patterns  
-        if (boss.phase === 1) {  
+        // Advanced movement patterns based on rage mode
+        if (boss.rageMode) {
+            // Erratic movement in rage mode
+            boss.x += Math.sin(Date.now() / 200) * 4  
+            boss.y += Math.cos(Date.now() / 250) * 3  
+        } else if (boss.phase === 1) {  
             boss.x += Math.sin(Date.now() / 500) * 2  
         } else if (boss.phase === 2) {  
             boss.x += Math.sin(Date.now() / 300) * 3  
@@ -951,86 +1107,104 @@ function updateBoss() {
         boss.y = Math.max(30, Math.min(200, boss.y))  
     }  
     
+    // Rage mode activation
+    if (boss.hp < boss.maxHp * boss.rageThreshold && !boss.rageMode) {
+        boss.rageMode = true
+        boss.speed *= 1.5
+        boss.attackTimer = 0
+        playBossWarning()
+    }
+    
     // Boss attacks  
     boss.attackTimer++  
-    let attackSpeed = 60 - boss.phase * 10  
-    if (boss.specialAttack === 0) attackSpeed *= 0.8  
-    else if (boss.specialAttack === 1) attackSpeed *= 1.2  
+    let attackSpeed = boss.rageMode ? 30 : 60 - boss.phase * 10  
     
     if (boss.attackTimer > attackSpeed) {  
         boss.attackTimer = 0  
+        boss.patternTimer++
         
-        if (boss.phase === 1) {  
-            // Phase 1: Spread shot  
-            for (let i = 0; i < 5; i++) {  
-                let angle = (i / 5) * Math.PI * 2 + Date.now() / 1000  
-                enemyBullets.push({  
-                    x: boss.x + boss.w / 2,  
-                    y: boss.y + boss.h / 2,  
-                    speed: 3,  
-                    vx: Math.cos(angle) * 3,  
-                    vy: Math.sin(angle) * 3,  
-                    pattern: 'circular'  
-                })  
-            }  
-        } else if (boss.phase === 2) {  
-            // Phase 2: Aimed shots + mines  
-            for (let i = 0; i < 3; i++) {  
-                let dx = (player.x + 20) - (boss.x + boss.w / 2)  
-                let dy = (player.y + 20) - (boss.y + boss.h / 2)  
-                let dist = Math.sqrt(dx * dx + dy * dy)  
-                let vx = (dx / dist) * 4  
-                let vy = (dy / dist) * 4  
+        if (boss.patternTimer % 5 === 0) {
+            boss.attackPattern = Math.floor(Math.random() * 4)
+        }
+        
+        switch(boss.attackPattern) {
+            case 0: // Spiral attack
+                boss.angle += 0.1
+                for (let i = 0; i < (boss.rageMode ? 12 : 8); i++) {
+                    let angle = boss.angle + (i / 8) * Math.PI * 2
+                    enemyBullets.push({
+                        x: boss.x + boss.w / 2,
+                        y: boss.y + boss.h / 2,
+                        speed: 4,
+                        vx: Math.cos(angle) * 4,
+                        vy: Math.sin(angle) * 4,
+                        pattern: 'spiral',
+                        damage: boss.rageMode ? 2 : 1
+                    })
+                }
+                break
                 
-                enemyBullets.push({  
-                    x: boss.x + boss.w / 2 + (i - 1) * 20,  
-                    y: boss.y + boss.h / 2,  
-                    speed: 4,  
-                    vx: vx,  
-                    vy: vy,  
-                    pattern: 'aimed'  
-                })  
-            }  
-            
-            // Drop mines  
-            if (Math.random() < 0.3) {  
-                spawnMine(boss.x + boss.w/2, boss.y + boss.h)  
-            }  
-        } else {  
-            // Phase 3: Spiral + black holes  
-            boss.angle += 0.2  
-            for (let i = 0; i < 8; i++) {  
-                let angle = boss.angle + (i / 8) * Math.PI * 2  
-                enemyBullets.push({  
-                    x: boss.x + boss.w / 2,  
-                    y: boss.y + boss.h / 2,  
-                    speed: 4,  
-                    vx: Math.cos(angle) * 4,  
-                    vy: Math.sin(angle) * 4,  
-                    pattern: 'spiral'  
-                })  
-            }  
-            
-            // Create black hole  
-            if (Math.random() < 0.1) {  
-                spawnBlackHole(boss.x + boss.w/2, boss.y + boss.h/2)  
-            }  
-        }  
+            case 1: // Aimed burst
+                for (let i = 0; i < (boss.rageMode ? 5 : 3); i++) {
+                    let dx = (player.x + 20) - (boss.x + boss.w / 2)
+                    let dy = (player.y + 20) - (boss.y + boss.h / 2)
+                    let dist = Math.sqrt(dx * dx + dy * dy)
+                    let vx = (dx / dist) * (boss.rageMode ? 5 : 4)
+                    let vy = (dy / dist) * (boss.rageMode ? 5 : 4)
+                    
+                    enemyBullets.push({
+                        x: boss.x + boss.w / 2 + (i - 1) * 20,
+                        y: boss.y + boss.h / 2,
+                        speed: 4,
+                        vx: vx,
+                        vy: vy,
+                        pattern: 'aimed',
+                        damage: boss.rageMode ? 2 : 1
+                    })
+                }
+                break
+                
+            case 2: // Laser sweep
+                laserBeams.push({
+                    x: boss.x + boss.w / 2,
+                    y: boss.y + boss.h / 2,
+                    angle: boss.angle,
+                    length: GAME_HEIGHT,
+                    width: 30,
+                    damage: boss.rageMode ? 3 : 2,
+                    active: true,
+                    life: 30
+                })
+                boss.angle += 0.2
+                break
+                
+            case 3: // Mine field
+                for (let i = 0; i < (boss.rageMode ? 5 : 3); i++) {
+                    spawnMine(
+                        boss.x + boss.w / 2 + (Math.random() - 0.5) * 100,
+                        boss.y + boss.h / 2 + (Math.random() - 0.5) * 50
+                    )
+                }
+                break
+        }
         
-        // Special attacks based on boss type  
-        if (boss.specialAttack === 0 && boss.phase === 3) {  
-            // Laser sweep  
-            laserBeams.push({  
-                x: boss.x + boss.w/2,  
-                y: boss.y + boss.h/2,  
-                angle: 0,  
-                length: GAME_HEIGHT,  
-                width: 20,  
-                damage: 2,  
-                active: true  
-            })  
-        }  
-    }  
+        // Spawn minions
+        if (boss.rageMode && boss.attackTimer % 3 === 0) {
+            for (let i = 0; i < 2; i++) {
+                let minion = {
+                    x: boss.x + (Math.random() - 0.5) * 100,
+                    y: boss.y + 50,
+                    w: 20,
+                    h: 20,
+                    speed: 3,
+                    hp: 2,
+                    type: 'minion',
+                    color: '#ff8800'
+                }
+                enemies.push(minion)
+            }
+        }
+    }
     
     // Phase transition based on HP  
     if (boss.hp < boss.maxHp * 0.3) boss.phase = 3  
@@ -1053,6 +1227,24 @@ function shoot() {
     let isCritical = Math.random() < (player.skills.critical * 0.1)
     if (isCritical) damage *= 2
     
+    // Multishot skill
+    let multishotCount = 1 + player.skills.multishot
+    
+    // Drone support
+    for (let drone of player.drones) {
+        if (drone.active) {
+            bullets.push({
+                x: drone.x,
+                y: drone.y,
+                speed: bulletSpeed,
+                damage: damage * 0.7,
+                critical: isCritical,
+                fromDrone: true
+            })
+        }
+    }
+    
+    // Main weapons
     if (player.powerups.laserBeam) {
         laserBeams.push({  
             x: player.x + 18,  
@@ -1060,20 +1252,27 @@ function shoot() {
             width: 30,  
             damage: damage * 2,  
             active: true,  
-            life: 20  
+            life: 20,
+            critical: isCritical
         })
     }
     else if (player.powerups.tripleShot) {
-        bullets.push({ x: player.x + 8, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
-        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
-        bullets.push({ x: player.x + 28, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+        for (let m = 0; m < multishotCount; m++) {
+            bullets.push({ x: player.x + 8 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+            bullets.push({ x: player.x + 18 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+            bullets.push({ x: player.x + 28 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+        }
     }
     else if (player.powerups.spreadShot) {
-        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
-        bullets.push({ x: player.x + 10, y: player.y + 5, speed: bulletSpeed * 0.8, damage: damage * 0.7, critical: isCritical })
-        bullets.push({ x: player.x + 26, y: player.y + 5, speed: bulletSpeed * 0.8, damage: damage * 0.7, critical: isCritical })
+        for (let m = 0; m < multishotCount; m++) {
+            bullets.push({ x: player.x + 18 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+            bullets.push({ x: player.x + 10 + m * 5, y: player.y + 5, speed: bulletSpeed * 0.8, damage: damage * 0.7, critical: isCritical })
+            bullets.push({ x: player.x + 26 + m * 5, y: player.y + 5, speed: bulletSpeed * 0.8, damage: damage * 0.7, critical: isCritical })
+        }
     } else {
-        bullets.push({ x: player.x + 18, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+        for (let m = 0; m < multishotCount; m++) {
+            bullets.push({ x: player.x + 18 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+        }
     }
     
     // Homing missiles
@@ -1085,20 +1284,26 @@ function shoot() {
             target: null,
             angle: 0,
             damage: damage * 2,
-            critical: isCritical
+            critical: isCritical,
+            homing: true
         })
     }
     
     // Satellite support  
     for (let s of satellites) {  
         if (s.active) {  
-            bullets.push({  
-                x: s.x,  
-                y: s.y,  
-                speed: bulletSpeed,  
-                damage: s.damage * (1 + player.skills.damage * 0.1),  
-                critical: isCritical  
-            })  
+            s.fireTimer++
+            if (s.fireTimer > 10) {
+                s.fireTimer = 0
+                bullets.push({  
+                    x: s.x,  
+                    y: s.y,  
+                    speed: bulletSpeed,  
+                    damage: s.damage * (1 + player.skills.damage * 0.1),  
+                    critical: isCritical,
+                    fromSatellite: true
+                })  
+            }
         }  
     }  
 }  
@@ -1106,7 +1311,7 @@ function shoot() {
 function autoFire() {  
     if (firing && gameActive && !gamePaused) {  
         shoot()  
-        let baseDelay = player.powerups.rapidFire ? 80 : 150  
+        let baseDelay = player.powerups.rapidFire ? 60 : 150  
         let delay = baseDelay / (1 + player.skills.fireRate * 0.2)  
         setTimeout(autoFire, delay)  
     }  
@@ -1120,46 +1325,77 @@ function useSpecial() {
     player.specialMeter = 0  
     updateUI()  
     
-    // Choose random special effect  
-    let specialType = Math.floor(Math.random() * 4)  
+    // Choose special effect based on wave
+    let specialType = Math.floor(Math.random() * (5 + Math.floor(wave / 3)))  
     
-    if (specialType === 0) {  
-        // Nuke - screen clear  
-        for (let e of enemies) {  
-            explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 5 })  
-            score += 20 * wave  
-            player.experience += 10  
-        }  
-        for (let b of enemyBullets) {  
-            explosions.push({ x: b.x, y: b.y, size: 2 })  
-        }  
-        enemies = []  
-        enemyBullets = []  
-    } else if (specialType === 1) {  
-        // Black hole  
-        spawnBlackHole(GAME_WIDTH/2, GAME_HEIGHT/2)  
-    } else if (specialType === 2) {  
-        // Time slow  
-        timeSlowActive = true  
-        if (timeSlowTimer) clearTimeout(timeSlowTimer)  
-        timeSlowTimer = setTimeout(() => {  
-            timeSlowActive = false  
-        }, 3000)  
-    } else {  
-        // Health restore  
-        player.life = Math.min(player.life + 2, player.maxLife)  
+    switch(specialType) {  
+        case 0: // Nuke - screen clear  
+            for (let e of enemies) {  
+                explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 5 })  
+                score += 20 * wave  
+                player.experience += 10  
+            }  
+            for (let b of enemyBullets) {  
+                explosions.push({ x: b.x, y: b.y, size: 2 })  
+            }  
+            enemies = []  
+            enemyBullets = []  
+            break
+            
+        case 1: // Black hole  
+            spawnBlackHole(player.x + 20, player.y - 50)  
+            break
+            
+        case 2: // Time slow  
+            timeSlowActive = true  
+            if (timeSlowTimer) clearTimeout(timeSlowTimer)  
+            timeSlowTimer = setTimeout(() => {  
+                timeSlowActive = false  
+            }, 5000)  
+            break
+            
+        case 3: // Health restore  
+            player.life = Math.min(player.life + 3, player.maxLife)  
+            break
+            
+        case 4: // Wormhole  
+            spawnWormhole()  
+            break
+            
+        case 5: // Force field  
+            forceField = {  
+                x: player.x + 20,  
+                y: player.y + 20,  
+                radius: 80,  
+                life: 200,  
+                damage: 5  
+            }  
+            break
+            
+        case 6: // Meteor shower  
+            for (let i = 0; i < 10; i++) {  
+                setTimeout(() => {  
+                    spawnAsteroid()  
+                }, i * 100)  
+            }  
+            break
+            
+        default: // Random powerup  
+            for (let i = 0; i < 3; i++) {  
+                spawnPowerup()  
+            }  
     }  
     
     // Add particles  
-    for (let i = 0; i < 30; i++) {  
+    for (let i = 0; i < 50; i++) {  
         particles.push({  
             x: GAME_WIDTH / 2,  
             y: GAME_HEIGHT / 2,  
-            vx: (Math.random() - 0.5) * 10,  
-            vy: (Math.random() - 0.5) * 10,  
-            life: 30,  
-            size: Math.random() * 5 + 2,  
-            color: '#aa44ff'  
+            vx: (Math.random() - 0.5) * 15,  
+            vy: (Math.random() - 0.5) * 15,  
+            life: 50,  
+            size: Math.random() * 8 + 2,  
+            color: ['#aa44ff', '#ff00ff', '#00aaff'][Math.floor(Math.random() * 3)]  
         })  
     }  
 }  
@@ -1187,24 +1423,218 @@ function levelUp() {
     setTimeout(() => {  
         document.body.removeChild(message)  
     }, 2000)  
+    
+    // Check achievement
+    if (player.level >= 10) {
+        checkAchievement('VETERAN')
+    }
 }
 
 // Draw functions  
 function drawStars() {  
     for (let s of stars) {  
-        s.y += s.speed * (s.layer + 1) * 0.5  
+        s.y += s.speed * (s.layer + 1) * 0.5 * (timeSlowActive ? 0.3 : 1)
         if (s.y > GAME_HEIGHT) {  
             s.y = 0  
             s.x = Math.random() * GAME_WIDTH  
         }  
-        ctx.fillStyle = `rgba(255, 255, 255, ${s.brightness})`  
+        ctx.fillStyle = s.color  
+        ctx.globalAlpha = s.brightness
         ctx.fillRect(s.x, s.y, s.size, s.size)  
     }  
+    ctx.globalAlpha = 1
 }  
+
+function drawAsteroids() {
+    for (let i = asteroids.length - 1; i >= 0; i--) {
+        let a = asteroids[i]
+        
+        // Movement
+        a.x += a.speedX * (timeSlowActive ? 0.3 : 1)
+        a.y += a.speedY * (timeSlowActive ? 0.3 : 1)
+        a.angle += a.rotationSpeed
+        
+        // Wrap around
+        if (a.y > GAME_HEIGHT + 50) {
+            a.y = -50
+            a.x = Math.random() * GAME_WIDTH
+        }
+        if (a.x < -50) a.x = GAME_WIDTH + 50
+        if (a.x > GAME_WIDTH + 50) a.x = -50
+        
+        // Draw asteroid
+        ctx.save()
+        ctx.translate(a.x, a.y)
+        ctx.rotate(a.angle)
+        
+        // Cratered look
+        ctx.fillStyle = a.color
+        ctx.shadowColor = '#aa8866'
+        ctx.shadowBlur = 10
+        ctx.beginPath()
+        for (let j = 0; j < 8; j++) {
+            let angle = (j / 8) * Math.PI * 2
+            let radius = a.radius + Math.sin(angle * 3) * 5
+            let x = Math.cos(angle) * radius
+            let y = Math.sin(angle) * radius
+            if (j === 0) ctx.moveTo(x, y)
+            else ctx.lineTo(x, y)
+        }
+        ctx.closePath()
+        ctx.fill()
+        
+        // Craters
+        ctx.shadowBlur = 0
+        ctx.fillStyle = '#664422'
+        for (let j = 0; j < 3; j++) {
+            let craterX = Math.cos(j * 2.1) * (a.radius * 0.3)
+            let craterY = Math.sin(j * 1.8) * (a.radius * 0.3)
+            ctx.beginPath()
+            ctx.arc(craterX, craterY, a.radius * 0.2, 0, Math.PI * 2)
+            ctx.fill()
+        }
+        
+        // Health indicator for large asteroids
+        if (a.health < a.maxHealth) {
+            ctx.fillStyle = '#ff0000'
+            ctx.fillRect(-a.radius, -a.radius - 10, a.radius * 2 * (a.health / a.maxHealth), 3)
+        }
+        
+        ctx.restore()
+    }
+}
+
+function drawWormholes() {
+    for (let i = wormholes.length - 1; i >= 0; i--) {
+        let w = wormholes[i]
+        w.life--
+        
+        ctx.save()
+        ctx.translate(w.x, w.y)
+        
+        // Rotating effect
+        ctx.rotate(Date.now() / 500)
+        
+        // Outer ring
+        ctx.strokeStyle = w.color
+        ctx.lineWidth = 3
+        ctx.setLineDash([10, 10])
+        ctx.beginPath()
+        ctx.arc(0, 0, w.radius, 0, Math.PI * 2)
+        ctx.stroke()
+        
+        // Inner swirl
+        for (let j = 0; j < 4; j++) {
+            let angle = (j / 4) * Math.PI * 2 + Date.now() / 1000
+            ctx.beginPath()
+            ctx.arc(
+                Math.cos(angle) * w.radius * 0.5,
+                Math.sin(angle) * w.radius * 0.5,
+                10,
+                0, Math.PI * 2
+            )
+            ctx.fillStyle = w.color
+            ctx.globalAlpha = 0.5
+            ctx.fill()
+        }
+        
+        ctx.restore()
+        
+        // Teleport player
+        w.teleportTimer++
+        if (w.teleportTimer > 100) {
+            w.teleportTimer = 0
+            let dx = player.x + 20 - w.x
+            let dy = player.y + 20 - w.y
+            let dist = Math.sqrt(dx * dx + dy * dy)
+            
+            if (dist < w.radius + 30) {
+                // Teleport player to other end
+                player.x = w.targetX - 20
+                player.y = w.targetY - 20
+                
+                // Particles
+                for (let j = 0; j < 20; j++) {
+                    particles.push({
+                        x: w.x,
+                        y: w.y,
+                        vx: (Math.random() - 0.5) * 10,
+                        vy: (Math.random() - 0.5) * 10,
+                        life: 20,
+                        size: 5,
+                        color: w.color
+                    })
+                }
+            }
+        }
+        
+        if (w.life <= 0) wormholes.splice(i, 1)
+    }
+}
+
+function drawForceField() {
+    if (!forceField) return
+    
+    forceField.life--
+    
+    ctx.save()
+    ctx.translate(forceField.x, forceField.y)
+    
+    // Shield effect
+    ctx.strokeStyle = '#00aaff'
+    ctx.lineWidth = 3
+    ctx.setLineDash([10, 5])
+    ctx.beginPath()
+    ctx.arc(0, 0, forceField.radius, 0, Math.PI * 2)
+    ctx.stroke()
+    
+    // Inner glow
+    ctx.setLineDash([])
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.arc(0, 0, forceField.radius - 2, 0, Math.PI * 2)
+    ctx.stroke()
+    
+    // Particles
+    for (let i = 0; i < 5; i++) {
+        let angle = Math.random() * Math.PI * 2
+        let x = Math.cos(angle) * forceField.radius
+        let y = Math.sin(angle) * forceField.radius
+        ctx.fillStyle = '#00aaff'
+        ctx.globalAlpha = Math.random() * 0.5
+        ctx.beginPath()
+        ctx.arc(x, y, 2, 0, Math.PI * 2)
+        ctx.fill()
+    }
+    
+    ctx.restore()
+    
+    // Damage enemies
+    for (let e of enemies) {
+        let dx = e.x + e.w/2 - forceField.x
+        let dy = e.y + e.h/2 - forceField.y
+        let dist = Math.sqrt(dx * dx + dy * dy)
+        
+        if (dist < forceField.radius) {
+            e.hp -= forceField.damage
+            explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 2 })
+        }
+    }
+    
+    if (forceField.life <= 0) forceField = null
+}
 
 function drawPlayer() {  
     ctx.save()  
     ctx.translate(player.x + 20, player.y + 20)  
+    
+    // Phase shift effect  
+    if (player.powerups.phaseShift || player.phaseShiftActive) {  
+        ctx.globalAlpha = 0.5  
+        ctx.shadowColor = '#aa00aa'  
+        ctx.shadowBlur = 30  
+    }  
     
     // Shield effect  
     if (player.powerups.shield) {  
@@ -1240,6 +1670,8 @@ function drawPlayer() {
     if (player.powerups.rapidFire) bodyColor = '#ff00ff'  
     if (player.powerups.laserBeam) bodyColor = '#ff00aa'  
     if (player.powerups.timeSlow) bodyColor = '#00aaff'  
+    if (player.powerups.vampire) bodyColor = '#880000'  
+    if (player.powerups.phaseShift) bodyColor = '#aa00aa'  
     
     ctx.fillStyle = bodyColor  
     ctx.beginPath()  
@@ -1259,48 +1691,143 @@ function drawPlayer() {
     ctx.fillStyle = "orange"  
     ctx.beginPath()  
     ctx.moveTo(-6, 10)  
-    ctx.lineTo(0, 20 + (firing ? 10 : 0))  
+    ctx.lineTo(0, 20 + (firing ? 15 : 5))  
     ctx.lineTo(6, 10)  
     ctx.fill()  
+    
+    // Drones  
+    for (let i = 0; i < player.drones.length; i++) {  
+        let drone = player.drones[i]  
+        let angle = Date.now() / 500 + (i * Math.PI * 2 / player.drones.length)  
+        drone.x = Math.cos(angle) * 30  
+        drone.y = Math.sin(angle) * 30  
+        
+        ctx.fillStyle = '#00aa00'  
+        ctx.shadowColor = '#00ff00'  
+        ctx.shadowBlur = 10  
+        ctx.beginPath()  
+        ctx.arc(drone.x, drone.y, 5, 0, Math.PI * 2)  
+        ctx.fill()  
+        
+        // Drone weapon  
+        ctx.fillStyle = '#ffff00'  
+        ctx.beginPath()  
+        ctx.arc(drone.x + Math.cos(angle) * 10, drone.y + Math.sin(angle) * 10, 2, 0, Math.PI * 2)  
+        ctx.fill()  
+    }  
     
     // Satellites  
     for (let s of satellites) {  
         s.angle += s.speed  
-        s.x = player.x + 20 + Math.cos(s.angle) * s.distance  
-        s.y = player.y + 20 + Math.sin(s.angle) * s.distance  
+        s.x = Math.cos(s.angle) * s.distance  
+        s.y = Math.sin(s.angle) * s.distance  
         
         ctx.fillStyle = '#aa44ff'  
+        ctx.shadowColor = '#ff00ff'  
+        ctx.shadowBlur = 15  
         ctx.beginPath()  
-        ctx.arc(s.x - (player.x + 20), s.y - (player.y + 20), 5, 0, Math.PI * 2)  
+        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2)  
         ctx.fill()  
     }  
     
     ctx.restore()  
+    ctx.shadowBlur = 0  
+    ctx.globalAlpha = 1  
 }  
 
 function drawBullets() {  
-    ctx.fillStyle = "yellow"  
     for (let i = bullets.length - 1; i >= 0; i--) {  
         let b = bullets[i]  
-        b.y -= b.speed  
+        
+        // Time slow effect  
+        let speedMultiplier = timeSlowActive ? 0.3 : 1  
+        b.y -= b.speed * speedMultiplier  
+        
+        // Chain lightning effect
+        if (player.powerups.chainLightning && Math.random() < 0.1) {
+            chainLightning.push({
+                x: b.x,
+                y: b.y,
+                target: null,
+                damage: b.damage * 0.5,
+                chains: 3,
+                critical: b.critical
+            })
+        }
+        
         if (b.critical) {  
             ctx.fillStyle = "#ffaa00"  
+            ctx.shadowColor = '#ffaa00'  
+            ctx.shadowBlur = 10  
             ctx.fillRect(b.x - 2, b.y - 2, 8, 14)  
         } else {  
             ctx.fillStyle = "yellow"  
+            ctx.shadowColor = 'yellow'  
+            ctx.shadowBlur = 5  
             ctx.fillRect(b.x, b.y, 4, 10)  
         }  
+        
         if (b.y < 0) bullets.splice(i, 1)  
     }  
+    ctx.shadowBlur = 0  
 }  
 
+function drawChainLightning() {
+    for (let i = chainLightning.length - 1; i >= 0; i--) {
+        let c = chainLightning[i]
+        
+        if (!c.target || c.target.hp <= 0) {
+            // Find nearest enemy
+            let minDist = Infinity
+            for (let e of enemies) {
+                let dist = Math.sqrt((e.x + e.w/2 - c.x) ** 2 + (e.y + e.h/2 - c.y) ** 2)
+                if (dist < minDist) {
+                    minDist = dist
+                    c.target = e
+                }
+            }
+        }
+        
+        if (c.target) {
+            // Draw lightning
+            ctx.beginPath()
+            ctx.moveTo(c.x, c.y)
+            
+            let midX = (c.x + c.target.x + c.target.w/2) / 2 + (Math.random() - 0.5) * 20
+            let midY = (c.y + c.target.y + c.target.h/2) / 2 + (Math.random() - 0.5) * 20
+            
+            ctx.quadraticCurveTo(midX, midY, c.target.x + c.target.w/2, c.target.y + c.target.h/2)
+            ctx.strokeStyle = c.critical ? '#ffff00' : '#00ffff'
+            ctx.lineWidth = 3
+            ctx.shadowColor = '#00ffff'
+            ctx.shadowBlur = 10
+            ctx.stroke()
+            
+            // Damage target
+            c.target.hp -= c.damage
+            c.chains--
+            
+            explosions.push({
+                x: c.target.x + c.target.w/2,
+                y: c.target.y + c.target.h/2,
+                size: 2
+            })
+        }
+        
+        if (c.chains <= 0) chainLightning.splice(i, 1)
+    }
+    ctx.shadowBlur = 0
+}
+
 function drawMissiles() {  
-    ctx.fillStyle = "#ff8800"  
     for (let i = missiles.length - 1; i >= 0; i--) {  
         let m = missiles[i]  
         
+        // Time slow effect  
+        let speedMultiplier = timeSlowActive ? 0.3 : 1  
+        
         // Find nearest enemy  
-        if (!m.target || !enemies.includes(m.target)) {  
+        if ((!m.target || !enemies.includes(m.target)) && m.homing) {  
             let minDist = Infinity  
             for (let e of enemies) {  
                 let dist = Math.sqrt((e.x + e.w/2 - m.x) ** 2 + (e.y + e.h/2 - m.y) ** 2)  
@@ -1311,31 +1838,43 @@ function drawMissiles() {
             }  
         }  
         
-        if (m.target) {  
+        if (m.target && m.homing) {  
             let dx = (m.target.x + m.target.w/2) - m.x  
             let dy = (m.target.y + m.target.h/2) - m.y  
             let dist = Math.sqrt(dx * dx + dy * dy)  
             
             if (dist > 5) {  
-                m.x += (dx / dist) * m.speed  
-                m.y += (dy / dist) * m.speed  
+                m.x += (dx / dist) * m.speed * speedMultiplier  
+                m.y += (dy / dist) * m.speed * speedMultiplier  
             }  
         } else {  
-            m.y -= m.speed  
+            m.y -= m.speed * speedMultiplier  
         }  
         
         // Draw missile  
         ctx.save()  
         ctx.translate(m.x, m.y)  
-        ctx.rotate(Math.atan2(-m.speed, 0))  
+        ctx.rotate(Math.atan2(-m.speed * speedMultiplier, 0))  
+        
+        // Missile body
         ctx.fillStyle = m.critical ? "#ffaa00" : "#ff8800"  
+        ctx.shadowColor = '#ff8800'  
+        ctx.shadowBlur = 10  
         ctx.fillRect(-2, -5, 4, 10)  
+        
+        // Missile head
         ctx.fillStyle = "#ffaa00"  
         ctx.fillRect(-1, -8, 2, 5)  
+        
+        // Exhaust
+        ctx.fillStyle = "#ff4400"  
+        ctx.fillRect(-1, 5, 2, 5)  
+        
         ctx.restore()  
         
-        if (m.y < 0 || m.y > GAME_HEIGHT) missiles.splice(i, 1)  
+        if (m.y < -20 || m.y > GAME_HEIGHT + 20 || m.x < -20 || m.x > GAME_WIDTH + 20) missiles.splice(i, 1)  
     }  
+    ctx.shadowBlur = 0  
 }  
 
 function drawLaserBeams() {  
@@ -1348,10 +1887,10 @@ function drawLaserBeams() {
         ctx.rotate(l.angle)  
         
         // Laser effect  
-        ctx.fillStyle = `rgba(255, 0, 255, ${l.life / 20})`  
-        ctx.shadowColor = '#ff00ff'  
+        ctx.fillStyle = l.critical ? `rgba(255, 255, 0, ${l.life / 20})` : `rgba(255, 0, 255, ${l.life / 20})`  
+        ctx.shadowColor = l.critical ? '#ffff00' : '#ff00ff'  
         ctx.shadowBlur = 20  
-        ctx.fillRect(-2, 0, 4, -l.length)  
+        ctx.fillRect(-l.width/2, 0, l.width, -l.length)  
         
         ctx.restore()  
         
@@ -1363,7 +1902,8 @@ function drawBlackHoles() {
     for (let i = blackHoles.length - 1; i >= 0; i--) {  
         let bh = blackHoles[i]  
         bh.life--  
-        bh.radius = Math.min(bh.radius + 0.5, bh.maxRadius)  
+        bh.radius = Math.min(bh.radius + 0.3, bh.maxRadius)  
+        bh.damageTimer++
         
         // Draw black hole  
         ctx.save()  
@@ -1388,6 +1928,19 @@ function drawBlackHoles() {
         ctx.arc(0, 0, bh.radius * 0.8, 0, Math.PI * 2)  
         ctx.stroke()  
         
+        // Particles being pulled in
+        for (let j = 0; j < 5; j++) {
+            let angle = (j / 5) * Math.PI * 2 + Date.now() / 300
+            let dist = bh.radius * 0.7 + Math.sin(Date.now() / 100 + j) * 10
+            let x = Math.cos(angle) * dist
+            let y = Math.sin(angle) * dist
+            ctx.fillStyle = '#ffffff'
+            ctx.globalAlpha = 0.5
+            ctx.beginPath()
+            ctx.arc(x, y, 2, 0, Math.PI * 2)
+            ctx.fill()
+        }
+        
         ctx.restore()  
         
         // Pull enemies  
@@ -1399,44 +1952,73 @@ function drawBlackHoles() {
             if (dist < bh.radius * 2) {  
                 e.x += (dx / dist) * bh.pullSpeed  
                 e.y += (dy / dist) * bh.pullSpeed  
+                
+                // Damage enemies at center
+                if (dist < bh.radius && bh.damageTimer > 10) {
+                    e.hp -= bh.damage
+                    explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 2 })
+                    bh.damageTimer = 0
+                }
             }  
         }  
         
         // Pull player  
-        let dx = player.x + 20 - bh.x  
-        let dy = player.y + 20 - bh.y  
-        let dist = Math.sqrt(dx * dx + dy * dy)  
-        
-        if (dist < bh.radius * 2) {  
-            player.x += (dx / dist) * bh.pullSpeed  
-            player.y += (dy / dist) * bh.pullSpeed  
-        }  
+        if (!player.powerups.phaseShift && !player.phaseShiftActive) {
+            let dx = player.x + 20 - bh.x  
+            let dy = player.y + 20 - bh.y  
+            let dist = Math.sqrt(dx * dx + dy * dy)  
+            
+            if (dist < bh.radius * 2) {  
+                player.x += (dx / dist) * bh.pullSpeed  
+                player.y += (dy / dist) * bh.pullSpeed  
+            }  
+        }
         
         if (bh.life <= 0) blackHoles.splice(i, 1)  
     }  
+    ctx.globalAlpha = 1
+    ctx.setLineDash([])
 }
 
 function drawMines() {  
     for (let i = mines.length - 1; i >= 0; i--) {  
         let m = mines[i]  
-        m.y += 1  
+        m.y += 1 * (timeSlowActive ? 0.3 : 1)  
+        m.armTime--  
         
-        if (m.armTime > 0) {  
-            ctx.fillStyle = '#ffaa00'  
-        } else {  
-            ctx.fillStyle = '#ff0000'  
-        }  
+        // Draw mine
+        ctx.save()
+        ctx.translate(m.x, m.y)
         
+        // Proximity indicator
+        if (m.armTime <= 0) {
+            ctx.strokeStyle = '#ff0000'
+            ctx.lineWidth = 1
+            ctx.setLineDash([5, 5])
+            ctx.beginPath()
+            ctx.arc(0, 0, m.proximityRadius, 0, Math.PI * 2)
+            ctx.stroke()
+        }
+        
+        // Mine body
+        ctx.fillStyle = m.armTime > 0 ? '#ffaa00' : '#ff0000'  
+        ctx.shadowColor = m.armTime > 0 ? '#ffaa00' : '#ff0000'  
+        ctx.shadowBlur = 15
         ctx.beginPath()  
-        ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2)  
+        ctx.arc(0, 0, m.radius, 0, Math.PI * 2)  
         ctx.fill()  
         
+        // Skull symbol
         ctx.fillStyle = '#ffff00'  
         ctx.font = '12px Arial'  
-        ctx.fillText('💣', m.x - 8, m.y + 4)  
+        ctx.shadowBlur = 0
+        ctx.fillText('💣', -8, 4)  
         
-        if (m.y > GAME_HEIGHT) mines.splice(i, 1)  
+        ctx.restore()
+        
+        if (m.y > GAME_HEIGHT + 20) mines.splice(i, 1)  
     }  
+    ctx.setLineDash([])
 }
 
 function drawEnemyBullets() {  
@@ -1458,27 +2040,41 @@ function drawEnemyBullets() {
                     b.x += (dx / dist) * b.speed * 0.5 * speedMultiplier  
                     b.y += (dy / dist) * b.speed * 0.5 * speedMultiplier  
                 }  
+            } else if (b.pattern === 'wave') {  
+                b.wavePhase += 0.1  
+                b.x += Math.sin(b.wavePhase) * 2 * speedMultiplier  
+                b.y += b.speed * speedMultiplier  
             } else {  
                 b.y += b.speed * speedMultiplier  
             }  
         }  
         
         // Draw bullet based on pattern  
+        ctx.globalAlpha = b.invisible || 1
         if (b.pattern === 'spread') {  
             ctx.fillStyle = "#ff00ff"  
+            ctx.shadowColor = '#ff00ff'  
             ctx.fillRect(b.x, b.y, 6, 12)  
         } else if (b.pattern === 'aimed') {  
             ctx.fillStyle = "#ffaa00"  
+            ctx.shadowColor = '#ffaa00'  
             ctx.fillRect(b.x, b.y, 5, 10)  
+        } else if (b.pattern === 'wave') {  
+            ctx.fillStyle = "#00aaff"  
+            ctx.shadowColor = '#00aaff'  
+            ctx.fillRect(b.x, b.y, 5, 8)  
         } else {  
             ctx.fillStyle = "red"  
+            ctx.shadowColor = 'red'  
             ctx.fillRect(b.x, b.y, 4, 10)  
         }  
         
-        if (b.y > GAME_HEIGHT || b.y < 0 || b.x < 0 || b.x > GAME_WIDTH) {  
+        if (b.y > GAME_HEIGHT + 20 || b.y < -20 || b.x < -20 || b.x > GAME_WIDTH + 20) {  
             enemyBullets.splice(i, 1)  
         }  
     }  
+    ctx.globalAlpha = 1
+    ctx.shadowBlur = 0  
 }  
 
 // REDESIGNED ENEMY DRAW FUNCTION - REALISTIC SPACESHIPS
@@ -1492,7 +2088,21 @@ function drawEnemies() {
             e.wingAngle = Math.sin(Date.now() / 200) * 0.1
         }
         
-        // Movement patterns
+        // Healer logic
+        if (e.type === 'healer') {
+            e.healTimer++
+            if (e.healTimer > 100) {
+                e.healTimer = 0
+                for (let other of enemies) {
+                    if (other !== e && other.hp < other.maxHp) {
+                        other.hp = Math.min(other.hp + 1, other.maxHp)
+                        break
+                    }
+                }
+            }
+        }
+        
+        // Movement patterns  
         if (e.pattern === 1) {  
             // Sine wave movement  
             e.x += Math.sin(Date.now() / 200 + e.y) * 2  
@@ -1500,6 +2110,9 @@ function drawEnemies() {
             // Circle movement  
             e.angle += 0.02  
             e.x += Math.cos(e.angle) * 2  
+        } else if (e.pattern === 3) {  
+            // Zigzag  
+            e.x += Math.sin(Date.now() / 100) * 3  
         }  
         
         // Time slow effect  
@@ -1512,13 +2125,21 @@ function drawEnemies() {
             e.shield = Math.min(e.shield + e.shieldRegen, e.maxHp)  
         }  
         
+        // Stealth effect
+        if (e.type === 'stealth') {
+            e.stealthAlpha = 0.3 + Math.sin(Date.now() / 500) * 0.2
+        }
+        
         ctx.save()
         ctx.translate(e.x + e.w/2, e.y + e.h/2)
+        ctx.globalAlpha = e.stealthAlpha || 1
         
         // Draw ship based on design
         if (e.design === 0) { // Standard Fighter
             // Main body
             ctx.fillStyle = e.color || '#0f0'
+            ctx.shadowColor = e.color || '#0f0'
+            ctx.shadowBlur = 10
             ctx.beginPath()
             ctx.moveTo(0, -15)
             ctx.lineTo(10, 10)
@@ -1531,6 +2152,7 @@ function drawEnemies() {
             
             // Cockpit
             ctx.fillStyle = '#00ffff'
+            ctx.shadowBlur = 5
             ctx.beginPath()
             ctx.arc(0, -8, 4, 0, Math.PI * 2)
             ctx.fill()
@@ -1548,6 +2170,7 @@ function drawEnemies() {
         } else if (e.design === 1) { // Interceptor (Fast)
             // Sleek body
             ctx.fillStyle = e.color || '#ffaa00'
+            ctx.shadowColor = e.color || '#ffaa00'
             ctx.beginPath()
             ctx.moveTo(0, -18)
             ctx.lineTo(12, 12)
@@ -1582,6 +2205,7 @@ function drawEnemies() {
         } else if (e.design === 2) { // Heavy Cruiser (Elite)
             // Main hull
             ctx.fillStyle = e.color || '#ff5555'
+            ctx.shadowColor = e.color || '#ff5555'
             ctx.fillRect(-15, -12, 30, 24)
             
             // Bridge
@@ -1609,6 +2233,7 @@ function drawEnemies() {
         } else if (e.design === 3) { // Shielded Frigate
             // Main body with shield generator rings
             ctx.fillStyle = e.color || '#00aaff'
+            ctx.shadowColor = e.color || '#00aaff'
             ctx.beginPath()
             ctx.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2)
             ctx.fill()
@@ -1648,6 +2273,7 @@ function drawEnemies() {
         } else if (e.design === 4) { // Kamikaze Drone
             // Small, aggressive design
             ctx.fillStyle = e.color || '#ff4400'
+            ctx.shadowColor = e.color || '#ff4400'
             ctx.beginPath()
             ctx.moveTo(0, -10)
             ctx.lineTo(12, 8)
@@ -1672,6 +2298,47 @@ function drawEnemies() {
             // Suicide burn
             ctx.fillStyle = `rgba(255, 100, 0, ${Math.random() * 0.9 + 0.1})`
             ctx.fillRect(-4, 8, 8, 10)
+            
+        } else if (e.design === 5) { // Stealth Fighter
+            // Angular design
+            ctx.fillStyle = e.color || '#aa00aa'
+            ctx.shadowColor = e.color || '#aa00aa'
+            ctx.beginPath()
+            ctx.moveTo(0, -20)
+            ctx.lineTo(15, 0)
+            ctx.lineTo(10, 15)
+            ctx.lineTo(0, 10)
+            ctx.lineTo(-10, 15)
+            ctx.lineTo(-15, 0)
+            ctx.closePath()
+            ctx.fill()
+            
+            // Glowing edges
+            ctx.strokeStyle = '#ff00ff'
+            ctx.lineWidth = 1
+            ctx.stroke()
+            
+        } else if (e.design === 6) { // Healer
+            // Rounded design with cross
+            ctx.fillStyle = e.color || '#00ff88'
+            ctx.shadowColor = e.color || '#00ff88'
+            ctx.beginPath()
+            ctx.ellipse(0, 0, 15, 10, 0, 0, Math.PI * 2)
+            ctx.fill()
+            
+            // Healing cross
+            ctx.fillStyle = '#ffffff'
+            ctx.fillRect(-3, -8, 6, 16)
+            ctx.fillRect(-8, -3, 16, 6)
+            
+            // Healing pulse
+            if (e.healTimer > 50) {
+                ctx.strokeStyle = '#ffffff'
+                ctx.lineWidth = 2
+                ctx.beginPath()
+                ctx.arc(0, 0, 20 + Math.sin(Date.now() / 100) * 5, 0, Math.PI * 2)
+                ctx.stroke()
+            }
         }
         
         ctx.restore()
@@ -1680,6 +2347,7 @@ function drawEnemies() {
         if (e.hp > 1) {  
             ctx.fillStyle = "white"  
             ctx.font = "12px Arial"  
+            ctx.shadowBlur = 0
             ctx.fillText(e.hp, e.x + e.w/2 - 5, e.y - 5)  
         }  
         
@@ -1692,6 +2360,7 @@ function drawEnemies() {
     }  
     
     enemies = enemies.filter(e => e.y <= GAME_HEIGHT + 20)  
+    ctx.shadowBlur = 0
 }  
 
 function drawBoss() {  
@@ -1703,9 +2372,15 @@ function drawBoss() {
     // Rotating effect  
     ctx.rotate(Date.now() / 1000)  
     
+    // Rage mode effects
+    if (boss.rageMode) {
+        ctx.shadowColor = '#ff0000'
+        ctx.shadowBlur = 50
+    }
+    
     // Boss body  
-    ctx.fillStyle = '#ff0000'  
-    ctx.shadowColor = '#ff0000'  
+    ctx.fillStyle = boss.rageMode ? '#ff8800' : '#ff0000'  
+    ctx.shadowColor = boss.rageMode ? '#ff8800' : '#ff0000'  
     ctx.shadowBlur = 30  
     ctx.beginPath()  
     ctx.moveTo(0, -50)  
@@ -1716,7 +2391,7 @@ function drawBoss() {
     ctx.closePath()  
     ctx.fill()  
     
-    // Eyes based on phase  
+    // Eyes based on phase and rage mode
     ctx.shadowBlur = 0  
     ctx.fillStyle = 'white'  
     ctx.beginPath()  
@@ -1726,7 +2401,7 @@ function drawBoss() {
     ctx.arc(15, -20, 8, 0, Math.PI * 2)  
     ctx.fill()  
     
-    ctx.fillStyle = 'black'  
+    ctx.fillStyle = boss.rageMode ? 'red' : 'black'  
     ctx.beginPath()  
     ctx.arc(-15 + (boss.phase === 3 ? 2 : 0), -20, 4, 0, Math.PI * 2)  
     ctx.fill()  
@@ -1737,7 +2412,7 @@ function drawBoss() {
     // Phase indicator  
     ctx.fillStyle = '#fff'  
     ctx.font = '14px Arial'  
-    ctx.fillText(`PHASE ${boss.phase}`, -25, -60)  
+    ctx.fillText(`PHASE ${boss.phase}${boss.rageMode ? ' RAGE' : ''}`, -35, -70)  
     
     ctx.restore()  
 }  
@@ -1745,8 +2420,9 @@ function drawBoss() {
 function drawPowerups() {  
     for (let i = powerups.length - 1; i >= 0; i--) {  
         let p = powerups[i]  
-        p.y += p.speed  
+        p.y += p.speed * (timeSlowActive ? 0.3 : 1)  
         p.angle += 0.02  
+        p.pulsePhase += 0.05
         
         let type = POWERUP_TYPES[p.type]  
         
@@ -1754,13 +2430,16 @@ function drawPowerups() {
         ctx.translate(p.x, p.y)  
         ctx.rotate(p.angle)  
         
+        // Pulsing size
+        let pulseSize = p.size/2 + Math.sin(p.pulsePhase) * 2
+        
         // Glow effect  
         ctx.shadowColor = type.color  
-        ctx.shadowBlur = 15  
+        ctx.shadowBlur = 20  
         
         ctx.fillStyle = type.color  
         ctx.beginPath()  
-        ctx.arc(0, 0, p.size/2, 0, Math.PI * 2)  
+        ctx.arc(0, 0, pulseSize, 0, Math.PI * 2)  
         ctx.fill()  
         
         ctx.shadowBlur = 0  
@@ -1769,7 +2448,7 @@ function drawPowerups() {
         ctx.fillText(type.symbol, -8, 6)  
         
         // Duration indicator for temporary powerups  
-        if (type.duration > 0) {  
+        if (type.duration > 0 && p.type !== 'SCORE_BOOST') {  
             ctx.fillStyle = '#fff'  
             ctx.font = '8px Arial'  
             ctx.fillText(`${type.duration/1000}s`, -6, 18)  
@@ -1785,12 +2464,15 @@ function drawExplosions() {
     for (let i = explosions.length - 1; i >= 0; i--) {  
         let ex = explosions[i]  
         ctx.fillStyle = `rgba(255, ${200 - ex.size * 8}, 0, ${1 - ex.size/25})`  
+        ctx.shadowColor = '#ff8800'  
+        ctx.shadowBlur = 20  
         ctx.beginPath()  
         ctx.arc(ex.x, ex.y, ex.size, 0, Math.PI * 2)  
         ctx.fill()  
         ex.size += 1.5  
         if (ex.size > 25) explosions.splice(i, 1)  
     }  
+    ctx.shadowBlur = 0  
 }  
 
 function drawParticles() {  
@@ -1802,13 +2484,37 @@ function drawParticles() {
         p.size *= 0.95  
         
         ctx.fillStyle = p.color  
+        ctx.shadowColor = p.color  
+        ctx.shadowBlur = 10  
         ctx.beginPath()  
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)  
         ctx.fill()  
         
         if (p.life <= 0 || p.size < 0.5) particles.splice(i, 1)  
     }  
+    ctx.shadowBlur = 0  
 }  
+
+function drawDebris() {
+    for (let i = debris.length - 1; i >= 0; i--) {
+        let d = debris[i]
+        d.x += d.vx
+        d.y += d.vy
+        d.rotation += d.rotationSpeed
+        d.life--
+        
+        ctx.save()
+        ctx.translate(d.x, d.y)
+        ctx.rotate(d.rotation)
+        ctx.fillStyle = d.color
+        ctx.globalAlpha = d.life / 50
+        ctx.fillRect(-d.size/2, -d.size/2, d.size, d.size)
+        ctx.restore()
+        
+        if (d.life <= 0) debris.splice(i, 1)
+    }
+    ctx.globalAlpha = 1
+}
 
 function drawSpecialMeter() {  
     let meterX = 10  
@@ -1820,9 +2526,15 @@ function drawSpecialMeter() {
     ctx.fillStyle = '#333'  
     ctx.fillRect(meterX, meterY, meterWidth, meterHeight)  
     
-    // Fill  
+    // Fill with pulse when full
+    if (player.specialMeter >= player.maxSpecial) {
+        ctx.fillStyle = '#aa44ff'
+        ctx.shadowColor = '#aa44ff'
+        ctx.shadowBlur = 10 + Math.sin(Date.now() / 200) * 5
+    } else {
+        ctx.fillStyle = '#aa44ff'
+    }
     let fillWidth = (player.specialMeter / player.maxSpecial) * meterWidth  
-    ctx.fillStyle = '#aa44ff'  
     ctx.fillRect(meterX, meterY, fillWidth, meterHeight)  
     
     // Border  
@@ -1833,6 +2545,7 @@ function drawSpecialMeter() {
     // Text  
     ctx.fillStyle = '#fff'  
     ctx.font = '10px Arial'  
+    ctx.shadowBlur = 0
     ctx.fillText('SPECIAL', meterX, meterY - 2)  
 }
 
@@ -1861,8 +2574,11 @@ function drawSkillPoints() {
     if (player.skillPoints > 0) {  
         ctx.fillStyle = '#ffff00'  
         ctx.font = 'bold 16px Arial'  
+        ctx.shadowColor = '#ffff00'
+        ctx.shadowBlur = 10
         ctx.fillText(`✨ ${player.skillPoints}`, 10, 190)  
     }  
+    ctx.shadowBlur = 0
 }  
 
 function updateUI() {  
@@ -1916,6 +2632,10 @@ function addCombo() {
         document.getElementById('comboCounter').innerHTML = `🔥 ${combo}x COMBO!`  
         player.specialMeter = Math.min(player.specialMeter + 5, player.maxSpecial)  
         updateUI()  
+        
+        // Check combo achievements
+        if (combo >= 20) checkAchievement('COMBO_MASTER')
+        if (combo >= 50) checkAchievement('PERFECTIONIST')
     }  
 }  
 
@@ -1933,7 +2653,7 @@ function bulletCollision() {
                 b.y + 10 > e.y  
             ) {  
                 explosions.push({ x: e.x + e.w/2, y: e.y + e.h/2, size: 2 })  
-                playExplosion()  
+                playHit()  
                 
                 let damage = b.damage || 1  
                 
@@ -1946,9 +2666,30 @@ function bulletCollision() {
                 
                 bullets.splice(i, 1)  
                 
+                // Vampire lifesteal
+                if (player.powerups.vampire && damage > 0) {
+                    player.life = Math.min(player.life + 0.5, player.maxLife)
+                }
+                
                 if (e.hp <= 0) {  
-                    score += 10 * wave  
-                    player.experience += 10  
+                    score += 10 * wave * (player.powerups.SCORE_BOOST ? 2 : 1)
+                    player.experience += e.experienceValue || 10  
+                    totalKills++
+                    
+                    // Create debris
+                    for (let k = 0; k < 5; k++) {
+                        debris.push({
+                            x: e.x + e.w/2,
+                            y: e.y + e.h/2,
+                            vx: (Math.random() - 0.5) * 5,
+                            vy: (Math.random() - 0.5) * 5,
+                            size: Math.random() * 5 + 2,
+                            rotation: Math.random() * Math.PI * 2,
+                            rotationSpeed: (Math.random() - 0.5) * 0.2,
+                            color: e.color || '#888',
+                            life: 50
+                        })
+                    }
                     
                     // Level up check  
                     if (player.experience >= player.level * 100) {  
@@ -1961,20 +2702,36 @@ function bulletCollision() {
                     addCombo()  
                     
                     // Chance to drop powerup  
-                    if (Math.random() < 0.2) {  
+                    if (Math.random() < 0.25) {  
                         spawnPowerup()  
                     }  
+                    
+                    // First blood achievement
+                    if (totalKills === 1) {
+                        checkAchievement('FIRST_BLOOD')
+                    }
+                    
+                    // Sharpshooter achievement
+                    if (totalKills >= 1000) {
+                        checkAchievement('SHARPSHOOTER')
+                    }
                     
                     // Wave progression  
                     if (enemiesKilled >= enemiesForNextWave) {  
                         wave++  
                         enemiesKilled = 0  
                         enemiesForNextWave = 10 + wave * 2  
+                        playNewWave()
                         
                         // Spawn boss every 5 waves  
                         if (wave % 5 === 0) {  
                             spawnBoss()  
                         }  
+                        
+                        // Survivor achievement
+                        if (wave >= 10) {
+                            checkAchievement('SURVIVOR')
+                        }
                     }  
                 }  
                 
@@ -1984,6 +2741,76 @@ function bulletCollision() {
         }  
     }  
 }  
+
+function asteroidCollision() {
+    for (let i = asteroids.length - 1; i >= 0; i--) {
+        let a = asteroids[i]
+        
+        // Bullet collision
+        for (let j = bullets.length - 1; j >= 0; j--) {
+            let b = bullets[j]
+            let dx = b.x - a.x
+            let dy = b.y - a.y
+            let dist = Math.sqrt(dx * dx + dy * dy)
+            
+            if (dist < a.radius) {
+                a.health -= b.damage || 1
+                bullets.splice(j, 1)
+                explosions.push({ x: b.x, y: b.y, size: 2 })
+                
+                if (a.health <= 0) {
+                    // Break asteroid into pieces
+                    for (let k = 0; k < 5; k++) {
+                        debris.push({
+                            x: a.x,
+                            y: a.y,
+                            vx: (Math.random() - 0.5) * 5,
+                            vy: (Math.random() - 0.5) * 5,
+                            size: a.radius / 3,
+                            rotation: Math.random() * Math.PI * 2,
+                            rotationSpeed: (Math.random() - 0.5) * 0.2,
+                            color: '#886644',
+                            life: 50
+                        })
+                    }
+                    asteroids.splice(i, 1)
+                    score += 5
+                }
+                break
+            }
+        }
+        
+        // Player collision
+        if (!player.powerups.phaseShift && !player.phaseShiftActive) {
+            let dx = player.x + 20 - a.x
+            let dy = player.y + 20 - a.y
+            let dist = Math.sqrt(dx * dx + dy * dy)
+            
+            if (dist < a.radius + 20) {
+                explosions.push({ x: player.x + 20, y: player.y + 20, size: 5 })
+                
+                if (player.powerups.shield) {
+                    player.powerups.shield = false
+                    clearTimeout(player.powerupTimers.shield)
+                } else {
+                    player.life -= 1
+                }
+                
+                asteroids.splice(i, 1)
+                updateUI()
+                
+                if (player.life <= 0) {
+                    gameActive = false
+                    playGameOver()
+                    setTimeout(() => {
+                        alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)
+                        location.reload()
+                    }, 500)
+                }
+            }
+        }
+    }
+}
 
 function missileCollision() {  
     for (let i = missiles.length - 1; i >= 0; i--) {  
@@ -2065,7 +2892,7 @@ function mineCollision() {
             let dy = m.y - (e.y + e.h/2)  
             let dist = Math.sqrt(dx * dx + dy * dy)  
             
-            if (dist < m.radius + e.w/2) {  
+            if (dist < m.radius + e.w/2 || dist < m.proximityRadius) {  
                 explosions.push({ x: m.x, y: m.y, size: 10 })  
                 playExplosion()  
                 
@@ -2088,32 +2915,34 @@ function mineCollision() {
         }  
         
         // Player collision with mines  
-        let dx = m.x - (player.x + 20)  
-        let dy = m.y - (player.y + 20)  
-        let dist = Math.sqrt(dx * dx + dy * dy)  
-        
-        if (dist < m.radius + 15) {  
-            explosions.push({ x: player.x + 20, y: player.y + 20, size: 5 })  
+        if (!player.powerups.phaseShift && !player.phaseShiftActive) {
+            let dx = m.x - (player.x + 20)  
+            let dy = m.y - (player.y + 20)  
+            let dist = Math.sqrt(dx * dx + dy * dy)  
             
-            if (player.powerups.shield) {  
-                player.powerups.shield = false  
-                clearTimeout(player.powerupTimers.shield)  
-            } else {  
-                player.life -= m.damage  
+            if (dist < m.radius + 15 || dist < m.proximityRadius) {  
+                explosions.push({ x: player.x + 20, y: player.y + 20, size: 5 })  
+                
+                if (player.powerups.shield) {  
+                    player.powerups.shield = false  
+                    clearTimeout(player.powerupTimers.shield)  
+                } else {  
+                    player.life -= m.damage  
+                }  
+                
+                mines.splice(i, 1)  
+                updateUI()  
+                
+                if (player.life <= 0) {  
+                    gameActive = false  
+                    playGameOver()  
+                    setTimeout(() => {  
+                        alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
+                        location.reload()  
+                    }, 500)  
+                }  
             }  
-            
-            mines.splice(i, 1)  
-            updateUI()  
-            
-            if (player.life <= 0) {  
-                gameActive = false  
-                playGameOver()  
-                setTimeout(() => {  
-                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
-                    location.reload()  
-                }, 500)  
-            }  
-        }  
+        }
     }  
 }  
 
@@ -2177,31 +3006,33 @@ function bossCollision() {
     }  
     
     // Player vs boss collision  
-    if (  
-        player.x < boss.x + boss.w &&  
-        player.x + player.w > boss.x &&  
-        player.y < boss.y + boss.h &&  
-        player.y + player.h > boss.y  
-    ) {  
-        explosions.push({ x: player.x + 20, y: player.y + 20, size: 10 })  
-        
-        if (player.powerups.shield) {  
-            player.powerups.shield = false  
-            clearTimeout(player.powerupTimers.shield)  
-        } else {  
-            player.life -= 2  
-        }  
-        
-        updateUI()  
-        
-        if (player.life <= 0) {  
-            gameActive = false  
-            playGameOver()  
-            setTimeout(() => {  
-                alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
-                location.reload()  
-            }, 500)  
-        }  
+    if (!player.powerups.phaseShift && !player.phaseShiftActive) {
+        if (  
+            player.x < boss.x + boss.w &&  
+            player.x + player.w > boss.x &&  
+            player.y < boss.y + boss.h &&  
+            player.y + player.h > boss.y  
+        ) {  
+            explosions.push({ x: player.x + 20, y: player.y + 20, size: 10 })  
+            
+            if (player.powerups.shield) {  
+                player.powerups.shield = false  
+                clearTimeout(player.powerupTimers.shield)  
+            } else {  
+                player.life -= boss.rageMode ? 3 : 2  
+            }  
+            
+            updateUI()  
+            
+            if (player.life <= 0) {  
+                gameActive = false  
+                playGameOver()  
+                setTimeout(() => {  
+                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
+                    location.reload()  
+                }, 500)  
+            }  
+        }
     }  
 }  
 
@@ -2258,7 +3089,7 @@ function shipCollision() {
                 gameActive = false  
                 playGameOver()  
                 setTimeout(() => {  
-                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
+                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
                     location.reload()  
                 }, 500)  
             }  
@@ -2278,7 +3109,10 @@ function playerBulletCollision() {
             explosions.push({ x: player.x + 20, y: player.y + 20, size: 3 })  
             enemyBullets.splice(i, 1)  
             
-            if (player.powerups.shield) {  
+            if (player.powerups.phaseShift || player.phaseShiftActive) {
+                // Phase shift dodges bullets
+                continue
+            } else if (player.powerups.shield) {  
                 player.powerups.shield = false  
                 clearTimeout(player.powerupTimers.shield)  
             } else {  
@@ -2291,7 +3125,7 @@ function playerBulletCollision() {
                 gameActive = false  
                 playGameOver()  
                 setTimeout(() => {  
-                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
+                    alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`)  
                     location.reload()  
                 }, 500)  
             }  
@@ -2314,6 +3148,8 @@ function powerupCollision() {
                 if (player.life < player.maxLife) {  
                     player.life++  
                 }  
+            } else if (p.type === 'REPAIR') {  
+                player.life = Math.min(player.life + 2, player.maxLife)  
             } else if (p.type === 'SPECIAL') {  
                 player.specialMeter = Math.min(player.specialMeter + 30, player.maxSpecial)  
             } else if (p.type === 'NUKE') {  
@@ -2324,17 +3160,31 @@ function powerupCollision() {
                 enemies = []  
                 enemyBullets = []  
             } else if (p.type === 'BLACK_HOLE') {  
-                spawnBlackHole(GAME_WIDTH/2, GAME_HEIGHT/2)  
+                spawnBlackHole(player.x + 20, player.y - 50)  
+            } else if (p.type === 'SCORE_BOOST') {  
+                // Handled in scoring
             } else {  
                 // Activate powerup  
                 let key = p.type.toLowerCase()  
                 player.powerups[key] = true  
+                
+                // Special handling for drone
+                if (key === 'drone') {
+                    player.drones.push({
+                        x: 0,
+                        y: 0,
+                        active: true
+                    })
+                }
                 
                 // Set timeout to deactivate  
                 if (POWERUP_TYPES[p.type].duration > 0) {  
                     clearTimeout(player.powerupTimers[key])  
                     player.powerupTimers[key] = setTimeout(() => {  
                         player.powerups[key] = false  
+                        if (key === 'drone') {
+                            player.drones = []
+                        }
                         updateUI()  
                     }, POWERUP_TYPES[p.type].duration)  
                 }  
@@ -2342,6 +3192,14 @@ function powerupCollision() {
             
             powerups.splice(i, 1)  
             updateUI()  
+            
+            // Collector achievement
+            if (achievements.includes('COLLECTOR')) {
+                let collected = achievements.filter(a => a === 'COLLECTOR').length
+                if (collected >= 50) {
+                    checkAchievement('COLLECTOR')
+                }
+            }
         }  
     }  
 }  
@@ -2372,13 +3230,25 @@ function checkAchievement(achievementId) {
 }  
 
 function updatePlayer() {  
-    player.x += joystickX * player.speed * (1 + player.skills.speed * 0.1)  
-    player.y += joystickY * player.speed * (1 + player.skills.speed * 0.1)  
+    // Apply movement with skill bonus
+    let moveSpeed = player.speed * (1 + player.skills.speed * 0.1)
+    if (timeSlowActive) moveSpeed *= 0.5
+    
+    player.x += joystickX * moveSpeed  
+    player.y += joystickY * moveSpeed  
     player.x = Math.max(0, Math.min(GAME_WIDTH - player.w, player.x))  
     player.y = Math.max(0, Math.min(GAME_HEIGHT - player.h, player.y))  
     
     // Passive special meter gain  
     player.specialMeter = Math.min(player.specialMeter + 0.1, player.maxSpecial)  
+    
+    // Phase shift timer
+    if (player.phaseShiftActive) {
+        player.phaseShiftTimer--
+        if (player.phaseShiftTimer <= 0) {
+            player.phaseShiftActive = false
+        }
+    }
 }  
 
 // Game control functions  
@@ -2405,11 +3275,24 @@ document.addEventListener('visibilitychange', () => {
     }  
 })  
 
-function gameLoop() {  
+function gameLoop(timestamp) {  
     if (!gameActive) return  
+    
+    // Calculate delta time for animations
+    if (lastTimestamp === 0) lastTimestamp = timestamp
+    let deltaTime = timestamp - lastTimestamp
+    lastTimestamp = timestamp
+    
+    // Update total play time
+    if (!gamePaused) {
+        totalPlayTime += deltaTime
+    }
     
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT)  
     drawStars()  
+    drawAsteroids()
+    drawWormholes()
+    drawForceField()
     
     if (!gamePaused) {  
         updatePlayer()  
@@ -2421,6 +3304,7 @@ function gameLoop() {
     
     drawPlayer()  
     drawBullets()  
+    drawChainLightning()
     drawMissiles()  
     drawLaserBeams()  
     drawEnemyBullets()  
@@ -2431,6 +3315,7 @@ function gameLoop() {
     drawMines()  
     drawExplosions()  
     drawParticles()  
+    drawDebris()
     drawSpecialMeter()  
     drawExperienceBar()  
     drawSkillPoints()  
@@ -2445,6 +3330,7 @@ function gameLoop() {
         shipCollision()  
         playerBulletCollision()  
         powerupCollision()  
+        asteroidCollision()
     }  
     
     requestAnimationFrame(gameLoop)  
@@ -2600,12 +3486,16 @@ document.addEventListener('keydown', (e) => {
         case '1':  
         case '2':  
         case '3':  
+        case '4':  
+        case '5':  
             // Skill allocation  
             if (player.skillPoints > 0) {  
                 let skill = parseInt(e.key) - 1  
                 if (skill === 0) player.skills.damage++  
                 else if (skill === 1) player.skills.fireRate++  
                 else if (skill === 2) player.skills.speed++  
+                else if (skill === 3) player.skills.critical++  
+                else if (skill === 4) player.skills.lifesteal++  
                 player.skillPoints--  
             }  
             break  
