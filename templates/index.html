@@ -223,24 +223,26 @@ canvas {
     box-sizing: border-box;  
 }  
 
+/* ========== UPDATED JOYSTICK - SMOOTH ANALOG ========== */
 #joystick {  
-    width: min(130px, 32vw);  
-    height: min(130px, 32vw);  
-    max-width: 130px;  
-    max-height: 130px;  
-    min-width: 90px;  
-    min-height: 90px;  
-    background: rgba(30, 30, 50, 0.8);  
+    width: min(140px, 34vw);  
+    height: min(140px, 34vw);  
+    max-width: 140px;  
+    max-height: 140px;  
+    min-width: 100px;  
+    min-height: 100px;  
+    background: rgba(20, 20, 40, 0.85);  
     border-radius: 50%;  
     position: relative;  
     touch-action: none;  
     pointer-events: auto;  
-    backdrop-filter: blur(4px);  
-    border: 2px solid rgba(0, 255, 255, 0.5);  
-    box-shadow: 0 0 30px rgba(0, 255, 255, 0.4);  
+    backdrop-filter: blur(6px);  
+    border: 2px solid rgba(0, 255, 255, 0.7);  
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.6), inset 0 0 20px rgba(0, 255, 255, 0.3);  
     display: flex;  
     justify-content: center;  
     align-items: center;  
+    transition: box-shadow 0.1s ease;
 }  
 
 #joystick::before {
@@ -249,26 +251,29 @@ canvas {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent 70%);
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent 80%);
+    pointer-events: none;
 }
 
 #stick {  
-    width: min(55px, 14vw);  
-    height: min(55px, 14vw);  
-    max-width: 55px;  
-    max-height: 55px;  
-    min-width: 40px;  
-    min-height: 40px;  
-    background: radial-gradient(circle at 30% 30%, #ffffff, #aaddff);  
+    width: min(60px, 15vw);  
+    height: min(60px, 15vw);  
+    max-width: 60px;  
+    max-height: 60px;  
+    min-width: 45px;  
+    min-height: 45px;  
+    background: radial-gradient(circle at 35% 35%, #ffffff, #aaddff, #88ccff);  
     border-radius: 50%;  
     position: absolute;  
     left: 50%;  
     top: 50%;  
     transform: translate(-50%, -50%);  
-    transition: all 0.03s ease;  
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.9);  
-    border: 2px solid #0ff;  
+    /* transition removed for real-time smoothness - now updated directly via JS transform */
+    box-shadow: 0 0 25px rgba(255, 255, 255, 0.9), 0 0 45px #0ff;  
+    border: 2px solid #ffffff;  
+    will-change: transform;
 }  
+/* ==================================================== */
 
 #fire {  
     width: min(100px, 25vw);  
@@ -423,8 +428,7 @@ canvas {
     
     <div id="uiOverlay">  
         <div id="topBar">  
-            <div id="titleText">Exomnia aircraft
-</div>  
+            <div id="titleText">🚀 SPACE SHOOTING V2.0</div>  
             <div id="statsText">  
                 <span class="life">❤️ <span id="lifeValue">3</span></span>  
                 <span class="score">🎁 <span id="scoreValue">0</span></span>  
@@ -1215,7 +1219,7 @@ function updateBoss() {
     document.getElementById('bossHealthFill').style.width = healthPercent + '%'  
 }  
 
-// Enhanced shooting system  
+// Enhanced shooting system with level-based bullet count
 function shoot() {  
     if (!gameActive || gamePaused) return  
     playShoot()  
@@ -1223,12 +1227,18 @@ function shoot() {
     let bulletSpeed = 7 * (1 + player.skills.speed * 0.1)
     let damage = 1 * (1 + player.skills.damage * 0.2)
     
+    // Calculate base bullet count based on level (1 bullet at level 1, +1 bullet every 2 levels)
+    let baseBulletCount = 1 + Math.floor(player.level / 2)
+    
     // Critical hit chance  
     let isCritical = Math.random() < (player.skills.critical * 0.1)
     if (isCritical) damage *= 2
     
-    // Multishot skill
-    let multishotCount = 1 + player.skills.multishot
+    // Multishot skill adds additional bullets
+    let multishotBonus = player.skills.multishot
+    
+    // Total bullet count
+    let totalBulletCount = baseBulletCount + multishotBonus
     
     // Drone support
     for (let drone of player.drones) {
@@ -1257,21 +1267,34 @@ function shoot() {
         })
     }
     else if (player.powerups.tripleShot) {
-        for (let m = 0; m < multishotCount; m++) {
+        // Triple shot overrides normal bullet count with 3 bullets
+        for (let m = 0; m < totalBulletCount; m++) {
             bullets.push({ x: player.x + 8 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
             bullets.push({ x: player.x + 18 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
             bullets.push({ x: player.x + 28 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
         }
     }
     else if (player.powerups.spreadShot) {
-        for (let m = 0; m < multishotCount; m++) {
+        // Spread shot - 3 bullets per set
+        for (let m = 0; m < totalBulletCount; m++) {
             bullets.push({ x: player.x + 18 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
             bullets.push({ x: player.x + 10 + m * 5, y: player.y + 5, speed: bulletSpeed * 0.8, damage: damage * 0.7, critical: isCritical })
             bullets.push({ x: player.x + 26 + m * 5, y: player.y + 5, speed: bulletSpeed * 0.8, damage: damage * 0.7, critical: isCritical })
         }
     } else {
-        for (let m = 0; m < multishotCount; m++) {
-            bullets.push({ x: player.x + 18 + m * 5, y: player.y, speed: bulletSpeed, damage: damage, critical: isCritical })
+        // Normal shot with bullet count based on level
+        let spacing = 8 // Space between bullets
+        let startX = player.x + 18 - ((totalBulletCount - 1) * spacing / 2)
+        
+        for (let i = 0; i < totalBulletCount; i++) {
+            bullets.push({ 
+                x: startX + (i * spacing), 
+                y: player.y, 
+                speed: bulletSpeed, 
+                damage: damage, 
+                critical: isCritical,
+                fromLevel: player.level // Tag with level for visual effect
+            })
         }
     }
     
@@ -1400,13 +1423,14 @@ function useSpecial() {
     }  
 }  
 
-// Level up system  
+// Level up system with visual feedback
 function levelUp() {  
     player.level++  
     player.skillPoints++  
     playLevelUp()  
     
-    // Show level up message  
+    // Show level up message with bullet count info
+    let bulletCount = 1 + Math.floor(player.level / 2)
     let message = document.createElement('div')  
     message.style.position = 'absolute'  
     message.style.top = '50%'  
@@ -1415,14 +1439,28 @@ function levelUp() {
     message.style.color = '#0ff'  
     message.style.fontSize = '32px'  
     message.style.fontWeight = 'bold'  
-    message.style.textShadow = '0 0 20px #0ff'  
+    message.style.textShadow = '0 0 20px #0ff, 0 0 40px #00aaff'  
     message.style.zIndex = '1000'  
-    message.textContent = `LEVEL UP! (${player.level})`  
+    message.style.textAlign = 'center'  
+    message.innerHTML = `LEVEL UP! (${player.level})<br><span style="font-size: 20px">🔥 ${bulletCount} BULLETS PER SHOT!</span>`  
     document.body.appendChild(message)  
+    
+    // Add level up particles
+    for (let i = 0; i < 30; i++) {
+        particles.push({
+            x: player.x + 20,
+            y: player.y + 20,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10 - 5,
+            life: 60,
+            size: Math.random() * 6 + 2,
+            color: '#00ffff'
+        })
+    }
     
     setTimeout(() => {  
         document.body.removeChild(message)  
-    }, 2000)  
+    }, 3000)  
     
     // Check achievement
     if (player.level >= 10) {
@@ -1647,10 +1685,15 @@ function drawPlayer() {
         ctx.setLineDash([])  
     }  
     
-    // Level indicator  
+    // Level indicator with bullet count
+    let bulletCount = 1 + Math.floor(player.level / 2)
     ctx.fillStyle = '#fff'  
+    ctx.font = 'bold 12px Arial'  
+    ctx.shadowColor = '#00ffff'
+    ctx.shadowBlur = 10
+    ctx.fillText(`Lvl ${player.level}`, -15, -35)  
     ctx.font = '10px Arial'  
-    ctx.fillText(`Lvl ${player.level}`, -10, -30)  
+    ctx.fillText(`${bulletCount}🔫`, -12, -20)  
     
     // Wings  
     ctx.fillStyle = "#00e5ff"  
@@ -1665,13 +1708,18 @@ function drawPlayer() {
     ctx.lineTo(5, 15)  
     ctx.fill()  
     
-    // Body - color based on active powerups  
+    // Body - color based on active powerups and level
     let bodyColor = '#0ff'  
     if (player.powerups.rapidFire) bodyColor = '#ff00ff'  
     if (player.powerups.laserBeam) bodyColor = '#ff00aa'  
     if (player.powerups.timeSlow) bodyColor = '#00aaff'  
     if (player.powerups.vampire) bodyColor = '#880000'  
     if (player.powerups.phaseShift) bodyColor = '#aa00aa'  
+    
+    // Add level-based glow
+    let levelGlow = Math.min(player.level * 0.1, 0.5)
+    ctx.shadowColor = bodyColor
+    ctx.shadowBlur = 10 + levelGlow * 20
     
     ctx.fillStyle = bodyColor  
     ctx.beginPath()  
@@ -1755,17 +1803,22 @@ function drawBullets() {
             })
         }
         
-        if (b.critical) {  
+        // Different bullet colors based on level
+        if (b.fromLevel) {
+            // Color shifts with level
+            let hue = (b.fromLevel * 20) % 360
+            ctx.fillStyle = `hsl(${hue}, 100%, 50%)`  
+            ctx.shadowColor = `hsl(${hue}, 100%, 50%)`  
+        } else if (b.critical) {  
             ctx.fillStyle = "#ffaa00"  
             ctx.shadowColor = '#ffaa00'  
-            ctx.shadowBlur = 10  
-            ctx.fillRect(b.x - 2, b.y - 2, 8, 14)  
         } else {  
             ctx.fillStyle = "yellow"  
             ctx.shadowColor = 'yellow'  
-            ctx.shadowBlur = 5  
-            ctx.fillRect(b.x, b.y, 4, 10)  
         }  
+        
+        ctx.shadowBlur = 10  
+        ctx.fillRect(b.x - (b.fromLevel ? 2 : 0), b.y - 2, 4 + (b.fromLevel ? 2 : 0), 12)  
         
         if (b.y < 0) bullets.splice(i, 1)  
     }  
@@ -3338,55 +3391,114 @@ function gameLoop(timestamp) {
 
 gameLoop()  
 
-// Touch controls  
+// ========== UPDATED TOUCH CONTROLS - SMOOTH ANALOG JOYSTICK ==========
 const joystick = document.getElementById("joystick")  
 const stick = document.getElementById("stick")  
 const fire = document.getElementById("fire")  
 const specialBtn = document.getElementById("specialButton")  
 
-function handleJoystickMove(e) {  
-    e.preventDefault()  
+// Joystick active flag
+let joystickActive = false
+
+// Get max travel distance for stick (in pixels)
+function getJoystickMaxRadius() {
+    let rect = joystick.getBoundingClientRect()
+    // Stick can move half of joystick width minus half of stick width
+    return (rect.width / 2) - (stick.offsetWidth / 2)
+}
+
+// Convert pixel offset to normalized vector (-1..1)
+function handleJoystickMove(clientX, clientY) {  
     let rect = joystick.getBoundingClientRect()  
-    let touch = e.touches ? e.touches[0] : e  
     
     let centerX = rect.left + rect.width / 2  
     let centerY = rect.top + rect.height / 2  
-    let maxRadius = rect.width / 2 - stick.offsetWidth / 2  
+    let maxRadius = getJoystickMaxRadius()
     
-    let x = touch.clientX - centerX  
-    let y = touch.clientY - centerY  
+    // Calculate raw offset from center
+    let dx = clientX - centerX  
+    let dy = clientY - centerY  
     
-    let distance = Math.sqrt(x * x + y * y)  
+    // Clamp distance to maxRadius for both position and joystick values
+    let distance = Math.sqrt(dx * dx + dy * dy)  
     if (distance > maxRadius) {  
-        x = x * maxRadius / distance  
-        y = y * maxRadius / distance  
+        dx = dx * maxRadius / distance  
+        dy = dy * maxRadius / distance  
+        distance = maxRadius
     }  
     
-    joystickX = x / maxRadius  
-    joystickY = y / maxRadius  
+    // Normalize joystick values (-1..1) based on max radius
+    joystickX = dx / maxRadius  
+    joystickY = dy / maxRadius  
     
-    stick.style.left = (x + rect.width / 2 - stick.offsetWidth / 2) + "px"  
-    stick.style.top = (y + rect.height / 2 - stick.offsetHeight / 2) + "px"  
+    // Update stick position with absolute pixels for smooth movement
+    stick.style.left = (rect.width / 2 + dx - stick.offsetWidth / 2) + "px"  
+    stick.style.top = (rect.height / 2 + dy - stick.offsetHeight / 2) + "px"  
+    // Remove transform to allow direct pixel positioning
+    stick.style.transform = "none"  
 }  
 
-function handleJoystickEnd(e) {  
-    e.preventDefault()  
+function handleJoystickEnd() {  
+    joystickActive = false
     joystickX = 0  
     joystickY = 0  
+    // Reset stick to center with transform for clean reset
     stick.style.left = "50%"  
     stick.style.top = "50%"  
     stick.style.transform = "translate(-50%, -50%)"  
 }  
 
+// Touch events
 joystick.addEventListener("touchstart", (e) => {  
     e.preventDefault()  
     initAudio()  
+    joystickActive = true
+    let touch = e.touches[0]  
+    handleJoystickMove(touch.clientX, touch.clientY)  
 })  
 
-joystick.addEventListener("touchmove", handleJoystickMove)  
-joystick.addEventListener("touchend", handleJoystickEnd)  
-joystick.addEventListener("touchcancel", handleJoystickEnd)  
+joystick.addEventListener("touchmove", (e) => {  
+    e.preventDefault()  
+    if (!joystickActive) return
+    let touch = e.touches[0]  
+    handleJoystickMove(touch.clientX, touch.clientY)  
+})  
 
+joystick.addEventListener("touchend", (e) => {  
+    e.preventDefault()  
+    handleJoystickEnd()  
+})  
+
+joystick.addEventListener("touchcancel", (e) => {  
+    e.preventDefault()  
+    handleJoystickEnd()  
+})  
+
+// Mouse events for testing
+joystick.addEventListener("mousedown", (e) => {  
+    e.preventDefault()  
+    initAudio()  
+    joystickActive = true
+    handleJoystickMove(e.clientX, e.clientY)  
+    
+    function onMouseMove(e) {  
+        e.preventDefault()  
+        if (!joystickActive) return
+        handleJoystickMove(e.clientX, e.clientY)  
+    }  
+    
+    function onMouseUp(e) {  
+        e.preventDefault()  
+        handleJoystickEnd()  
+        document.removeEventListener("mousemove", onMouseMove)  
+        document.removeEventListener("mouseup", onMouseUp)  
+    }  
+    
+    document.addEventListener("mousemove", onMouseMove)  
+    document.addEventListener("mouseup", onMouseUp)  
+})  
+
+// Fire button  
 fire.addEventListener("touchstart", (e) => {  
     e.preventDefault()  
     initAudio()  
@@ -3408,33 +3520,6 @@ fire.addEventListener("touchcancel", (e) => {
     firing = false  
 })  
 
-specialBtn.addEventListener("touchstart", (e) => {  
-    e.preventDefault()  
-    useSpecial()  
-})  
-
-// Mouse controls  
-joystick.addEventListener("mousedown", (e) => {  
-    e.preventDefault()  
-    initAudio()  
-    handleJoystickMove(e)  
-    
-    function onMouseMove(e) {  
-        e.preventDefault()  
-        handleJoystickMove(e)  
-    }  
-    
-    function onMouseUp(e) {  
-        e.preventDefault()  
-        handleJoystickEnd(e)  
-        document.removeEventListener("mousemove", onMouseMove)  
-        document.removeEventListener("mouseup", onMouseUp)  
-    }  
-    
-    document.addEventListener("mousemove", onMouseMove)  
-    document.addEventListener("mouseup", onMouseUp)  
-})  
-
 fire.addEventListener("mousedown", (e) => {  
     e.preventDefault()  
     initAudio()  
@@ -3454,12 +3539,18 @@ fire.addEventListener("mouseleave", () => {
     firing = false  
 })  
 
+// Special button  
+specialBtn.addEventListener("touchstart", (e) => {  
+    e.preventDefault()  
+    useSpecial()  
+})  
+
 specialBtn.addEventListener("mousedown", (e) => {  
     e.preventDefault()  
     useSpecial()  
 })  
 
-// Keyboard controls for testing  
+// Keyboard controls  
 document.addEventListener('keydown', (e) => {  
     switch(e.key) {  
         case 'ArrowLeft': joystickX = -1; break  
