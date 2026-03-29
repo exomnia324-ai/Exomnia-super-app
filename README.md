@@ -1,4 +1,4 @@
-# Exomnia-super-app
-All in one apps
+# Exomnia 
+# space shotting game 
 # Founder-supriyo dolui
 # co-founder & ceo -Dipanjan khamrui
