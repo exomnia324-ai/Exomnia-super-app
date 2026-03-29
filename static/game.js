@@ -1,4 +1,3 @@
-<script>  
 window.addEventListener('load', () => {  
     document.getElementById('loading').style.display = 'none'  
 })  
@@ -496,4 +495,4 @@ function showAchievement(text) {
     el.style.display = 'block'
     setTimeout(() => el.style.display = 'none', 2000)
 }
-</script> 
+
