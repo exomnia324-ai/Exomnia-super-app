@@ -47,6 +47,10 @@ let player = {
 let bullets = [], enemyBullets = [], enemies = [], explosions = [], powerups = [], stars = [], missiles = [], particles = [], laserBeams = [], blackHoles = [], satellites = [], mines = [], chainLightning = [], asteroids = [], wormholes = [], debris = [], forceField = null, reflectedBullets = []
 let score = 0, joystickX = 0, joystickY = 0, firing = false, gameActive = true, gamePaused = false, wave = 1, enemiesKilled = 0, enemiesForNextWave = 10, combo = 0, comboTimeout = null, bossActive = false, boss = null, timeSlowActive = false, timeSlowTimer = null, achievements = [], highScore = localStorage.getItem('highScore') ? parseInt(localStorage.getItem('highScore')) : 0, totalKills = 0, totalPlayTime = 0, lastTimestamp = 0, screenShake = 0
 
+// UI hide initially
+document.getElementById('bossHealthBar').style.display = 'none'
+document.getElementById('bossName').style.display = 'none'
+
 function addScreenShake(amount) { screenShake = Math.min(screenShake + amount, 15); setTimeout(() => { screenShake = Math.max(0, screenShake - 1); }, 50); }
 
 // New powerup types
@@ -209,9 +213,23 @@ function bulletCollision() {
                     if (totalKills === 1) checkAchievement('FIRST_BLOOD')
                     if (totalKills >= 1000) checkAchievement('SHARPSHOOTER')
                     if (enemiesKilled >= enemiesForNextWave) {  
-                        wave++; enemiesKilled = 0; enemiesForNextWave = 10 + wave * 2; playNewWave()
-                        if (wave % 5 === 0) spawnBoss()
-                        if (wave >= 10) checkAchievement('SURVIVOR')
+                        // Reset boss state and start next wave
+                        bossActive = false
+                        boss = null
+                        
+                        // UI hide
+                        document.getElementById('bossHealthBar').style.display = 'none'
+                        document.getElementById('bossName').style.display = 'none'
+                        
+                        // NEXT WAVE FORCE START
+                        enemiesKilled = 0
+                        enemiesForNextWave = 10 + wave * 2
+                        
+                        // choto delay diye next wave start
+                        setTimeout(() => {
+                            wave++
+                            playNewWave()
+                        }, 1000)
                     }  
                 }  
                 updateUI(); break  
@@ -390,7 +408,7 @@ for (let i = 0; i < 5; i++) asteroids.push({ x: Math.random() * GAME_WIDTH, y: M
 
 let enemyInterval, enemyShootInterval, powerupInterval, satelliteInterval, asteroidInterval
 function startGameIntervals() {
-    enemyInterval = setInterval(() => { if (gameActive && !gamePaused && !bossActive) { let enemyCount = Math.min(3 + Math.floor(wave / 1.5), 12); for (let i = 0; i < enemyCount; i++) setTimeout(() => { if (gameActive && !gamePaused && !bossActive) spawnEnemy() }, i * 150) } }, 2000 - Math.min(wave * 80, 1200))
+    enemyInterval = setInterval(() => { if (gameActive && !gamePaused && !bossActive) { let enemyCount = Math.min(2 + Math.floor(wave / 3), 6); for (let i = 0; i < enemyCount; i++) setTimeout(() => { if (gameActive && !gamePaused && !bossActive) spawnEnemy() }, i * 300) } }, 2500 - Math.min(wave * 60, 1000))
     enemyShootInterval = setInterval(() => { if (gameActive && !gamePaused) for (let e of enemies) if (e && Math.random() < 0.7 + wave * 0.02) enemyShoot(e) }, 1800 - Math.min(wave * 40, 1200))
     powerupInterval = setInterval(() => { if (gameActive && !gamePaused && Math.random() < 0.5) spawnPowerup() }, 3000)
     satelliteInterval = setInterval(() => { if (gameActive && !gamePaused && wave > 3 && Math.random() < 0.4) spawnSatellite() }, 7000)
@@ -454,7 +472,16 @@ function playerBulletCollision() { for (let i = enemyBullets.length - 1; i >= 0;
 function missileCollision() { for (let i = missiles.length - 1; i >= 0; i--) for (let j = enemies.length - 1; j >= 0; j--) if (missiles[i].x < enemies[j].x + enemies[j].w && missiles[i].x + 4 > enemies[j].x && missiles[i].y < enemies[j].y + enemies[j].h && missiles[i].y + 10 > enemies[j].y) { explosions.push({ x: enemies[j].x + enemies[j].w/2, y: enemies[j].y + enemies[j].h/2, size: 5 }); let damage = missiles[i].damage || 2; if (enemies[j].shield > 0) enemies[j].shield -= damage; else enemies[j].hp -= damage; missiles.splice(i, 1); if (enemies[j].hp <= 0) { addScore(15 * wave); player.experience += 15; enemies.splice(j, 1); enemiesKilled++; addCombo() } updateUI(); break } }
 function laserCollision() { for (let i = laserBeams.length - 1; i >= 0; i--) for (let j = enemies.length - 1; j >= 0; j--) if (laserBeams[i].y < enemies[j].y + enemies[j].h && laserBeams[i].y > enemies[j].y && Math.abs(laserBeams[i].x - (enemies[j].x + enemies[j].w/2)) < laserBeams[i].width/2) { explosions.push({ x: enemies[j].x + enemies[j].w/2, y: enemies[j].y + enemies[j].h/2, size: 3 }); if (enemies[j].shield > 0) enemies[j].shield -= laserBeams[i].damage; else enemies[j].hp -= laserBeams[i].damage; if (enemies[j].hp <= 0) { addScore(10 * wave); player.experience += 10; enemies.splice(j, 1); enemiesKilled++; addCombo() } } }
 function mineCollision() { for (let i = mines.length - 1; i >= 0; i--) { let m = mines[i]; if (m.armTime > 0) continue; for (let j = enemies.length - 1; j >= 0; j--) { let e = enemies[j]; let dx = m.x - (e.x + e.w/2), dy = m.y - (e.y + e.h/2), dist = Math.sqrt(dx * dx + dy * dy); if (dist < m.radius + e.w/2 || dist < m.proximityRadius) { explosions.push({ x: m.x, y: m.y, size: 10 }); playExplosion(); if (e.shield > 0) e.shield -= m.damage; else e.hp -= m.damage; mines.splice(i, 1); if (e.hp <= 0) { addScore(15 * wave); enemies.splice(j, 1); enemiesKilled++; addCombo() } break } } if (!player.powerups.phaseShift && !player.phaseShiftActive) { let dx = m.x - (player.x + 20), dy = m.y - (player.y + 20), dist = Math.sqrt(dx * dx + dy * dy); if (dist < m.radius + 15 || dist < m.proximityRadius) { explosions.push({ x: player.x + 20, y: player.y + 20, size: 5 }); if (player.powerups.shield) { player.powerups.shield = false; clearTimeout(player.powerupTimers.shield) } else player.life -= m.damage; mines.splice(i, 1); updateUI(); if (player.life <= 0) { gameActive = false; playGameOver(); setTimeout(() => { alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`); location.reload() }, 500) } } } } }
-function bossCollision() { if (!boss || !bossActive) return; for (let i = bullets.length - 1; i >= 0; i--) if (bullets[i].x < boss.x + boss.w && bullets[i].x + 4 > boss.x && bullets[i].y < boss.y + boss.h && bullets[i].y + 10 > boss.y) { explosions.push({ x: bullets[i].x, y: bullets[i].y, size: 3 }); boss.hp -= bullets[i].damage || 1; bullets.splice(i, 1); player.specialMeter = Math.min(player.specialMeter + 2, player.maxSpecial); player.experience += 5; if (boss.hp <= 0) { explosions.push({ x: boss.x + boss.w/2, y: boss.y + boss.h/2, size: 20 }); playExplosion(); addScore(500 * wave); player.experience += 200; bossActive = false; boss = null; document.getElementById('bossHealthBar').style.display = 'none'; document.getElementById('bossName').style.display = 'none'; for (let i = 0; i < 5; i++) spawnPowerup(); checkAchievement('BOSS_SLAYER') } updateUI(); break } for (let i = missiles.length - 1; i >= 0; i--) if (missiles[i].x < boss.x + boss.w && missiles[i].x + 4 > boss.x && missiles[i].y < boss.y + boss.h && missiles[i].y + 10 > boss.y) { explosions.push({ x: missiles[i].x, y: missiles[i].y, size: 5 }); boss.hp -= missiles[i].damage || 2; missiles.splice(i, 1); player.specialMeter += 3 } if (!player.powerups.phaseShift && !player.phaseShiftActive && player.x < boss.x + boss.w && player.x + player.w > boss.x && player.y < boss.y + boss.h && player.y + player.h > boss.y) { explosions.push({ x: player.x + 20, y: player.y + 20, size: 10 }); if (player.powerups.shield) { player.powerups.shield = false; clearTimeout(player.powerupTimers.shield) } else player.life -= boss.rageMode ? 3 : 2; updateUI(); if (player.life <= 0) { gameActive = false; playGameOver(); setTimeout(() => { alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`); location.reload() }, 500) } } }
+function bossCollision() { if (!boss || !bossActive) return; for (let i = bullets.length - 1; i >= 0; i--) if (bullets[i].x < boss.x + boss.w && bullets[i].x + 4 > boss.x && bullets[i].y < boss.y + boss.h && bullets[i].y + 10 > boss.y) { explosions.push({ x: bullets[i].x, y: bullets[i].y, size: 3 }); boss.hp -= bullets[i].damage || 1; bullets.splice(i, 1); player.specialMeter = Math.min(player.specialMeter + 2, player.maxSpecial); player.experience += 5; if (boss.hp <= 0) { explosions.push({ x: boss.x + boss.w/2, y: boss.y + boss.h/2, size: 20 }); playExplosion(); addScore(500 * wave); player.experience += 200; bossActive = false; boss = null; document.getElementById('bossHealthBar').style.display = 'none'; document.getElementById('bossName').style.display = 'none'; for (let i = 0; i < 5; i++) spawnPowerup(); checkAchievement('BOSS_SLAYER'); 
+            
+            // After boss defeat, reset wave progression properly
+            enemiesKilled = 0;
+            enemiesForNextWave = 10 + wave * 2;
+            setTimeout(() => {
+                wave++;
+                playNewWave();
+            }, 1000);
+        } updateUI(); break } for (let i = missiles.length - 1; i >= 0; i--) if (missiles[i].x < boss.x + boss.w && missiles[i].x + 4 > boss.x && missiles[i].y < boss.y + boss.h && missiles[i].y + 10 > boss.y) { explosions.push({ x: missiles[i].x, y: missiles[i].y, size: 5 }); boss.hp -= missiles[i].damage || 2; missiles.splice(i, 1); player.specialMeter += 3 } if (!player.powerups.phaseShift && !player.phaseShiftActive && player.x < boss.x + boss.w && player.x + player.w > boss.x && player.y < boss.y + boss.h && player.y + player.h > boss.y) { explosions.push({ x: player.x + 20, y: player.y + 20, size: 10 }); if (player.powerups.shield) { player.powerups.shield = false; clearTimeout(player.powerupTimers.shield) } else player.life -= boss.rageMode ? 3 : 2; updateUI(); if (player.life <= 0) { gameActive = false; playGameOver(); setTimeout(() => { alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`); location.reload() }, 500) } } }
 function asteroidCollision() { for (let i = asteroids.length - 1; i >= 0; i--) { let a = asteroids[i]; for (let j = bullets.length - 1; j >= 0; j--) { let b = bullets[j]; let dx = b.x - a.x, dy = b.y - a.y; if (Math.sqrt(dx * dx + dy * dy) < a.radius) { a.health -= b.damage || 1; bullets.splice(j, 1); explosions.push({ x: b.x, y: b.y, size: 2 }); if (a.health <= 0) { for (let k = 0; k < 5; k++) debris.push({ x: a.x, y: a.y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, size: a.radius / 3, rotation: Math.random() * Math.PI * 2, rotationSpeed: (Math.random() - 0.5) * 0.2, color: '#886644', life: 50 }); asteroids.splice(i, 1); addScore(5) } break } } if (!player.powerups.phaseShift && !player.phaseShiftActive) { let dx = player.x + 20 - a.x, dy = player.y + 20 - a.y; if (Math.sqrt(dx * dx + dy * dy) < a.radius + 20) { explosions.push({ x: player.x + 20, y: player.y + 20, size: 5 }); if (player.powerups.shield) { player.powerups.shield = false; clearTimeout(player.powerupTimers.shield) } else player.life--; asteroids.splice(i, 1); updateUI(); if (player.life <= 0) { gameActive = false; playGameOver(); setTimeout(() => { alert(`💀 GAME OVER\n\nFinal Score: ${score}\nWaves: ${wave}\nKills: ${totalKills}\nLevel: ${player.level}\nHigh Score: ${highScore}\n\n✨ Play Again?`); location.reload() }, 500) } } } } }
 function drawReflectedBullets() { for (let i = reflectedBullets.length - 1; i >= 0; i--) { let b = reflectedBullets[i]; b.x += b.vx * (timeSlowActive ? 0.3 : 1); b.y += b.vy * (timeSlowActive ? 0.3 : 1); ctx.fillStyle = '#88aaff'; ctx.shadowColor = '#88aaff'; ctx.fillRect(b.x, b.y, 4, 8); for (let e of enemies) { if (b.x < e.x + e.w && b.x + 4 > e.x && b.y < e.y + e.h && b.y + 8 > e.y) { e.hp -= b.damage; explosions.push({ x: b.x, y: b.y, size: 2 }); reflectedBullets.splice(i, 1); break } } if (b.y > GAME_HEIGHT + 20) reflectedBullets.splice(i, 1) } }
 function applyReflectorShield() { if (!player.powerups.reflectorShield) return; for (let i = enemyBullets.length - 1; i >= 0; i--) { let b = enemyBullets[i]; if (b.x > player.x && b.x < player.x + player.w && b.y > player.y && b.y < player.y + player.h) { enemyBullets.splice(i, 1); reflectedBullets.push({ x: b.x, y: b.y, vx: -b.vx || 0, vy: -b.speed || -3, damage: b.damage || 1 }); playHit() } } }
@@ -495,4 +522,3 @@ function showAchievement(text) {
     el.style.display = 'block'
     setTimeout(() => el.style.display = 'none', 2000)
 }
-
