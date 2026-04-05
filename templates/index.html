@@ -1,67 +1,193 @@
-<!DOCTYPE html>  
-<html>  
-<head>  
-<meta charset="UTF-8">  
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">  
-<title>Space Shooting - ULTIMATE EDITION V3.0</title>  
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>EXOMNIA AIRCRAFT v7.0</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='Game/Style.css') }}">
-</head>  
-<body>  
+</head>
+<body>
+<div id="gc">
+  <canvas id="cv"></canvas>
+  <div id="noise"></div>
+  <div id="alertFlash"></div>
 
-<div id="gameContainer">  
-    <canvas id="game"></canvas>  
-    
-    <div id="uiOverlay">  
-        <div id="topBar">  
-            <div id="titleText">EXOMNIA AIRCRAFT v5.0</div>  
-            <div id="statsText">  
-                <span class="life">❤️ <span id="lifeValue">3</span></span>  
-                <span class="score">🎁 <span id="scoreValue">0</span></span>  
-                <span class="score">💰 <span id="coinValue">0</span></span>
-            </div>  
-        </div>  
-        
-        <div id="powerups"></div>
-        
-        <div id="waveInfo">
-            🌊 WAVE <span id="waveNumber">1</span>
-        </div>
-        
-        <div id="comboCounter"></div>
-        <div id="comboMultiplier">x1.0</div>
-        
-        <div id="bossHealthBar">
-            <div id="bossHealthFill"></div>
-        </div>
-        <div id="bossName">🚀 BOSS: DESTROYER</div>
-    </div>  
-    
-    <div id="controls">  
-        <div id="joystick">  
-            <div id="stick"></div>  
-        </div>  
-        <div id="specialButton">✨</div>
-        <div id="fire">FIRE</div>  
-    </div>  
-    
-    <div id="pauseMenu">
-        <div class="pauseButton" onclick="resumeGame()">▶ RESUME</div>
-        <div class="pauseButton" onclick="restartGame()">🔄 RESTART</div>
-        <div class="pauseButton red" onclick="quitGame()">⏹ QUIT</div>
+  <!-- START -->
+  <div id="startScreen">
+    <div class="stag">◈ SECTOR 7 · DEEP SPACE DEFENSE ◈</div>
+    <div class="stitle">EXOMNIA<br>AIRCRAFT</div>
+    <div class="sdesc">VERSION 7.0 &nbsp;·&nbsp; ULTIMATE COMBAT</div>
+    <div class="sInfoRow">
+      <div class="sInfo"><div class="sInfoVal">10</div><div class="sInfoLbl">WAVES</div></div>
+      <div class="sInfo"><div class="sInfoVal">5</div><div class="sInfoLbl">WEAPONS</div></div>
+      <div class="sInfo"><div class="sInfoVal">∞</div><div class="sInfoLbl">COMBAT</div></div>
     </div>
-</div>  
-<div id="skillMenu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:200; flex-direction:column; justify-content:center; align-items:center; gap:15px;">
-    <div style="color:#0ff; font-size:22px;">LEVEL UP! Choose Skill</div>
-    <button onclick="upgradeSkill('damage')">Damage ↑</button>
-    <button onclick="upgradeSkill('fireRate')">Fire Rate ↑</button>
-    <button onclick="upgradeSkill('speed')">Speed ↑</button>
-    <button onclick="upgradeSkill('critical')">Critical ↑</button>
-</div>
+    <button id="launchBtn" onclick="startGame()">▶ LAUNCH MISSION</button>
+    <div class="shint">WASD/ARROWS · SPACE=FIRE · E=SPECIAL · Q=WEAPON</div>
+  </div>
 
-<div id="achievementPopup" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#0ff; font-size:20px; display:none; z-index:300;"></div>
-<div id="loading">LOADING...</div>  
-    
+  <!-- UI OVERLAY -->
+  <div id="ui">
+    <div id="topHUD">
+      <div class="corner-l"></div>
+      <div class="corner-r"></div>
+      <div class="logo">EXOMNIA</div>
+      <div class="hud-right">
+        <div class="chip hp"><span class="lbl">HP</span><span id="hpV">3</span></div>
+        <div class="chip sh"><span class="lbl">SH</span><span id="shV">100</span></div>
+        <div class="chip sc"><span class="lbl">SCORE</span><span id="scV">0</span></div>
+        <div class="chip co"><span class="lbl">COIN</span><span id="coV">0</span></div>
+      </div>
+    </div>
+    <div id="pauseBtn" onclick="togglePause()">⏸</div>
+
+    <div id="shieldWrap">
+      <div class="bar-lbl">SHIELD INTEGRITY</div>
+      <div class="bar-track"><div id="shieldFill" style="width:100%"></div></div>
+      <div class="bar-ticks">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+    <div id="waveTag">◈ WAVE &nbsp;<span id="waveN">1</span></div>
+    <div id="combo">
+      <div id="comboBig">x0</div>
+      <div id="comboSub">COMBO</div>
+      <div id="comboMult"></div>
+    </div>
+    <div id="skillPanel">
+      <div class="srow"><span>DMG</span><div class="sdots" id="dDots"></div></div>
+      <div class="srow"><span>SPD</span><div class="sdots" id="sDots"></div></div>
+      <div class="srow"><span>RTE</span><div class="sdots" id="rDots"></div></div>
+      <div class="srow"><span>CRT</span><div class="sdots" id="cDots"></div></div>
+      <div class="srow"><span>SHD</span><div class="sdots" id="shDots"></div></div>
+    </div>
+    <div id="weaponHUD">
+      <div class="wslot active" id="w0"><span class="wnum">1</span>🔵<div class="wbar"></div></div>
+      <div class="wslot" id="w1"><span class="wnum">2</span>🔴<div class="wbar"></div></div>
+      <div class="wslot" id="w2"><span class="wnum">3</span>💚<div class="wbar"></div></div>
+    </div>
+    <div id="bossHUD">
+      <div id="bossLbl">DESTROYER</div>
+      <div id="bossTrack">
+        <div id="bossFill" style="width:100%"></div>
+        <div id="bossSegments"></div>
+      </div>
+      <div id="bossPhaseLabel">PHASE I</div>
+    </div>
+    <div id="xpWrap">
+      <div id="lvlBadge">LVL 1</div>
+      <div class="bar-track"><div id="xpFill" style="width:0%"></div></div>
+    </div>
+    <div id="puPanel"></div>
+  </div>
+
+  <!-- MINIMAP -->
+  <div id="minimap">
+    <canvas id="mmcv" width="75" height="75"></canvas>
+    <div id="radarSweep"></div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div id="ctrl">
+    <div id="joyWrap">
+      <div id="joyBase">
+        <div id="joyCross"></div>
+        <div id="stick">
+          <div id="stkRing1"></div>
+          <div id="stkRing2"></div>
+        </div>
+      </div>
+      <svg id="gearSvg" viewBox="0 0 136 136" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gG" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#1e3a50"/>
+            <stop offset="40%" stop-color="#0e2030"/>
+            <stop offset="100%" stop-color="#060e18"/>
+          </linearGradient>
+          <filter id="gGlow">
+            <feGaussianBlur stdDeviation="1.2" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- outer gear ring -->
+        <path d="M120.00,68.00L131.73,73.86L131.08,78.84L118.23,81.46L118.23,81.46L128.04,90.15L126.12,94.79L113.03,94.00L113.03,94.00L120.27,104.94L117.21,108.92L104.77,104.77L104.77,104.77L108.92,117.21L104.94,120.27L94.00,113.03L94.00,113.03L94.79,126.12L90.15,128.04L81.46,118.23L81.46,118.23L78.84,131.08L73.86,131.73L68.00,120.00L68.00,120.00L62.14,131.73L57.16,131.08L54.54,118.23L54.54,118.23L45.85,128.04L41.21,126.12L42.00,113.03L42.00,113.03L31.06,120.27L27.08,117.21L31.23,104.77L31.23,104.77L18.79,108.92L15.73,104.94L22.97,94.00L22.97,94.00L9.88,94.79L7.96,90.15L17.77,81.46L17.77,81.46L4.92,78.84L4.27,73.86L16.00,68.00L16.00,68.00L4.27,62.14L4.92,57.16L17.77,54.54L17.77,54.54L7.96,45.85L9.88,41.21L22.97,42.00L22.97,42.00L15.73,31.06L18.79,27.08L31.23,31.23L31.23,31.23L27.08,18.79L31.06,15.73L42.00,22.97L42.00,22.97L41.21,9.88L45.85,7.96L54.54,17.77L54.54,17.77L57.16,4.92L62.14,4.27L68.00,16.00L68.00,16.00L73.86,4.27L78.84,4.92L81.46,17.77L81.46,17.77L90.15,7.96L94.79,9.88L94.00,22.97L94.00,22.97L104.94,15.73L108.92,18.79L104.77,31.23L104.77,31.23L117.21,27.08L120.27,31.06L113.03,42.00L113.03,42.00L126.12,41.21L128.04,45.85L118.23,54.54L118.23,54.54L131.08,57.16L131.73,62.14L120.00,68.00Z M82,68 A14,14 0 1,0 54,68 A14,14 0 1,0 82,68 Z" fill="url(#gG)" stroke="rgba(0,200,255,0.35)" stroke-width="0.8" filter="url(#gGlow)" fill-rule="evenodd"/>
+        <!-- inner accent ring -->
+        <circle cx="68" cy="68" r="49" fill="none" stroke="rgba(0,180,255,0.12)" stroke-width="1"/>
+        <!-- tick marks at teeth valleys -->
+        <circle cx="68" cy="68" r="44" fill="none" stroke="rgba(0,200,255,0.06)" stroke-width="4" stroke-dasharray="3 11.6"/>
+      </svg>
+      <div id="joyLabel">THRUST</div>
+    </div>
+    <div id="btnGroup">
+      <div id="specialBtn" onclick="doSpecial()">✨<div id="spCD"></div></div>
+      <div id="weaponBtn" onclick="cycleWeapon()">WPN</div>
+    </div>
+    <div id="fireBtn">FIRE<div id="firePulse"></div></div>
+  </div>
+
+  <!-- LEVEL UP -->
+  <div id="lvlUp">
+    <div id="lvlTitle">LEVEL UP</div>
+    <div id="lvlSub">SELECT UPGRADE MODULE</div>
+    <div class="cards">
+      <div class="card" onclick="upgrade('damage')">
+        <div class="clvl" id="dmgLvl">LVL 0</div>
+        <div class="ci">⚡</div><div class="cn">DAMAGE</div><div class="cd">+25% bullet<br>damage output</div>
+      </div>
+      <div class="card" onclick="upgrade('fireRate')">
+        <div class="clvl" id="rateLvl">LVL 0</div>
+        <div class="ci">🔫</div><div class="cn">FIRE RATE</div><div class="cd">+20% attack<br>speed boost</div>
+      </div>
+      <div class="card" onclick="upgrade('speed')">
+        <div class="clvl" id="spdLvl">LVL 0</div>
+        <div class="ci">💨</div><div class="cn">SPEED</div><div class="cd">+15% ship<br>maneuverability</div>
+      </div>
+      <div class="card" onclick="upgrade('critical')">
+        <div class="clvl" id="critLvl">LVL 0</div>
+        <div class="ci">💥</div><div class="cn">CRITICAL</div><div class="cd">+10% critical<br>strike chance</div>
+      </div>
+      <div class="card" onclick="upgrade('shield')">
+        <div class="clvl" id="shdLvl">LVL 0</div>
+        <div class="ci">🛡️</div><div class="cn">SHIELD</div><div class="cd">+20 max shield<br>capacity</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAUSE -->
+  <div id="pauseMenu">
+    <div id="pauseTitle">PAUSED</div>
+    <div class="mSep"></div>
+    <div class="mBtn" onclick="togglePause()">▶ &nbsp;RESUME</div>
+    <div class="mBtn" onclick="restartGame()">↺ &nbsp;RESTART</div>
+    <div class="mSep"></div>
+    <div class="mBtn red" onclick="toStart()">⏹ &nbsp;QUIT MISSION</div>
+  </div>
+
+  <!-- END SCREEN -->
+  <div id="endScreen">
+    <div id="endTitle" class="lose">GAME OVER</div>
+    <div id="statsTable">
+      <div class="eStat">WAVE REACHED <span id="eWave">1</span></div>
+      <div class="eStat">FINAL SCORE &nbsp;&nbsp;<span id="eScore">0</span></div>
+      <div class="eStat">KILLS &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="eKills">0</span></div>
+      <div class="eStat">MAX COMBO &nbsp;&nbsp;&nbsp;<span id="eCombo">0</span></div>
+    </div>
+    <div class="mBtn" onclick="restartGame()" style="pointer-events:auto">↺ &nbsp;RETRY MISSION</div>
+    <div class="mBtn red" onclick="toStart()" style="pointer-events:auto">⏹ &nbsp;MAIN MENU</div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- LOADING -->
+  <div id="loading">
+    <div id="loadTitle">EXOMNIA AIRCRAFT</div>
+    <div id="loadSub2">VERSION 7.0 · ULTRA COMBAT</div>
+    <div id="lbar"><div id="lfill"></div></div>
+    <div id="lsub">INITIALIZING COMBAT SYSTEMS</div>
+    <div class="ldots"><div class="ldot"></div><div class="ldot"></div><div class="ldot"></div></div>
+  </div>
+</div>
 <script src="{{ url_for('static', filename='Game/game.js') }}"></script>
-</body>  
+</body>
 </html>
