@@ -6,7 +6,41 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Courier New',Courier,monospace;user-select:none;-webkit-user-select:none;}
+
+/* ── CROSS-BROWSER FULL HEIGHT FIX ──
+   Handles: Chrome (dynamic toolbar), Safari (notch+toolbar),
+   Firefox, Samsung Browser, UC Browser, Opera Mini, old/new iOS/Android */
+html{
+  width:100%;
+  height:100%;
+  /* Fallback for very old browsers */
+  height: 100vh;
+  /* iOS Safari & old WebKit */
+  height: -webkit-fill-available;
+  /* Modern browsers supporting dvh (Chrome 108+, Safari 15.4+, Firefox 101+) */
+  height: 100dvh;
+  background:#000;
+  overflow:hidden;
+}
+body{
+  width:100%;
+  height:100%;
+  height: 100vh;
+  height: -webkit-fill-available;
+  height: 100dvh;
+  background:#000;
+  overflow:hidden;
+  font-family:'Courier New',Courier,monospace;
+  user-select:none;-webkit-user-select:none;
+  /* Prevents bounce/overscroll on iOS */
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  /* Safe area padding for notch devices */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
 
 :root{
   --c1:#00e5ff;--c2:#0077ff;--red:#ff1a3c;--gold:#ffcc00;--green:#00ff8c;
@@ -18,7 +52,13 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Co
   --panel-bg:linear-gradient(145deg,rgba(0,12,30,0.95),rgba(0,5,18,0.98));
 }
 
-#gc{position:relative;width:100vw;height:100vh;overflow:hidden;cursor:none;}
+#gc{
+  position:fixed; /* fixed instead of relative — works in all browsers */
+  top:0;left:0;right:0;bottom:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;cursor:none;
+}
 #cv{position:absolute;inset:0;width:100%;height:100%;display:block;}
 #ui{position:absolute;inset:0;pointer-events:none;z-index:10;}
 
@@ -118,7 +158,9 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Co
 
 /* ─── XP BAR ─── */
 #xpWrap{
-  position:absolute;bottom:142px;left:50%;transform:translateX(-50%);
+  position:absolute;
+  bottom:calc(142px + env(safe-area-inset-bottom, 0px));
+  left:50%;transform:translateX(-50%);
   width:min(200px,50vw);z-index:20;
   display:flex;flex-direction:column;align-items:center;gap:2px;
 }
@@ -192,7 +234,9 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Co
 
 /* ─── BOSS HUD ─── */
 #bossHUD{
-  position:absolute;bottom:152px;left:50%;transform:translateX(-50%);
+  position:absolute;
+  bottom:calc(152px + env(safe-area-inset-bottom, 0px));
+  left:50%;transform:translateX(-50%);
   width:min(360px,90vw);z-index:20;
   display:none;flex-direction:column;align-items:center;gap:5px;
   background:rgba(20,0,5,0.85);border:1px solid rgba(255,26,60,0.3);
@@ -222,7 +266,9 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Co
 
 /* ─── MINIMAP ─── */
 #minimap{
-  position:absolute;bottom:142px;left:10px;
+  position:absolute;
+  bottom:calc(142px + env(safe-area-inset-bottom, 0px));
+  left:10px;
   width:75px;height:75px;z-index:20;
   border:1px solid rgba(0,229,255,0.18);border-radius:3px;
   background:rgba(0,5,15,0.85);overflow:hidden;
@@ -239,9 +285,14 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Co
 
 /* ─── CONTROLS ─── */
 #ctrl{
-  position:absolute;bottom:0;left:0;right:0;height:138px;
+  position:absolute;bottom:0;left:0;right:0;
+  height:auto;min-height:138px;
   display:flex;align-items:center;justify-content:space-between;
-  padding:0 16px 20px;
+  /* Safe area bottom padding — works on iOS notch, Android gesture nav, Chrome toolbar */
+  padding-left:  max(16px, calc(16px + env(safe-area-inset-left,   0px)));
+  padding-right: max(16px, calc(16px + env(safe-area-inset-right,  0px)));
+  padding-top:   10px;
+  padding-bottom: max(20px, calc(20px + env(safe-area-inset-bottom, 0px)));
   background:linear-gradient(0deg,rgba(0,2,10,0.97) 0%,rgba(0,2,10,0.6) 70%,transparent 100%);
   z-index:20;pointer-events:auto;
 }
@@ -620,7 +671,9 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Co
 
 /* ─── POWER UP INDICATORS ─── */
 #puPanel{
-  position:absolute;bottom:142px;right:10px;
+  position:absolute;
+  bottom:calc(142px + env(safe-area-inset-bottom, 0px));
+  right:10px;
   display:flex;flex-direction:column;gap:3px;z-index:20;
 }
 .puTag{
