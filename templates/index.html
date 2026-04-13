@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>EXOMNIA AIRCRAFT v7.0</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='Game/Style.css') }}">
 </head>
@@ -159,6 +162,7 @@
     <div id="pauseTitle">PAUSED</div>
     <div class="mSep"></div>
     <div class="mBtn" onclick="togglePause()">▶ &nbsp;RESUME</div>
+    <div class="mBtn" onclick="openSettings()">⚙ &nbsp;SETTINGS</div>
     <div class="mBtn" onclick="restartGame()">↺ &nbsp;RESTART</div>
     <div class="mSep"></div>
     <div class="mBtn red" onclick="toStart()">⏹ &nbsp;QUIT MISSION</div>
@@ -175,6 +179,107 @@
     </div>
     <div class="mBtn" onclick="restartGame()" style="pointer-events:auto">↺ &nbsp;RETRY MISSION</div>
     <div class="mBtn red" onclick="toStart()" style="pointer-events:auto">⏹ &nbsp;MAIN MENU</div>
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div id="settingsPanel">
+    <div id="settingsInner">
+      <div class="setTitle">⚙ SYSTEM CONFIG</div>
+      <div class="setSub">COMBAT PARAMETERS</div>
+
+      <div class="setSection">MOVEMENT</div>
+
+      <div class="setRow">
+        <div class="setLbl">SHIP SPEED<span class="setVal" id="spdVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="spdFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="spdSlider" min="2" max="10" step="0.5" value="5">
+        </div>
+        <div class="setHint">Ship base movement speed</div>
+      </div>
+
+      <div class="setRow">
+        <div class="setLbl">SENSITIVITY<span class="setVal" id="sensVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="sensFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="sensSlider" min="1" max="10" step="0.5" value="5">
+        </div>
+        <div class="setHint">Joystick / keyboard response</div>
+      </div>
+
+      <div class="setRow">
+        <div class="setLbl">INERTIA<span class="setVal" id="inertiaVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="inertiaFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="inertiaSlider" min="1" max="10" step="0.5" value="5">
+        </div>
+        <div class="setHint">Higher = more floaty/sliding</div>
+      </div>
+
+      <div class="setRow">
+        <div class="setLbl">DEAD ZONE<span class="setVal" id="deadVal">6</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="deadFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="deadSlider" min="2" max="20" step="1" value="6">
+        </div>
+        <div class="setHint">Joystick center dead zone (px)</div>
+      </div>
+
+      <div class="setSection">COMBAT</div>
+
+      <div class="setRow">
+        <div class="setLbl">FIRE RATE<span class="setVal" id="fireRateVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="fireRateFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="fireRateSlider" min="1" max="10" step="0.5" value="5">
+        </div>
+        <div class="setHint">Manual fire rate override</div>
+      </div>
+
+      <div class="setSection">DISPLAY</div>
+
+      <div class="setRow">
+        <div class="setLbl">SCREEN SHAKE<span class="setVal" id="shakeVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="shakeFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="shakeSlider" min="0" max="10" step="1" value="5">
+        </div>
+        <div class="setHint">Impact screen shake intensity</div>
+      </div>
+
+      <div class="setRow toggleRow">
+        <div class="setLbl">PARTICLES</div>
+        <div class="toggleBtn" id="particleToggle" onclick="toggleSetting('particles')">
+          <div class="toggleKnob"></div>
+          <span>ON</span>
+        </div>
+      </div>
+
+      <div class="setRow toggleRow">
+        <div class="setLbl">SCREEN GLOW</div>
+        <div class="toggleBtn" id="glowToggle" onclick="toggleSetting('glow')">
+          <div class="toggleKnob"></div>
+          <span>ON</span>
+        </div>
+      </div>
+
+      <div class="setBtnRow">
+        <div class="setBtn reset" onclick="resetSettings()">↺ RESET</div>
+        <div class="setBtn save" onclick="saveSettings()">✔ APPLY</div>
+      </div>
+    </div>
   </div>
 
   <div id="toast"></div>
