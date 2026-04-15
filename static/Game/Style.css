@@ -76,7 +76,7 @@ body{
 /* ─── TOP HUD ─── */
 #topHUD{
   position:absolute;top:0;left:0;right:0;height:58px;
-  display:flex;align-items:center;justify-content:space-between;
+  display:flex;align-items:center;justify-content:flex-start;
   padding:0 12px;
   background:linear-gradient(180deg,rgba(0,4,14,0.98) 0%,rgba(0,4,14,0.75) 65%,transparent 100%);
   pointer-events:auto;z-index:20;
@@ -98,29 +98,31 @@ body{
   text-shadow:0 0 20px var(--c1),0 0 50px rgba(0,229,255,0.3);
   position:relative;
 }
-.logo::after{content:'v7';font-size:7px;letter-spacing:2px;color:rgba(0,229,255,0.4);
-  position:absolute;bottom:-2px;right:-16px;}
+.logo::after{content:'';display:none;}
 
 /* ─── STATUS CHIPS ─── */
-.hud-right{display:flex;align-items:center;gap:6px;}
+.hud-right{display:flex;align-items:center;gap:5px;max-width:calc(100vw - 60px);overflow:hidden;}
 .chip{
   display:flex;align-items:center;gap:4px;
-  background:rgba(0,229,255,0.04);
-  border:1px solid rgba(0,229,255,0.12);
-  border-radius:3px;padding:3px 8px;
-  font-family:'Courier New',monospace;font-weight:700;
-  font-size:clamp(9px,2vw,12px);letter-spacing:2px;
+  background:rgba(0,0,0,0.55);
+  border:1px solid rgba(255,255,255,0.18);
+  border-radius:4px;padding:4px 9px;
+  font-family:'Courier New',monospace;font-weight:900;
+  font-size:clamp(11px,2.5vw,15px);letter-spacing:1px;
   transition:all .15s;position:relative;overflow:hidden;
+  min-width:0;flex-shrink:1;
+  text-shadow:0 0 8px currentColor;
 }
 .chip::before{content:'';position:absolute;inset:0;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.02) 50%,transparent);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.03) 50%,transparent);
   transform:translateX(-100%);animation:shimmer 3s ease infinite;}
 @keyframes shimmer{0%{transform:translateX(-100%)}30%,100%{transform:translateX(200%)}}
-.chip.hp{color:#ff4466;border-color:rgba(255,68,102,0.2);}
-.chip.sc{color:var(--gold);border-color:rgba(255,204,0,0.2);}
-.chip.sh{color:#44aaff;border-color:rgba(68,170,255,0.2);}
-.chip.co{color:var(--green);border-color:rgba(0,255,140,0.2);}
-.chip .lbl{font-size:7px;letter-spacing:3px;opacity:.4;margin-right:1px;}
+.chip.hp{color:#ff5577;border-color:rgba(255,85,119,0.5);background:rgba(60,0,15,0.7);}
+.chip.sc{color:#ffdd00;border-color:rgba(255,221,0,0.5);background:rgba(40,30,0,0.7);}
+.chip.sh{color:#55bbff;border-color:rgba(85,187,255,0.5);background:rgba(0,20,50,0.7);}
+.chip.co{color:#00ff99;border-color:rgba(0,255,153,0.5);background:rgba(0,40,20,0.7);}
+.chip .lbl{font-size:8px;letter-spacing:2px;opacity:.65;margin-right:2px;white-space:nowrap;font-weight:700;}
+.chip span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px;}
 .chip.bump{animation:bump .25s ease;}
 @keyframes bump{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
 
@@ -130,27 +132,28 @@ body{
   width:min(220px,55vw);z-index:20;
   display:flex;flex-direction:column;align-items:center;gap:2px;
 }
-.bar-lbl{font-size:7px;letter-spacing:4px;color:rgba(68,170,255,0.45);font-family:'Courier New',monospace;}
+.bar-lbl{font-size:9px;letter-spacing:3px;color:rgba(100,180,255,0.85);font-family:'Courier New',monospace;font-weight:700;text-shadow:0 0 8px rgba(68,170,255,0.6);}
 .bar-track{
-  width:100%;height:4px;background:rgba(68,170,255,0.06);border-radius:2px;
-  border:1px solid rgba(68,170,255,0.12);overflow:visible;position:relative;
+  width:100%;height:5px;background:rgba(68,170,255,0.1);border-radius:2px;
+  border:1px solid rgba(68,170,255,0.25);overflow:visible;position:relative;
 }
 .bar-track::before{content:'';position:absolute;top:-2px;bottom:-2px;left:-2px;right:-2px;
-  border-radius:3px;border:1px solid rgba(68,170,255,0.05);}
+  border-radius:3px;border:1px solid rgba(68,170,255,0.08);}
 #shieldFill{height:100%;background:linear-gradient(90deg,#003bb5,#0077ff,#44aaff);border-radius:2px;
   transition:width .25s ease;box-shadow:0 0 10px rgba(68,170,255,0.8),0 0 20px rgba(68,170,255,0.3);}
 /* tick marks */
 .bar-ticks{width:100%;display:flex;justify-content:space-between;padding:0 2px;margin-top:1px;}
-.bar-ticks span{width:1px;height:3px;background:rgba(68,170,255,0.2);}
+.bar-ticks span{width:1px;height:3px;background:rgba(68,170,255,0.3);}
 
 /* ─── WAVE BADGE ─── */
 #waveTag{
-  position:absolute;top:64px;left:50%;transform:translateX(-50%);
-  font-family:'Courier New',monospace;font-size:clamp(8px,2vw,10px);
-  letter-spacing:6px;color:rgba(0,229,255,0.5);text-shadow:var(--glow1);
+  position:absolute;top:90px;left:50%;transform:translateX(-50%);
+  font-family:'Courier New',monospace;font-size:clamp(10px,2.5vw,13px);
+  font-weight:900;letter-spacing:5px;color:#00eeff;
+  text-shadow:0 0 14px #00eeff,0 0 30px rgba(0,238,255,0.4);
   z-index:20;white-space:nowrap;
-  background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.1);
-  padding:3px 12px;border-radius:2px;
+  background:rgba(0,10,25,0.75);border:1px solid rgba(0,229,255,0.35);
+  padding:4px 14px;border-radius:3px;
 }
 
 /* ─── XP BAR ─── */
@@ -164,55 +167,80 @@ body{
 #xpFill{height:100%;background:linear-gradient(90deg,#003388,#0055cc,var(--c1));border-radius:2px;
   transition:width .35s ease;box-shadow:0 0 8px var(--c1);}
 #lvlBadge{
-  font-family:'Courier New',monospace;font-weight:900;font-size:clamp(8px,2vw,11px);
-  letter-spacing:3px;color:var(--c1);
-  background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.15);
-  padding:2px 8px;border-radius:2px;
+  font-family:'Courier New',monospace;font-weight:900;font-size:clamp(10px,2.5vw,13px);
+  letter-spacing:3px;color:#ffffff;
+  text-shadow:0 0 12px var(--c1),0 0 25px rgba(0,229,255,0.4);
+  background:rgba(0,10,30,0.8);border:1px solid rgba(0,229,255,0.4);
+  padding:3px 10px;border-radius:3px;
 }
 
 /* ─── WEAPON SLOTS ─── */
 #weaponHUD{
-  position:absolute;top:64px;right:10px;
-  display:flex;flex-direction:column;gap:4px;z-index:20;
+  position:absolute;top:64px;right:8px;
+  display:flex;flex-direction:column;gap:5px;z-index:20;
+  pointer-events:auto;
 }
 .wslot{
-  width:38px;height:38px;border-radius:5px;
-  border:1px solid rgba(0,229,255,0.15);
-  background:linear-gradient(145deg,rgba(0,10,25,0.9),rgba(0,5,15,0.95));
-  display:flex;align-items:center;justify-content:center;
-  font-size:16px;position:relative;overflow:hidden;
-  transition:all .2s;
+  width:52px;height:52px;border-radius:8px;
+  border:1px solid rgba(0,229,255,0.18);
+  background:linear-gradient(145deg,rgba(0,10,25,0.92),rgba(0,5,15,0.97));
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:18px;position:relative;overflow:hidden;
+  transition:all .15s;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+  gap:1px;
 }
 .wslot::before{content:'';position:absolute;inset:0;
   background:linear-gradient(145deg,rgba(255,255,255,0.04),transparent);}
-.wslot.active{border-color:var(--c1);box-shadow:var(--glow1),inset 0 0 10px rgba(0,229,255,0.08);}
+.wslot:not(.locked):active{transform:scale(0.84);background:rgba(0,229,255,0.22);box-shadow:0 0 18px rgba(0,229,255,0.5);}
+.wslot.active{
+  border-color:var(--c1);
+  box-shadow:var(--glow1),inset 0 0 14px rgba(0,229,255,0.12);
+  background:linear-gradient(145deg,rgba(0,30,55,0.97),rgba(0,12,30,0.99));
+}
 .wslot.active::after{content:'';position:absolute;inset:0;
-  background:linear-gradient(180deg,rgba(0,229,255,0.06),transparent);}
+  background:linear-gradient(180deg,rgba(0,229,255,0.1),transparent);}
+/* pulse ring on active slot */
+.wslot.active::before{content:'';position:absolute;inset:-2px;border-radius:9px;
+  border:1px solid rgba(0,229,255,0.4);animation:slotPulse 1.8s ease infinite;pointer-events:none;}
+@keyframes slotPulse{0%,100%{opacity:0.6;transform:scale(1);}50%{opacity:0;transform:scale(1.06);}}
 .wslot .wbar{position:absolute;bottom:0;left:0;right:0;height:2px;
   background:linear-gradient(90deg,var(--c1),#0077ff);box-shadow:0 0 6px var(--c1);
   transform-origin:left;transition:transform .1s linear;}
-.wslot .wnum{position:absolute;top:2px;left:3px;font-size:7px;
-  color:rgba(0,229,255,0.4);font-family:'Courier New',monospace;letter-spacing:0;}
+.wslot .wnum{position:absolute;top:2px;left:4px;font-size:7px;
+  color:rgba(0,229,255,0.55);font-family:'Courier New',monospace;letter-spacing:0;font-weight:700;}
+.wslot .wname{
+  font-size:5.5px;letter-spacing:1px;
+  font-family:'Courier New',monospace;font-weight:700;
+  color:rgba(0,229,255,0.6);
+  line-height:1;margin-top:1px;
+  white-space:nowrap;overflow:hidden;max-width:42px;text-overflow:ellipsis;
+}
+.wslot.active .wname{color:var(--c1);text-shadow:0 0 6px var(--c1);}
+/* locked slot style */
+.wslot.locked{opacity:0.35;filter:grayscale(1);border-color:rgba(255,255,255,0.08);cursor:default;}
+.wslot.locked:active{transform:none;background:linear-gradient(145deg,rgba(0,10,25,0.92),rgba(0,5,15,0.97));}
 
 /* ─── SKILL PANEL ─── */
 #skillPanel{
   position:absolute;top:64px;left:10px;
-  display:flex;flex-direction:column;gap:4px;z-index:20;
-  background:rgba(0,8,20,0.7);border:1px solid rgba(0,229,255,0.08);
-  border-radius:4px;padding:5px 7px;
+  display:flex;flex-direction:column;gap:5px;z-index:20;
+  background:rgba(0,5,18,0.85);border:1px solid rgba(0,229,255,0.25);
+  border-radius:4px;padding:7px 9px;
 }
 #skillPanel::before{content:'STATS';position:absolute;top:-1px;left:6px;
-  font-size:6px;letter-spacing:3px;color:rgba(0,229,255,0.3);background:rgba(0,8,20,0.9);
-  padding:0 3px;font-family:'Courier New',monospace;}
-.srow{display:flex;align-items:center;gap:4px;font-size:7px;letter-spacing:1px;
-  color:rgba(0,229,255,0.4);font-family:'Courier New',monospace;}
-.srow span{width:22px;}
+  font-size:7px;letter-spacing:3px;color:rgba(0,229,255,0.7);background:rgba(0,5,18,0.95);
+  padding:0 4px;font-family:'Courier New',monospace;font-weight:700;}
+.srow{display:flex;align-items:center;gap:5px;font-size:9px;letter-spacing:1px;
+  color:rgba(0,229,255,0.85);font-family:'Courier New',monospace;font-weight:700;}
+.srow span{width:24px;}
 .sdots{display:flex;gap:2px;}
-.sd{width:4px;height:4px;border-radius:1px;background:rgba(0,229,255,0.07);
-  border:1px solid rgba(0,229,255,0.15);transition:all .3s;}
-.sd.on{background:var(--c1);box-shadow:0 0 5px var(--c1);border-color:var(--c1);}
-
-/* ─── COMBO ─── */
+.sd{width:5px;height:5px;border-radius:1px;background:rgba(0,229,255,0.1);
+  border:1px solid rgba(0,229,255,0.3);transition:all .3s;}
+.sd.on{background:var(--c1);box-shadow:0 0 7px var(--c1);border-color:var(--c1);}
+/* weapon slot number */
 #combo{
   position:absolute;top:110px;left:50%;transform:translateX(-50%);
   display:flex;flex-direction:column;align-items:center;
@@ -225,9 +253,9 @@ body{
   text-shadow:0 0 30px var(--gold),0 0 60px rgba(255,204,0,0.4),0 0 100px rgba(255,204,0,0.15);
   line-height:1;letter-spacing:2px;
 }
-#comboSub{font-size:8px;letter-spacing:6px;color:rgba(255,204,0,0.5);margin-top:3px;
-  font-family:'Courier New',monospace;}
-#comboMult{font-size:9px;letter-spacing:2px;color:rgba(255,204,0,0.35);margin-top:1px;}
+#comboSub{font-size:10px;letter-spacing:5px;color:rgba(255,220,0,0.85);margin-top:3px;
+  font-family:'Courier New',monospace;font-weight:700;text-shadow:0 0 10px var(--gold);}
+#comboMult{font-size:11px;letter-spacing:2px;color:rgba(255,220,0,0.75);margin-top:1px;font-weight:900;}
 
 /* ─── BOSS HUD ─── */
 #bossHUD{
@@ -244,8 +272,9 @@ body{
 #bossHUD::before{content:'';position:absolute;top:-1px;left:20%;right:20%;height:1px;
   background:linear-gradient(90deg,transparent,rgba(255,26,60,0.8),transparent);}
 #bossLbl{
-  font-family:'Courier New',monospace;font-size:clamp(8px,2.2vw,11px);
-  letter-spacing:4px;color:var(--red);text-shadow:var(--glow-r);
+  font-family:'Courier New',monospace;font-size:clamp(10px,2.8vw,14px);
+  letter-spacing:4px;color:#ff4455;text-shadow:0 0 15px #ff2244,0 0 30px rgba(255,34,68,0.5);
+  font-weight:900;
   display:flex;align-items:center;gap:8px;
 }
 #bossLbl::before,#bossLbl::after{content:'◆';font-size:6px;animation:blink 1s step-end infinite;}
@@ -259,7 +288,7 @@ body{
 #bossSegments{position:absolute;inset:0;display:flex;pointer-events:none;}
 .bseg{flex:1;border-right:1px solid rgba(0,0,0,0.4);}
 .bseg:last-child{border-right:none;}
-#bossPhaseLabel{font-size:7px;letter-spacing:3px;color:rgba(255,26,60,0.5);margin-top:1px;}
+#bossPhaseLabel{font-size:9px;letter-spacing:3px;color:rgba(255,80,80,0.9);margin-top:1px;font-weight:700;font-family:'Courier New',monospace;}
 
 /* ─── MINIMAP ─── */
 #minimap{
@@ -267,11 +296,11 @@ body{
   bottom:calc(142px + env(safe-area-inset-bottom, 0px));
   left:10px;
   width:75px;height:75px;z-index:20;
-  border:1px solid rgba(0,229,255,0.18);border-radius:3px;
-  background:rgba(0,5,15,0.85);overflow:hidden;
+  border:1px solid rgba(0,229,255,0.35);border-radius:3px;
+  background:rgba(0,5,15,0.9);overflow:hidden;
 }
 #minimap::before{content:'RADAR';position:absolute;top:2px;left:50%;transform:translateX(-50%);
-  font-size:5px;letter-spacing:2px;color:rgba(0,229,255,0.3);font-family:'Courier New',monospace;z-index:1;}
+  font-size:6px;letter-spacing:2px;color:rgba(0,229,255,0.75);font-family:'Courier New',monospace;font-weight:700;z-index:1;}
 #minimap canvas{width:100%;height:100%;}
 /* radar sweep */
 #radarSweep{position:absolute;inset:0;border-radius:3px;overflow:hidden;pointer-events:none;}
@@ -427,18 +456,6 @@ body{
   background:conic-gradient(transparent 0deg,transparent var(--p,0deg),rgba(0,0,0,0.7) var(--p,0deg));
   pointer-events:none;}
 
-/* WEAPON CYCLE */
-#weaponBtn{
-  width:48px;height:30px;border-radius:5px;
-  border:1px solid rgba(0,229,255,0.25);
-  background:linear-gradient(145deg,rgba(0,229,255,0.06),rgba(0,229,255,0.02));
-  font-family:'Courier New',monospace;font-weight:700;font-size:8px;letter-spacing:2px;
-  color:var(--c1);cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:all .15s;position:relative;overflow:hidden;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);
-}
-#weaponBtn:active{background:rgba(0,229,255,0.18);box-shadow:var(--glow1);}
-
 /* FIRE BUTTON */
 #fireBtn{
   width:92px;height:58px;border-radius:8px;
@@ -560,16 +577,17 @@ body{
 /* ─── TOAST ─── */
 #toast{
   position:absolute;top:68px;left:50%;transform:translateX(-50%) translateY(-10px);
-  padding:8px 20px;border-radius:4px;
-  background:linear-gradient(135deg,rgba(0,12,30,0.98),rgba(0,5,18,0.99));
-  border:1px solid rgba(255,204,0,0.35);
-  font-family:'Courier New',monospace;font-size:clamp(8px,2vw,11px);
-  letter-spacing:2px;color:var(--gold);text-shadow:0 0 15px var(--gold);
+  padding:9px 22px;border-radius:4px;
+  background:rgba(10,8,0,0.92);
+  border:1px solid rgba(255,204,0,0.6);
+  font-family:'Courier New',monospace;font-size:clamp(10px,2.5vw,13px);
+  font-weight:700;letter-spacing:2px;color:#ffee00;
+  text-shadow:0 0 12px #ffcc00,0 0 25px rgba(255,204,0,0.4);
   z-index:50;opacity:0;pointer-events:none;transition:all .3s;
-  white-space:nowrap;box-shadow:0 0 25px rgba(255,204,0,0.25);
+  white-space:nowrap;box-shadow:0 0 20px rgba(255,204,0,0.3),inset 0 0 15px rgba(255,204,0,0.04);
 }
 #toast::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(255,204,0,0.5),transparent);}
+  background:linear-gradient(90deg,transparent,rgba(255,204,0,0.7),transparent);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
 /* ─── START SCREEN ─── */
@@ -759,7 +777,78 @@ body{
 .setBtn.save{border-color:var(--green);color:var(--green);
   background:linear-gradient(145deg,rgba(0,255,140,0.06),rgba(0,255,140,0.01));}
 .setBtn.save:active{background:rgba(0,255,140,0.14);box-shadow:var(--glow-g);}
-.ft{position:absolute;pointer-events:none;font-family:'Courier New',monospace;
+/* ─── WEAPON SHOP ─── */
+#shopPanel{
+  position:absolute;inset:0;background:rgba(0,2,10,0.97);
+  z-index:96;display:none;flex-direction:column;align-items:center;
+  overflow-y:auto;backdrop-filter:blur(8px);
+  padding:20px 10px 30px;
+}
+#shopPanel.on{display:flex;}
+#shopPanel::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 0%,rgba(255,204,0,0.05) 0%,transparent 55%);
+  pointer-events:none;}
+.shopTitle{
+  font-family:'Courier New',monospace;font-weight:900;
+  font-size:clamp(18px,5vw,28px);letter-spacing:6px;
+  color:var(--gold);text-shadow:0 0 30px var(--gold);
+  margin-bottom:4px;
+}
+.shopSub{font-size:8px;letter-spacing:5px;color:rgba(255,204,0,0.35);
+  font-family:'Courier New',monospace;margin-bottom:16px;}
+.shopCoins{
+  font-family:'Courier New',monospace;font-size:clamp(11px,3vw,15px);
+  letter-spacing:3px;color:var(--green);
+  background:rgba(0,255,140,0.06);border:1px solid rgba(0,255,140,0.2);
+  padding:5px 18px;border-radius:4px;margin-bottom:18px;
+}
+.shopGrid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(min(150px,42vw),1fr));
+  gap:10px;width:100%;max-width:520px;
+}
+.shopCard{
+  border-radius:8px;padding:14px 10px;text-align:center;
+  border:1px solid rgba(0,229,255,0.15);
+  background:linear-gradient(145deg,rgba(0,12,30,0.97),rgba(0,5,18,0.99));
+  position:relative;overflow:hidden;cursor:pointer;transition:all .2s;
+}
+.shopCard.owned{border-color:rgba(0,255,140,0.35);background:linear-gradient(145deg,rgba(0,20,10,0.97),rgba(0,10,5,0.99));}
+.shopCard.active-wep{border-color:var(--c1);box-shadow:0 0 20px rgba(0,229,255,0.3);}
+.shopCard.cant-afford{opacity:.55;cursor:not-allowed;}
+.shopCard:not(.owned):not(.cant-afford):active{transform:scale(0.95);border-color:var(--gold);}
+.shopCard::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent);}
+.shopIcon{font-size:30px;margin-bottom:6px;line-height:1;}
+.shopName{font-family:'Courier New',monospace;font-weight:900;
+  font-size:clamp(8px,2.2vw,11px);letter-spacing:3px;color:var(--c1);margin-bottom:4px;}
+.shopDesc{font-size:clamp(7px,1.8vw,9px);color:rgba(0,229,255,0.4);
+  letter-spacing:.5px;line-height:1.5;margin-bottom:8px;font-family:'Courier New',monospace;}
+.shopStats{display:flex;justify-content:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
+.shopStat{font-size:7px;letter-spacing:1px;padding:2px 5px;border-radius:2px;
+  font-family:'Courier New',monospace;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.12);}
+.shopStat.dmg{color:#ff6644;border-color:rgba(255,100,68,.2);}
+.shopStat.spd{color:#00e5ff;border-color:rgba(0,229,255,.2);}
+.shopStat.rte{color:#ffcc00;border-color:rgba(255,204,0,.2);}
+.shopPrice{
+  font-family:'Courier New',monospace;font-weight:900;
+  font-size:clamp(9px,2.5vw,13px);letter-spacing:2px;
+  color:var(--gold);
+}
+.shopPrice.owned-lbl{color:var(--green);font-size:10px;letter-spacing:3px;}
+.shopEquip{
+  margin-top:5px;font-size:8px;letter-spacing:2px;
+  color:var(--c1);font-family:'Courier New',monospace;opacity:.7;
+}
+.shopCloseBtn{
+  margin-top:20px;padding:12px 36px;border-radius:5px;
+  border:1px solid rgba(0,229,255,0.25);
+  background:linear-gradient(145deg,rgba(0,229,255,0.06),rgba(0,229,255,0.01));
+  font-family:'Courier New',monospace;font-weight:700;
+  font-size:clamp(9px,2.5vw,12px);letter-spacing:4px;color:var(--c1);
+  cursor:pointer;transition:all .18s;
+}
+.shopCloseBtn:active{background:rgba(0,229,255,0.18);}
+
   font-weight:700;font-size:12px;z-index:30;
   animation:fUp .9s ease forwards;text-shadow:0 0 10px currentColor;}
 @keyframes fUp{0%{opacity:1;transform:translateY(0) scale(1);}100%{opacity:0;transform:translateY(-58px) scale(.7);}}
@@ -790,10 +879,11 @@ body{
   display:flex;flex-direction:column;gap:3px;z-index:20;
 }
 .puTag{
-  font-size:7px;letter-spacing:2px;color:rgba(0,229,255,0.6);
-  font-family:'Courier New',monospace;
-  background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.15);
-  border-radius:2px;padding:2px 6px;white-space:nowrap;
+  font-size:9px;letter-spacing:2px;color:#ffffff;
+  font-family:'Courier New',monospace;font-weight:700;
+  background:rgba(0,20,50,0.88);border:1px solid rgba(0,229,255,0.5);
+  border-radius:3px;padding:3px 8px;white-space:nowrap;
+  text-shadow:0 0 8px var(--c1);
   animation:puPulse .5s ease infinite alternate;
 }
-@keyframes puPulse{from{opacity:.6}to{opacity:1}}
+@keyframes puPulse{from{opacity:.75}to{opacity:1}}
