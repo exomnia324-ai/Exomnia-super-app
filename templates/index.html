@@ -6,8 +6,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>EXOMNIA AIRCRAFT v7.0</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='Game/Style.css') }}">
+<title>EXOMNIA AIRCRAFT</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='Game/style.css') }}">
 </head>
 <body>
 <div id="gc">
@@ -19,7 +19,7 @@
   <div id="startScreen">
     <div class="stag">◈ SECTOR 7 · DEEP SPACE DEFENSE ◈</div>
     <div class="stitle">EXOMNIA<br>AIRCRAFT</div>
-    <div class="sdesc">VERSION 7.0 &nbsp;·&nbsp; ULTIMATE COMBAT</div>
+    <div class="sdesc">ULTIMATE COMBAT &nbsp;·&nbsp; DEEP SPACE</div>
     <div class="sInfoRow">
       <div class="sInfo"><div class="sInfoVal">10</div><div class="sInfoLbl">WAVES</div></div>
       <div class="sInfo"><div class="sInfoVal">5</div><div class="sInfoLbl">WEAPONS</div></div>
@@ -34,7 +34,6 @@
     <div id="topHUD">
       <div class="corner-l"></div>
       <div class="corner-r"></div>
-      <div class="logo">EXOMNIA</div>
       <div class="hud-right">
         <div class="chip hp"><span class="lbl">HP</span><span id="hpV">3</span></div>
         <div class="chip sh"><span class="lbl">SH</span><span id="shV">100</span></div>
@@ -124,7 +123,6 @@
     </div>
     <div id="btnGroup">
       <div id="specialBtn" onclick="doSpecial()">✨<div id="spCD"></div></div>
-      <div id="weaponBtn" onclick="cycleWeapon()">WPN</div>
     </div>
     <div id="fireBtn">FIRE<div id="firePulse"></div></div>
   </div>
@@ -162,6 +160,7 @@
     <div id="pauseTitle">PAUSED</div>
     <div class="mSep"></div>
     <div class="mBtn" onclick="togglePause()">▶ &nbsp;RESUME</div>
+    <div class="mBtn" style="color:var(--gold);border-color:rgba(255,204,0,0.3)" onclick="openShop()">🛒 &nbsp;WEAPON SHOP</div>
     <div class="mBtn" onclick="openSettings()">⚙ &nbsp;SETTINGS</div>
     <div class="mBtn" onclick="restartGame()">↺ &nbsp;RESTART</div>
     <div class="mSep"></div>
@@ -282,12 +281,21 @@
     </div>
   </div>
 
+  <!-- WEAPON SHOP -->
+  <div id="shopPanel">
+    <div class="shopTitle">⚔ WEAPON SHOP</div>
+    <div class="shopSub">PURCHASE ADVANCED ARMAMENTS</div>
+    <div class="shopCoins">◈ COINS: <span id="shopCoinDisplay">0</span></div>
+    <div class="shopGrid" id="shopGrid"></div>
+    <div class="shopCloseBtn" onclick="closeShop()">← BACK TO MISSION</div>
+  </div>
+
   <div id="toast"></div>
 
   <!-- LOADING -->
   <div id="loading">
     <div id="loadTitle">EXOMNIA AIRCRAFT</div>
-    <div id="loadSub2">VERSION 7.0 · ULTRA COMBAT</div>
+    <div id="loadSub2">DEEP SPACE DEFENSE</div>
     <div id="lbar"><div id="lfill"></div></div>
     <div id="lsub">INITIALIZING COMBAT SYSTEMS</div>
     <div class="ldots"><div class="ldot"></div><div class="ldot"></div><div class="ldot"></div></div>
