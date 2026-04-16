@@ -55,6 +55,7 @@ const WEAPONS=[
   {name:'SHOTGUN',  color:'#ff6644',scolor:'rgba(255,102,68,',w:6, h:10,spd:14,dmg:28, spread:8, icon:'💢',type:'shotgun', cost:70,  owned:false, desc:'8-pellet wide spread burst'},
   {name:'EMP',      color:'#00ddff',scolor:'rgba(0,221,255,', w:12,h:12,spd:9, dmg:55, spread:0, icon:'☢️',type:'emp',     cost:100, owned:false, desc:'Area pulse — stuns enemies'},
   {name:'NUKE',     color:'#ff2200',scolor:'rgba(255,34,0,',  w:16,h:16,spd:7, dmg:300,spread:0, icon:'☠️',type:'nuke',    cost:150, owned:false, desc:'Massive warhead — slow reload'},
+  {name:'VOID BLASTER',color:'8000ff',scolor:'rgba(128,0,255,',w:6, h:20,spd:16,dmg:45, spread:2, icon:'🕸️',type:'bullet',  cost:20,   owned:false,  desc:'Gravity pulse wpn'},
 ];
 // Per-weapon fire rate overrides (ms)
 const WEAPON_RATES={PULSE:150,PLASMA:280,LASER:90,MISSILE:600,RAILGUN:900,GATLING:60,SHOTGUN:700,EMP:1200,NUKE:3000};
