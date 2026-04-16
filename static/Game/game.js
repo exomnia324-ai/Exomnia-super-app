@@ -55,7 +55,11 @@ const WEAPONS=[
   {name:'SHOTGUN',  color:'#ff6644',scolor:'rgba(255,102,68,',w:6, h:10,spd:14,dmg:28, spread:8, icon:'💢',type:'shotgun', cost:70,  owned:false, desc:'8-pellet wide spread burst'},
   {name:'EMP',      color:'#00ddff',scolor:'rgba(0,221,255,', w:12,h:12,spd:9, dmg:55, spread:0, icon:'☢️',type:'emp',     cost:100, owned:false, desc:'Area pulse — stuns enemies'},
   {name:'NUKE',     color:'#ff2200',scolor:'rgba(255,34,0,',  w:16,h:16,spd:7, dmg:300,spread:0, icon:'☠️',type:'nuke',    cost:150, owned:false, desc:'Massive warhead — slow reload'},
-  {name:'VOID BLASTER',color:'8000ff',scolor:'rgba(128,0,255,',w:6, h:20,spd:16,dmg:45, spread:2, icon:'🕸️',type:'bullet',  cost:20,   owned:false,  desc:'Gravity pulse wpn'},            {name:'SAKTI',color:'8000ff',scolor:'rgba(128,0,255,',w:6, h:20,spd:16,dmg:45, spread:5, icon:'✨️',type:'shotgun',  cost:20,   owned:false,  desc:'Time Based Damage'},
+  {name:'VOID BLASTER',color:'8000ff',scolor:'rgba(128,0,255,',w:6, h:20,spd:16,dmg:45, spread:2, icon:'🕸️',type:'bullet',  cost:20,   owned:false,  desc:'Gravity pulse wpn'},
+  {name:'SHAKTI',color:'#00ff88',scolor:'rgba(68,0,2
+55,',w:8,h:10,spd:20,dmg:20,spread:5,
+icon:'✨',type:'shotgun',cost:50,owned:false,
+desc:'Time Based Damage'},
   {name:'THUNDER STRIKE',   color:'#ff3366',scolor:'rgba(255,51,102,',w:8, h:8, spd:13,dmg:35, spread:3, icon:'🌋',type:'railgun',  cost:0,   owned:true,  desc:'Multiple EnemyHit'},
   {name:'POISON DART',    color:'#00ff88',scolor:'rgba(0,255,136,',w:3, h:28,spd:24,dmg:18, spread:0, icon:'🎃',type:'bullet',  cost:0,   owned:true,  desc:'HP Less before Hit'},
   {name:'DRONE LAUNCHER',  color:'#ff8800',scolor:'rgba(255,136,0,', w:6, h:14,spd:10,dmg:80, spread:0, icon:'🛸',type:'missile', cost:50,  owned:false, desc:'Auto Enemy Follow'},
