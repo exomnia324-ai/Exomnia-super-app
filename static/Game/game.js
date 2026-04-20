@@ -55,16 +55,6 @@ const WEAPONS=[
   {name:'SHOTGUN',  color:'#ff6644',scolor:'rgba(255,102,68,',w:6, h:10,spd:14,dmg:28, spread:8, icon:'💢',type:'shotgun', cost:70,  owned:false, desc:'8-pellet wide spread burst'},
   {name:'EMP',      color:'#00ddff',scolor:'rgba(0,221,255,', w:12,h:12,spd:9, dmg:55, spread:0, icon:'☢️',type:'emp',     cost:100, owned:false, desc:'Area pulse — stuns enemies'},
   {name:'NUKE',     color:'#ff2200',scolor:'rgba(255,34,0,',  w:16,h:16,spd:7, dmg:300,spread:0, icon:'☠️',type:'nuke',    cost:150, owned:false, desc:'Massive warhead — slow reload'},
-  {name:'VOID BLASTER',color:'8000ff',scolor:'rgba(128,0,255,',w:6, h:20,spd:16,dmg:45, spread:2, icon:'🕸️',type:'bullet',  cost:20,   owned:false,  desc:'Gravity pulse wpn'},
-       {name:'SHAKTI',color:'#00ff88',scolor:'rgba(68,0,255,',w:8,h:10,spd:20,dmg:20,spread:5,icon:'✨',type:'shotgun',cost:50,owned:false,desc:'Time Based Damage'},
-  {name:'THUNDER STRIKE',   color:'#ff3366',scolor:'rgba(255,51,102,',w:8, h:8, spd:13,dmg:35, spread:3, icon:'🌋',type:'railgun',  cost:0,   owned:false,  desc:'Multiple EnemyHit'},
-  {name:'POISON DART',    color:'#00ff88',scolor:'rgba(0,255,136,',w:3, h:28,spd:24,dmg:18, spread:0, icon:'🎃',type:'bullet',  cost:0,   owned:false,  desc:'HP Less before Hit'},
-  {name:'DRONE LAUNCHER',  color:'#ff8800',scolor:'rgba(255,136,0,', w:6, h:14,spd:10,dmg:80, spread:0, icon:'🛸',type:'missile', cost:50,  owned:false, desc:'Auto Enemy Follow'},
-  {name:'CLUSTER BoMB',  color:'#aa44ff',scolor:'rgba(170,68,255,',w:4, h:35,spd:30,dmg:120,spread:0, icon:'🧨',type:'nurce', cost:80,  owned:false, desc:'Multiple Explosion'},
-  {name:'ICE CANNON',  color:'#ffdd00',scolor:'rgba(255,221,0,', w:4, h:12,spd:22,dmg:14, spread:5, icon:'⛄',type:'bullet',  cost:60,  owned:false, desc:'Enemy Slow'},
-  {name:'PSYCHIC WAVE',  color:'#ff6644',scolor:'rgba(255,102,68,',w:6, h:10,spd:14,dmg:28, spread:8, icon:'➿',type:'emp', cost:70,  owned:false, desc:'Enemy Freeze'},
-  {name:'TORNADO GUN',      color:'#00ddff',scolor:'rgba(0,221,255,', w:12,h:12,spd:9, dmg:55, spread:0, icon:'🌪️',type:'shotgun',     cost:100, owned:false, desc:'Bullet come to turned'},
-  {name:'SOlAR BEAM',     color:'#ff2200',scolor:'rgba(255,34,0,',  w:16,h:16,spd:7, dmg:300,spread:0, icon:'🌞',type:'railgun',    cost:150, owned:false, desc:'Continious High Damage Beam'},
 ];
 // Per-weapon fire rate overrides (ms)
 const WEAPON_RATES={PULSE:150,PLASMA:280,LASER:90,MISSILE:600,RAILGUN:900,GATLING:60,SHOTGUN:700,EMP:1200,NUKE:3000};
@@ -116,6 +106,9 @@ let _miniT=0,_accumT=0;
 const FIXED_STEP=16;
 function loop(ts){
   requestAnimationFrame(loop);
+  // Don't render game while lobby is visible
+  const lobbyEl=$id('lobbyScreen');
+  if(lobbyEl&&!lobbyEl.classList.contains('gone')){G.lastT=ts;return;}
   if(!G.alive||G.paused||G.over){G.lastT=ts;return;}
   const raw=Math.min(ts-G.lastT,50);
   G.lastT=ts;
@@ -652,7 +645,13 @@ function drawPlayer(){
   const blink=G.invT>0&&Math.sin(G._t*25)>0;
   if(blink)return;
 
-  // engine glow halo
+  // Get selected ship data
+  const shipIdx=G._shipIdx||0;
+  const ship=PILOT_SHIPS[shipIdx]||PILOT_SHIPS[0];
+  const col=ship.color;
+  const acc=ship.accent;
+
+  // engine glow halo (color matches ship)
   const eg=CX.createRadialGradient(x,y+h*.5,1,x,y+h*.5,h*.65);
   eg.addColorStop(0,'rgba(0,140,255,0.45)');eg.addColorStop(.6,'rgba(0,40,120,0.15)');eg.addColorStop(1,'rgba(0,0,0,0)');
   CX.fillStyle=eg;CX.beginPath();CX.ellipse(x,y+h*.5,w*.45,h*.55,0,0,Math.PI*2);CX.fill();
@@ -673,79 +672,138 @@ function drawPlayer(){
   CX.fillStyle='rgba(0,0,0,0.4)';
   CX.beginPath();CX.ellipse(x+4,y+6,w*.38,h*.28,0,0,Math.PI*2);CX.fill();
 
-  // main hull
-  glow('#00e5ff',14);
-  CX.fillStyle='#061e3c';
-  CX.beginPath();
-  CX.moveTo(x,y-h*.52);
-  CX.bezierCurveTo(x+w*.36,y-h*.1,x+w*.36,y+h*.1,x+w*.22,y+h*.4);
-  CX.lineTo(x-w*.22,y+h*.4);
-  CX.bezierCurveTo(x-w*.36,y+h*.1,x-w*.36,y-h*.1,x,y-h*.52);
-  CX.fill();
+  glow(col,14);
 
-  // hull highlight
-  CX.fillStyle='rgba(0,229,255,0.06)';
-  CX.beginPath();
-  CX.moveTo(x,y-h*.52);
-  CX.bezierCurveTo(x+w*.18,y-h*.3,x+w*.18,y,x+w*.05,y+h*.2);
-  CX.lineTo(x,y-h*.52);CX.fill();
+  if(ship.type==='wraith'){
+    // WRAITH — slim interceptor, narrow hull, swept wings
+    CX.fillStyle='#1a0030';
+    CX.beginPath();CX.moveTo(x,y-h*.52);CX.bezierCurveTo(x+w*.28,y-h*.1,x+w*.28,y+h*.15,x+w*.14,y+h*.45);CX.lineTo(x-w*.14,y+h*.45);CX.bezierCurveTo(x-w*.28,y+h*.15,x-w*.28,y-h*.1,x,y-h*.52);CX.fill();
+    CX.fillStyle='#250045';
+    CX.beginPath();CX.moveTo(x+w*.12,y+h*.1);CX.lineTo(x+w*.7,y+h*.5);CX.lineTo(x+w*.4,y+h*.48);CX.lineTo(x+w*.1,y+h*.22);CX.closePath();CX.fill();
+    CX.beginPath();CX.moveTo(x-w*.12,y+h*.1);CX.lineTo(x-w*.7,y+h*.5);CX.lineTo(x-w*.4,y+h*.48);CX.lineTo(x-w*.1,y+h*.22);CX.closePath();CX.fill();
+    CX.strokeStyle=col+'88';CX.lineWidth=1;
+    CX.beginPath();CX.moveTo(x+w*.12,y+h*.1);CX.lineTo(x+w*.7,y+h*.5);CX.stroke();
+    CX.beginPath();CX.moveTo(x-w*.12,y+h*.1);CX.lineTo(x-w*.7,y+h*.5);CX.stroke();
+    // cockpit
+    const cg=CX.createRadialGradient(x,y-h*.2,1,x,y-h*.2,w*.14);
+    cg.addColorStop(0,col);cg.addColorStop(1,'rgba(200,0,255,0)');
+    CX.fillStyle=cg;CX.beginPath();CX.ellipse(x,y-h*.2,w*.1,h*.1,0,0,Math.PI*2);CX.fill();
+    // spine
+    CX.strokeStyle=col+'88';CX.lineWidth=1;
+    CX.beginPath();CX.moveTo(x,y-h*.52);CX.lineTo(x,y+h*.4);CX.stroke();
 
-  // spine line
-  CX.strokeStyle='rgba(0,229,255,0.5)';CX.lineWidth=1.2;
-  CX.beginPath();CX.moveTo(x,y-h*.52);CX.lineTo(x,y+h*.35);CX.stroke();
+  } else if(ship.type==='titan'){
+    // TITAN — wide boxy gunship
+    CX.fillStyle='#1a0a00';
+    CX.beginPath();CX.moveTo(x,y-h*.42);CX.bezierCurveTo(x+w*.42,y-h*.08,x+w*.44,y+h*.12,x+w*.3,y+h*.42);CX.lineTo(x-w*.3,y+h*.42);CX.bezierCurveTo(x-w*.44,y+h*.12,x-w*.42,y-h*.08,x,y-h*.42);CX.fill();
+    CX.fillStyle='#2a1000';
+    CX.beginPath();CX.moveTo(x+w*.28,y+h*.05);CX.lineTo(x+w*.85,y+h*.4);CX.lineTo(x+w*.5,y+h*.42);CX.lineTo(x+w*.22,y+h*.2);CX.closePath();CX.fill();
+    CX.beginPath();CX.moveTo(x-w*.28,y+h*.05);CX.lineTo(x-w*.85,y+h*.4);CX.lineTo(x-w*.5,y+h*.42);CX.lineTo(x-w*.22,y+h*.2);CX.closePath();CX.fill();
+    // gun pods
+    CX.fillStyle=col+'aa';CX.fillRect(x+w*.18-2,y+h*.2,4,h*.22);CX.fillRect(x-w*.18-2,y+h*.2,4,h*.22);
+    CX.strokeStyle=col+'66';CX.lineWidth=1;
+    CX.beginPath();CX.moveTo(x+w*.28,y+h*.05);CX.lineTo(x+w*.85,y+h*.4);CX.stroke();
+    CX.beginPath();CX.moveTo(x-w*.28,y+h*.05);CX.lineTo(x-w*.85,y+h*.4);CX.stroke();
+    // cockpit
+    const cg=CX.createRadialGradient(x,y-h*.1,2,x,y-h*.1,w*.18);
+    cg.addColorStop(0,col);cg.addColorStop(1,'rgba(255,136,0,0)');
+    CX.fillStyle=cg;CX.beginPath();CX.ellipse(x,y-h*.1,w*.14,h*.12,0,0,Math.PI*2);CX.fill();
 
-  // wings
-  const wc='#0a2e5a';
-  CX.fillStyle=wc;CX.beginPath();
-  CX.moveTo(x+w*.2,y);CX.lineTo(x+w*.65,y+h*.44);CX.lineTo(x+w*.4,y+h*.44);CX.lineTo(x+w*.16,y+h*.18);CX.closePath();CX.fill();
-  CX.beginPath();
-  CX.moveTo(x-w*.2,y);CX.lineTo(x-w*.65,y+h*.44);CX.lineTo(x-w*.4,y+h*.44);CX.lineTo(x-w*.16,y+h*.18);CX.closePath();CX.fill();
+  } else if(ship.type==='phantom'){
+    // PHANTOM — ultra-slim stealth
+    CX.fillStyle='#001a10';
+    CX.beginPath();CX.moveTo(x,y-h*.58);CX.bezierCurveTo(x+w*.22,y-h*.08,x+w*.2,y+h*.15,x+w*.1,y+h*.44);CX.lineTo(x-w*.1,y+h*.44);CX.bezierCurveTo(x-w*.2,y+h*.15,x-w*.22,y-h*.08,x,y-h*.58);CX.fill();
+    CX.fillStyle='#003020';
+    CX.beginPath();CX.moveTo(x+w*.08,y+h*.08);CX.lineTo(x+w*.75,y+h*.46);CX.lineTo(x+w*.38,y+h*.45);CX.lineTo(x+w*.06,y+h*.22);CX.closePath();CX.fill();
+    CX.beginPath();CX.moveTo(x-w*.08,y+h*.08);CX.lineTo(x-w*.75,y+h*.46);CX.lineTo(x-w*.38,y+h*.45);CX.lineTo(x-w*.06,y+h*.22);CX.closePath();CX.fill();
+    CX.strokeStyle=col+'55';CX.lineWidth=0.8;
+    CX.beginPath();CX.moveTo(x+w*.08,y+h*.08);CX.lineTo(x+w*.75,y+h*.46);CX.stroke();
+    CX.beginPath();CX.moveTo(x-w*.08,y+h*.08);CX.lineTo(x-w*.75,y+h*.46);CX.stroke();
+    // spine
+    CX.strokeStyle=col+'66';CX.lineWidth=1;
+    CX.beginPath();CX.moveTo(x,y-h*.58);CX.lineTo(x,y+h*.4);CX.stroke();
+    // cockpit
+    const cg=CX.createRadialGradient(x,y-h*.22,1,x,y-h*.22,w*.13);
+    cg.addColorStop(0,col);cg.addColorStop(1,'rgba(0,255,140,0)');
+    CX.fillStyle=cg;CX.beginPath();CX.ellipse(x,y-h*.22,w*.09,h*.09,0,0,Math.PI*2);CX.fill();
 
-  // wing surface highlight
-  CX.fillStyle='rgba(0,229,255,0.04)';
-  CX.beginPath();CX.moveTo(x+w*.2,y);CX.lineTo(x+w*.65,y+h*.44);CX.lineTo(x+w*.42,y+h*.44);CX.closePath();CX.fill();
+  } else if(ship.type==='nova'){
+    // NOVA — heavy destroyer with multiple gun barrels
+    CX.fillStyle='#200010';
+    CX.beginPath();CX.moveTo(x,y-h*.48);CX.bezierCurveTo(x+w*.46,y-h*.06,x+w*.48,y+h*.14,x+w*.32,y+h*.44);CX.lineTo(x-w*.32,y+h*.44);CX.bezierCurveTo(x-w*.48,y+h*.14,x-w*.46,y-h*.06,x,y-h*.48);CX.fill();
+    CX.fillStyle='#380020';
+    CX.beginPath();CX.moveTo(x+w*.3,y+h*.04);CX.lineTo(x+w*.9,y+h*.42);CX.lineTo(x+w*.52,y+h*.44);CX.lineTo(x+w*.24,y+h*.18);CX.closePath();CX.fill();
+    CX.beginPath();CX.moveTo(x-w*.3,y+h*.04);CX.lineTo(x-w*.9,y+h*.42);CX.lineTo(x-w*.52,y+h*.44);CX.lineTo(x-w*.24,y+h*.18);CX.closePath();CX.fill();
+    // multi-gun barrels
+    CX.fillStyle=col+'cc';
+    CX.fillRect(x+w*.22-2,y+h*.15,3,h*.26);CX.fillRect(x-w*.22-2,y+h*.15,3,h*.26);
+    CX.fillRect(x+w*.36-2,y+h*.22,3,h*.2);CX.fillRect(x-w*.36-2,y+h*.22,3,h*.2);
+    CX.strokeStyle=col+'66';CX.lineWidth=1;
+    CX.beginPath();CX.moveTo(x+w*.3,y+h*.04);CX.lineTo(x+w*.9,y+h*.42);CX.stroke();
+    CX.beginPath();CX.moveTo(x-w*.3,y+h*.04);CX.lineTo(x-w*.9,y+h*.42);CX.stroke();
+    // cockpit
+    const cg=CX.createRadialGradient(x,y-h*.12,2,x,y-h*.12,w*.2);
+    cg.addColorStop(0,col);cg.addColorStop(1,'rgba(255,0,80,0)');
+    CX.fillStyle=cg;CX.beginPath();CX.ellipse(x,y-h*.12,w*.16,h*.14,0,0,Math.PI*2);CX.fill();
 
-  // wing edge glow
-  CX.strokeStyle='rgba(0,229,255,0.35)';CX.lineWidth=1;
-  CX.beginPath();CX.moveTo(x+w*.2,y);CX.lineTo(x+w*.6,y+h*.42);CX.stroke();
-  CX.beginPath();CX.moveTo(x-w*.2,y);CX.lineTo(x-w*.6,y+h*.42);CX.stroke();
+  } else {
+    // VIPER (default) — balanced fighter
+    CX.fillStyle='#061e3c';
+    CX.beginPath();
+    CX.moveTo(x,y-h*.52);
+    CX.bezierCurveTo(x+w*.36,y-h*.1,x+w*.36,y+h*.1,x+w*.22,y+h*.4);
+    CX.lineTo(x-w*.22,y+h*.4);
+    CX.bezierCurveTo(x-w*.36,y+h*.1,x-w*.36,y-h*.1,x,y-h*.52);
+    CX.fill();
+    // hull highlight
+    CX.fillStyle='rgba(0,229,255,0.06)';
+    CX.beginPath();CX.moveTo(x,y-h*.52);CX.bezierCurveTo(x+w*.18,y-h*.3,x+w*.18,y,x+w*.05,y+h*.2);CX.lineTo(x,y-h*.52);CX.fill();
+    // spine
+    CX.strokeStyle='rgba(0,229,255,0.5)';CX.lineWidth=1.2;
+    CX.beginPath();CX.moveTo(x,y-h*.52);CX.lineTo(x,y+h*.35);CX.stroke();
+    // wings
+    CX.fillStyle='#0a2e5a';
+    CX.beginPath();CX.moveTo(x+w*.2,y);CX.lineTo(x+w*.65,y+h*.44);CX.lineTo(x+w*.4,y+h*.44);CX.lineTo(x+w*.16,y+h*.18);CX.closePath();CX.fill();
+    CX.beginPath();CX.moveTo(x-w*.2,y);CX.lineTo(x-w*.65,y+h*.44);CX.lineTo(x-w*.4,y+h*.44);CX.lineTo(x-w*.16,y+h*.18);CX.closePath();CX.fill();
+    CX.fillStyle='rgba(0,229,255,0.04)';
+    CX.beginPath();CX.moveTo(x+w*.2,y);CX.lineTo(x+w*.65,y+h*.44);CX.lineTo(x+w*.42,y+h*.44);CX.closePath();CX.fill();
+    CX.strokeStyle='rgba(0,229,255,0.35)';CX.lineWidth=1;
+    CX.beginPath();CX.moveTo(x+w*.2,y);CX.lineTo(x+w*.6,y+h*.42);CX.stroke();
+    CX.beginPath();CX.moveTo(x-w*.2,y);CX.lineTo(x-w*.6,y+h*.42);CX.stroke();
+    // cockpit
+    const cg=CX.createRadialGradient(x,y-h*.18,1,x,y-h*.18,w*.16);
+    cg.addColorStop(0,'rgba(0,229,255,0.97)');cg.addColorStop(.55,'rgba(0,130,220,0.55)');cg.addColorStop(1,'rgba(0,80,200,0.08)');
+    CX.fillStyle=cg;CX.beginPath();CX.ellipse(x,y-h*.18,w*.12,h*.2,0,0,Math.PI*2);CX.fill();
+    CX.fillStyle='rgba(255,255,255,0.4)';
+    CX.beginPath();CX.ellipse(x-w*.04,y-h*.23,w*.04,h*.05,-.4,0,Math.PI*2);CX.fill();
+  }
 
-  // cockpit glow
-  const cg=CX.createRadialGradient(x,y-h*.18,1,x,y-h*.18,w*.16);
-  cg.addColorStop(0,'rgba(0,229,255,0.97)');
-  cg.addColorStop(.55,'rgba(0,130,220,0.55)');
-  cg.addColorStop(1,'rgba(0,80,200,0.08)');
-  CX.fillStyle=cg;CX.beginPath();CX.ellipse(x,y-h*.18,w*.12,h*.2,0,0,Math.PI*2);CX.fill();
-  // cockpit glint
-  CX.fillStyle='rgba(255,255,255,0.4)';
-  CX.beginPath();CX.ellipse(x-w*.04,y-h*.23,w*.04,h*.05,-.4,0,Math.PI*2);CX.fill();
-
-  // weapon stripe
+  // weapon stripe (all ships)
   const wc2=WEAPONS[G.wIdx].color;
   CX.strokeStyle=wc2;CX.lineWidth=1.5;CX.globalAlpha=.55;
   CX.beginPath();CX.moveTo(x+w*.14,y-h*.05);CX.lineTo(x+w*.34,y+h*.35);CX.stroke();
   CX.beginPath();CX.moveTo(x-w*.14,y-h*.05);CX.lineTo(x-w*.34,y+h*.35);CX.stroke();
   CX.globalAlpha=1;
 
-  // gun barrels
+  // gun barrels (all ships)
   CX.fillStyle='rgba(0,229,255,0.15)';
   CX.fillRect(x+w*.12-1,y-h*.5,2,8);
   CX.fillRect(x-w*.12-1,y-h*.5,2,8);
 
   // engine flames
   const ft=G._t*1000||0;
-  drawFlame(x,y+h*.42,ft,0);
-  if(G.activePU.triple){drawFlame(x+w*.22,y+h*.38,ft,200);drawFlame(x-w*.22,y+h*.38,ft,400);}
+  drawFlame(x,y+h*.42,ft,0,col);
+  if(G.activePU.triple){drawFlame(x+w*.22,y+h*.38,ft,200,col);drawFlame(x-w*.22,y+h*.38,ft,400,col);}
   noGlow();
 }
 
-function drawFlame(x,y,t,off){
+function drawFlame(x,y,t,off,shipCol){
   const fl=16+Math.sin((t+off)*.016)*8+Math.sin((t+off)*.031)*4;
   const wColor=WEAPONS[G.wIdx].color;
   const fg=CX.createLinearGradient(x,y,x,y+fl+10);
   fg.addColorStop(0,'rgba(200,235,255,0.98)');
-  fg.addColorStop(.2,'rgba(100,200,255,0.85)');
-  fg.addColorStop(.6,'rgba(0,100,255,0.5)');
+  fg.addColorStop(.2,shipCol?shipCol+'dd':'rgba(100,200,255,0.85)');
+  fg.addColorStop(.6,shipCol?shipCol+'88':'rgba(0,100,255,0.5)');
   fg.addColorStop(1,'rgba(0,30,120,0)');
   CX.fillStyle=fg;
   CX.beginPath();
@@ -1452,6 +1510,9 @@ function restartGame(){
   pauseMenu.classList.remove('on');endScreen.classList.remove('on');lvlUp.classList.remove('on');
   bossHUD.classList.remove('on');$id('pauseBtn').textContent='⏸';
   initG();initBG();
+  // Re-apply selected ship & mode bonuses after initG resets G
+  applyShipBonuses(selectedShip);
+  applyModeBonuses(selectedMode);
   waveEl.textContent='1';hpEl.textContent='3';scEl.textContent='0';coEl.textContent='0';
   shEl.textContent='100';shFill.style.width='100%';xpFill.style.width='0%';
   lvlBadge.textContent='LVL 1';updateSkillDots();updateWeaponHUD();puPanel.innerHTML='';
@@ -1460,9 +1521,393 @@ function restartGame(){
 }
 function toStart(){
   pauseMenu.classList.remove('on');endScreen.classList.remove('on');lvlUp.classList.remove('on');
-  initG();startSc.classList.remove('gone');
+  bossHUD.classList.remove('on');
+  SFX.stopMusic();
+  initG();
+  // Hide game UI elements
+  $id('ui').style.visibility='hidden';
+  $id('minimap').style.visibility='hidden';
+  $id('ctrl').style.visibility='hidden';
+  CV.style.visibility='hidden';
+  startSc.classList.add('gone');
+  const lobbyEl=$id('lobbyScreen');
+  lobbyEl.classList.remove('gone');
+  requestAnimationFrame(()=>lobbyEl.classList.add('visible'));
+  refreshLobbyStats();
 }
 function startGame(){startSc.classList.add('gone');restartGame();}
+
+// ═══ LOBBY SYSTEM ═══
+let selectedShip=0;
+let selectedMode='normal';
+
+// All ships data (index 0-2 = default owned, 3-4 = purchasable)
+const PILOT_SHIPS=[
+  {color:'#00e5ff',accent:'#0077ff',w:40,h:50,type:'viper',  name:'VIPER',  badge:'BALANCED',   atk:60,spd:60,def:60, price:0},
+  {color:'#cc44ff',accent:'#7700cc',w:32,h:56,type:'wraith', name:'WRAITH', badge:'INTERCEPTOR', atk:45,spd:88,def:42, price:0},
+  {color:'#ff8800',accent:'#cc4400',w:52,h:44,type:'titan',  name:'TITAN',  badge:'GUNSHIP',     atk:85,spd:38,def:80, price:0},
+  {color:'#00ff8c',accent:'#00aa55',w:44,h:52,type:'phantom',name:'PHANTOM',badge:'STEALTH',     atk:70,spd:75,def:50, price:500},
+  {color:'#ff2255',accent:'#aa0033',w:48,h:48,type:'nova',   name:'NOVA',   badge:'DESTROYER',   atk:95,spd:55,def:70, price:1200},
+];
+
+function getOwnedShips(){
+  try{
+    const o=JSON.parse(localStorage.getItem('exomniaOwnedShips')||'[0,1,2]');
+    return o;
+  }catch(e){return [0,1,2];}
+}
+function buyShip(idx){
+  const ship=PILOT_SHIPS[idx];
+  const coins=getLbyCoins();
+  if(coins<ship.price){showToast('NOT ENOUGH COINS!');return;}
+  const owned=getOwnedShips();
+  if(owned.includes(idx))return;
+  owned.push(idx);
+  try{localStorage.setItem('exomniaOwnedShips',JSON.stringify(owned));}catch(e){}
+  setLbyCoins(coins-ship.price);
+  showToast('SHIP UNLOCKED: '+ship.name);
+  openLbyPanel('shop');// refresh
+}
+function getLbyCoins(){
+  try{return parseInt(localStorage.getItem('exomniaTotalCoins')||'0');}catch(e){return 0;}
+}
+function setLbyCoins(v){
+  try{localStorage.setItem('exomniaTotalCoins',v);}catch(e){}
+  const el=$id('lbyCoinDisplay');
+  if(el)el.textContent='◈ '+v;
+}
+
+function selectShip(idx){
+  const owned=getOwnedShips();
+  if(!owned.includes(idx)){showToast('BUY THIS SHIP FIRST!');return;}
+  selectedShip=idx;
+  try{localStorage.setItem('exomniaShip',idx);}catch(e){}
+  updateLbyShipCard(idx);
+  // Update hangar selection if open
+  document.querySelectorAll('.hgr-card').forEach(c=>{
+    c.classList.toggle('hgr-selected',parseInt(c.dataset.ship)===idx);
+  });
+}
+
+function updateLbyShipCard(idx){
+  const s=PILOT_SHIPS[idx];
+  $id('lbyShipName').textContent=s.name;
+  $id('lbyShipType').textContent=s.badge;
+  $id('shipBarAtk').style.width=s.atk+'%';
+  $id('shipBarSpd').style.width=s.spd+'%';
+  $id('shipBarDef').style.width=s.def+'%';
+  drawSingleShip($id('lbyShipCanvas'),s,60,70);
+}
+
+function openLbyPanel(type){
+  const panel=$id('lbyPanel');
+  const title=$id('lbyPanelTitle');
+  const body=$id('lbyPanelBody');
+  panel.classList.add('open');
+  if(type==='hangar'){
+    title.textContent='HANGAR';
+    body.innerHTML='';
+    const grid=document.createElement('div');
+    grid.id='hangarGrid';
+    const owned=getOwnedShips();
+    owned.forEach(idx=>{
+      const s=PILOT_SHIPS[idx];
+      const card=document.createElement('div');
+      card.className='hgr-card'+(idx===selectedShip?' hgr-selected':'');
+      card.dataset.ship=idx;
+      card.onclick=()=>{selectShip(idx);closeLbyPanel();};
+      // Build all children via createElement — never use innerHTML+= as it destroys canvas
+      const slot=document.createElement('div');
+      slot.className='lby-card-title';
+      slot.textContent='SLOT '+(owned.indexOf(idx)+1);
+      card.appendChild(slot);
+      const cv=document.createElement('canvas');
+      cv.className='hgr-canvas';cv.width=54;cv.height=64;
+      card.appendChild(cv);
+      const nm=document.createElement('div');
+      nm.className='hgr-name';nm.textContent=s.name;
+      card.appendChild(nm);
+      const tp=document.createElement('div');
+      tp.className='hgr-type';tp.textContent=s.badge;
+      card.appendChild(tp);
+      grid.appendChild(card);
+      // Draw after append so canvas is live in DOM
+      setTimeout(()=>drawSingleShip(cv,s,54,64),0);
+    });
+    body.appendChild(grid);
+  } else {
+    title.textContent='◈ SHOP';
+    body.innerHTML='';
+
+    // Tab bar
+    const tabBar=document.createElement('div');
+    tabBar.style.cssText='display:flex;gap:8px;margin-bottom:14px;width:100%;max-width:500px;';
+    const tabShip=document.createElement('div');
+    tabShip.textContent='🚀 SHIP SHOP';
+    tabShip.style.cssText='flex:1;padding:9px 0;border-radius:5px;font-family:Courier New,monospace;font-weight:900;font-size:11px;letter-spacing:3px;text-align:center;cursor:pointer;transition:all .18s;border:1px solid rgba(0,229,255,0.5);color:#00e5ff;background:rgba(0,229,255,0.12);box-shadow:0 0 10px rgba(0,229,255,0.2);';
+    const tabWpn=document.createElement('div');
+    tabWpn.textContent='⚔ WEAPONS';
+    tabWpn.style.cssText='flex:1;padding:9px 0;border-radius:5px;font-family:Courier New,monospace;font-weight:900;font-size:11px;letter-spacing:3px;text-align:center;cursor:pointer;transition:all .18s;border:1px solid rgba(0,229,255,0.2);color:rgba(0,229,255,0.45);background:rgba(0,229,255,0.03);';
+    tabBar.appendChild(tabShip);
+    tabBar.appendChild(tabWpn);
+    body.appendChild(tabBar);
+
+    // Coin display
+    const coinRow=document.createElement('div');
+    coinRow.style.cssText='font-family:Courier New,monospace;font-size:13px;letter-spacing:3px;color:#00ff8c;background:rgba(0,255,140,0.06);border:1px solid rgba(0,255,140,0.2);padding:5px 18px;border-radius:4px;margin-bottom:14px;';
+    coinRow.id='lbyShopCoinRow';
+    coinRow.textContent='◈ COINS: '+getLbyCoins();
+    body.appendChild(coinRow);
+
+    // Content container
+    const content=document.createElement('div');
+    content.id='lbyShopContent';
+    content.style.cssText='width:100%;max-width:500px;';
+    body.appendChild(content);
+
+    function renderShipTab(){
+      tabShip.style.cssText='flex:1;padding:9px 0;border-radius:5px;font-family:Courier New,monospace;font-weight:900;font-size:11px;letter-spacing:3px;text-align:center;cursor:pointer;transition:all .18s;border:1px solid rgba(0,229,255,0.5);color:#00e5ff;background:rgba(0,229,255,0.12);box-shadow:0 0 10px rgba(0,229,255,0.2);';
+      tabWpn.style.cssText='flex:1;padding:9px 0;border-radius:5px;font-family:Courier New,monospace;font-weight:900;font-size:11px;letter-spacing:3px;text-align:center;cursor:pointer;transition:all .18s;border:1px solid rgba(0,229,255,0.2);color:rgba(0,229,255,0.45);background:rgba(0,229,255,0.03);';
+      content.innerHTML='';
+      const grid=document.createElement('div');
+      grid.id='shopGrid';
+      const owned=getOwnedShips();
+      const coins=getLbyCoins();
+      PILOT_SHIPS.forEach((s,idx)=>{
+        const isOwned=owned.includes(idx);
+        const item=document.createElement('div');
+        item.className='shop-item'+(isOwned?' owned':'');
+        const cv=document.createElement('canvas');
+        cv.className='shop-item-canvas';cv.width=50;cv.height=60;
+        const canAfford=coins>=s.price;
+        const btnHTML=isOwned
+          ?`<div class="shop-buy-btn owned-badge"><span class="shop-price">✔</span><span class="shop-price-lbl">OWNED</span></div>`
+          :`<div class="shop-buy-btn buy" onclick="buyShip(${idx})" style="${canAfford?'':'opacity:.4;cursor:default'}"><span class="shop-price">◈${s.price}</span><span class="shop-price-lbl">BUY</span></div>`;
+        item.innerHTML=`
+          <div class="shop-item-info">
+            <div class="shop-item-name">${s.name}</div>
+            <div class="shop-item-type">${s.badge}</div>
+            <div class="shop-item-bars">
+              <div class="shop-bar-r"><span class="shop-bar-l">ATK</span><div class="shop-bar-t"><div class="shop-bar-f atk" style="width:${s.atk}%"></div></div></div>
+              <div class="shop-bar-r"><span class="shop-bar-l">SPD</span><div class="shop-bar-t"><div class="shop-bar-f spd" style="width:${s.spd}%"></div></div></div>
+              <div class="shop-bar-r"><span class="shop-bar-l">DEF</span><div class="shop-bar-t"><div class="shop-bar-f def" style="width:${s.def}%"></div></div></div>
+            </div>
+          </div>${btnHTML}`;
+        item.insertBefore(cv,item.firstChild);
+        grid.appendChild(item);
+        setTimeout(()=>drawSingleShip(cv,s,50,60),0);
+      });
+      content.appendChild(grid);
+    }
+
+    function renderWpnTab(){
+      tabWpn.style.cssText='flex:1;padding:9px 0;border-radius:5px;font-family:Courier New,monospace;font-weight:900;font-size:11px;letter-spacing:3px;text-align:center;cursor:pointer;transition:all .18s;border:1px solid rgba(255,204,0,0.5);color:#ffcc00;background:rgba(255,204,0,0.1);box-shadow:0 0 10px rgba(255,204,0,0.2);';
+      tabShip.style.cssText='flex:1;padding:9px 0;border-radius:5px;font-family:Courier New,monospace;font-weight:900;font-size:11px;letter-spacing:3px;text-align:center;cursor:pointer;transition:all .18s;border:1px solid rgba(0,229,255,0.2);color:rgba(0,229,255,0.45);background:rgba(0,229,255,0.03);';
+      content.innerHTML='';
+      const coins=getLbyCoins();
+      const wGrid=document.createElement('div');
+      wGrid.className='shopGrid';
+      wGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(min(150px,42vw),1fr));gap:10px;width:100%;';
+      WEAPONS.forEach((w,idx)=>{
+        const card=document.createElement('div');
+        card.className='shopCard'+(w.owned?' owned':'')+(w.owned&&G.wIdx===idx?' active-wep':'')+(!w.owned&&coins<w.cost?' cant-afford':'');
+        const ownedBadge=w.owned
+          ?`<div class="shopPrice owned-lbl">✔ OWNED</div><div class="shopEquip">${G&&G.wIdx===idx?'▶ EQUIPPED':'TAP TO EQUIP'}</div>`
+          :`<div class="shopPrice">◈${w.cost}</div>`;
+        card.innerHTML=`<div class="shopIcon">${w.icon}</div>
+          <div class="shopName">${w.name}</div>
+          <div class="shopDesc">${w.desc}</div>
+          <div class="shopStats">
+            <div class="shopStat dmg">DMG ${w.dmg}</div>
+            <div class="shopStat spd">SPD ${w.spd}</div>
+          </div>${ownedBadge}`;
+        if(w.owned){
+          card.onclick=()=>{
+            // equip on lobby (will apply when game starts)
+            WEAPONS.forEach((_,i)=>WEAPONS[i]._lobbyEquip=false);
+            w._lobbyEquip=true;
+            showToast('◈ '+w.name+' EQUIPPED');
+            renderWpnTab();
+          };
+        } else {
+          card.onclick=()=>{
+            if(coins<w.cost){showToast('✕ NOT ENOUGH COINS');return;}
+            w.owned=true;
+            addLbyCoins(-w.cost);
+            const coinRowEl=$id('lbyShopCoinRow');
+            if(coinRowEl)coinRowEl.textContent='◈ COINS: '+getLbyCoins();
+            SFX.pickup_powerup&&SFX.pickup_powerup();
+            showToast('✔ '+w.name+' UNLOCKED');
+            renderWpnTab();
+          };
+        }
+        wGrid.appendChild(card);
+      });
+      content.appendChild(wGrid);
+    }
+
+    tabShip.onclick=renderShipTab;
+    tabWpn.onclick=renderWpnTab;
+    renderShipTab(); // default tab
+  }
+}
+function closeLbyPanel(){
+  $id('lbyPanel').classList.remove('open');
+}
+
+const PILOT_EMOJIS=['🧑‍🚀','👨‍✈️','👩‍✈️','🤖','👾','🦾','🧬','⚡'];
+let _emojiIdx=0;
+function cyclePilotEmoji(){
+  _emojiIdx=(_emojiIdx+1)%PILOT_EMOJIS.length;
+  $id('pilotEmoji').textContent=PILOT_EMOJIS[_emojiIdx];
+  try{localStorage.setItem('exomniaEmoji',_emojiIdx);}catch(e){}
+}
+
+function selectMode(m){
+  selectedMode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('selected'));
+  document.querySelector('[data-mode="'+m+'"]').classList.add('selected');
+}
+
+function launchFromLobby(){
+  const cs=($id('callsignInput').value||'').trim()||'PILOT';
+  try{localStorage.setItem('exomniaCallsign',cs);}catch(e){}
+  $id('lobbyScreen').classList.remove('visible');
+  $id('lobbyScreen').classList.add('gone');
+  startSc.classList.add('gone');
+  CV.style.visibility='visible';
+  $id('ui').style.visibility='visible';
+  $id('minimap').style.visibility='visible';
+  $id('ctrl').style.visibility='visible';
+  SFX.init();SFX.resume();
+  restartGame();
+  // Apply bonuses AFTER restartGame/initG so they are not wiped
+  applyShipBonuses(selectedShip);
+  applyModeBonuses(selectedMode);
+  SFX.startMusic();
+}
+
+function applyShipBonuses(idx){
+  G._shipIdx=idx;
+  G._selectedMode=selectedMode;
+  // Apply ship's actual dimensions so hitbox matches visuals
+  const s=PILOT_SHIPS[idx]||PILOT_SHIPS[0];
+  G.pw=s.w;
+  G.ph=s.h;
+  // Apply stat bonuses
+  G.pspd=5*(1+(s.spd-60)/200);   // speed scaled around base 60
+  G.shMax=100+(s.def-60)*0.5;    // defense adds shield capacity
+  G.shield=Math.min(G.shield||100,G.shMax);
+}
+function applyModeBonuses(mode){
+  G._selectedMode=mode;
+}
+
+function refreshLobbyStats(){
+  try{
+    const cs=localStorage.getItem('exomniaCallsign')||'';
+    if(cs)$id('callsignInput').value=cs;
+    const ei=parseInt(localStorage.getItem('exomniaEmoji')||'0');
+    _emojiIdx=ei;
+    $id('pilotEmoji').textContent=PILOT_EMOJIS[ei]||'🧑‍🚀';
+    const bs=parseInt(localStorage.getItem('exomniaBestScore')||'0');
+    const bw=parseInt(localStorage.getItem('exomniaBestWave')||'0');
+    const tk=parseInt(localStorage.getItem('exomniaTotalKills')||'0');
+    const gm=parseInt(localStorage.getItem('exomniaGames')||'0');
+    $id('pBestScore').textContent=bs>9999?(bs/1000).toFixed(1)+'K':bs;
+    $id('pBestWave').textContent=bw;
+    $id('pTotalKills').textContent=tk>9999?(tk/1000).toFixed(1)+'K':tk;
+    const pgEl=$id('pilotGames');if(pgEl)pgEl.textContent=gm+' MISSIONS';
+    const ranks=['◆ RECRUIT','◆ CADET','◆◆ PILOT','◆◆ ACE','◆◆◆ COMMANDER','◆◆◆ ADMIRAL','★ LEGEND'];
+    const ri=Math.min(Math.floor(bw/2),ranks.length-1);
+    $id('pilotRank').textContent=ranks[ri];
+    const si=parseInt(localStorage.getItem('exomniaShip')||'0');
+    const owned=getOwnedShips();
+    selectedShip=owned.includes(si)?si:0;
+    updateLbyShipCard(selectedShip);
+    // Coin display
+    setLbyCoins(getLbyCoins());
+  }catch(e){}
+}
+
+function drawSingleShip(cv,s,W,H){
+  if(!cv)return;
+  const cx=cv.getContext('2d');
+  cv.width=W;cv.height=H;
+  cx.clearRect(0,0,W,H);
+  const x=W/2,y=H*0.52;
+  const col=s.color,acc=s.accent;
+  const pw=s.w*(W/54),ph=s.h*(H/62);
+  cx.shadowBlur=14;cx.shadowColor=col;
+  if(s.type==='viper'){
+    cx.fillStyle='#061e3c';cx.beginPath();cx.moveTo(x,y-ph*.52);cx.bezierCurveTo(x+pw*.36,y-ph*.1,x+pw*.36,y+ph*.1,x+pw*.22,y+ph*.4);cx.lineTo(x-pw*.22,y+ph*.4);cx.bezierCurveTo(x-pw*.36,y+ph*.1,x-pw*.36,y-ph*.1,x,y-ph*.52);cx.fill();
+    cx.fillStyle='#0a2e5a';cx.beginPath();cx.moveTo(x+pw*.2,y);cx.lineTo(x+pw*.65,y+ph*.44);cx.lineTo(x+pw*.4,y+ph*.44);cx.lineTo(x+pw*.16,y+ph*.18);cx.closePath();cx.fill();
+    cx.beginPath();cx.moveTo(x-pw*.2,y);cx.lineTo(x-pw*.65,y+ph*.44);cx.lineTo(x-pw*.4,y+ph*.44);cx.lineTo(x-pw*.16,y+ph*.18);cx.closePath();cx.fill();
+    const cg=cx.createRadialGradient(x,y-ph*.18,1,x,y-ph*.18,pw*.16);cg.addColorStop(0,'rgba(0,229,255,0.97)');cg.addColorStop(1,'rgba(0,100,200,0)');cx.fillStyle=cg;cx.beginPath();cx.ellipse(x,y-ph*.18,pw*.12,ph*.1,0,0,Math.PI*2);cx.fill();
+    const eg=cx.createRadialGradient(x,y+ph*.45,2,x,y+ph*.45,12);eg.addColorStop(0,'rgba(0,120,255,0.9)');eg.addColorStop(1,'rgba(0,40,120,0)');cx.fillStyle=eg;cx.beginPath();cx.ellipse(x,y+ph*.45,6,9,0,0,Math.PI*2);cx.fill();
+  } else if(s.type==='wraith'){
+    cx.fillStyle='#1a0030';cx.beginPath();cx.moveTo(x,y-ph*.55);cx.bezierCurveTo(x+pw*.28,y-ph*.1,x+pw*.28,y+ph*.15,x+pw*.14,y+ph*.45);cx.lineTo(x-pw*.14,y+ph*.45);cx.bezierCurveTo(x-pw*.28,y+ph*.15,x-pw*.28,y-ph*.1,x,y-ph*.55);cx.fill();
+    cx.fillStyle='#250045';cx.beginPath();cx.moveTo(x+pw*.12,y+ph*.1);cx.lineTo(x+pw*.7,y+ph*.5);cx.lineTo(x+pw*.4,y+ph*.48);cx.lineTo(x+pw*.1,y+ph*.22);cx.closePath();cx.fill();
+    cx.beginPath();cx.moveTo(x-pw*.12,y+ph*.1);cx.lineTo(x-pw*.7,y+ph*.5);cx.lineTo(x-pw*.4,y+ph*.48);cx.lineTo(x-pw*.1,y+ph*.22);cx.closePath();cx.fill();
+    const cg2=cx.createRadialGradient(x,y-ph*.2,1,x,y-ph*.2,pw*.14);cg2.addColorStop(0,col);cg2.addColorStop(1,'rgba(200,0,255,0)');cx.fillStyle=cg2;cx.beginPath();cx.ellipse(x,y-ph*.2,pw*.1,ph*.09,0,0,Math.PI*2);cx.fill();
+    const eg2=cx.createRadialGradient(x,y+ph*.48,2,x,y+ph*.48,10);eg2.addColorStop(0,'rgba(200,0,255,0.9)');eg2.addColorStop(1,'rgba(100,0,160,0)');cx.fillStyle=eg2;cx.beginPath();cx.ellipse(x,y+ph*.48,5,8,0,0,Math.PI*2);cx.fill();
+  } else if(s.type==='titan'){
+    cx.fillStyle='#1a0a00';cx.beginPath();cx.moveTo(x,y-ph*.42);cx.bezierCurveTo(x+pw*.42,y-ph*.08,x+pw*.44,y+ph*.12,x+pw*.3,y+ph*.42);cx.lineTo(x-pw*.3,y+ph*.42);cx.bezierCurveTo(x-pw*.44,y+ph*.12,x-pw*.42,y-ph*.08,x,y-ph*.42);cx.fill();
+    cx.fillStyle='#2a1000';cx.beginPath();cx.moveTo(x+pw*.28,y+ph*.05);cx.lineTo(x+pw*.85,y+ph*.4);cx.lineTo(x+pw*.5,y+ph*.42);cx.lineTo(x+pw*.22,y+ph*.2);cx.closePath();cx.fill();
+    cx.beginPath();cx.moveTo(x-pw*.28,y+ph*.05);cx.lineTo(x-pw*.85,y+ph*.4);cx.lineTo(x-pw*.5,y+ph*.42);cx.lineTo(x-pw*.22,y+ph*.2);cx.closePath();cx.fill();
+    cx.fillStyle=col+'aa';cx.fillRect(x+pw*.18-2,y+ph*.2,4,ph*.22);cx.fillRect(x-pw*.18-2,y+ph*.2,4,ph*.22);
+    const cg3=cx.createRadialGradient(x,y-ph*.1,2,x,y-ph*.1,pw*.18);cg3.addColorStop(0,col);cg3.addColorStop(1,'rgba(255,136,0,0)');cx.fillStyle=cg3;cx.beginPath();cx.ellipse(x,y-ph*.1,pw*.14,ph*.12,0,0,Math.PI*2);cx.fill();
+    const eg3=cx.createRadialGradient(x,y+ph*.44,3,x,y+ph*.44,14);eg3.addColorStop(0,'rgba(255,120,0,0.9)');eg3.addColorStop(1,'rgba(200,60,0,0)');cx.fillStyle=eg3;cx.beginPath();cx.ellipse(x,y+ph*.44,8,10,0,0,Math.PI*2);cx.fill();
+  } else if(s.type==='phantom'){
+    // slim stealth
+    cx.fillStyle='#001a10';cx.beginPath();cx.moveTo(x,y-ph*.58);cx.bezierCurveTo(x+pw*.22,y-ph*.08,x+pw*.2,y+ph*.15,x+pw*.1,y+ph*.44);cx.lineTo(x-pw*.1,y+ph*.44);cx.bezierCurveTo(x-pw*.2,y+ph*.15,x-pw*.22,y-ph*.08,x,y-ph*.58);cx.fill();
+    cx.fillStyle='#003020';cx.beginPath();cx.moveTo(x+pw*.08,y+ph*.08);cx.lineTo(x+pw*.75,y+ph*.46);cx.lineTo(x+pw*.38,y+ph*.45);cx.lineTo(x+pw*.06,y+ph*.22);cx.closePath();cx.fill();
+    cx.beginPath();cx.moveTo(x-pw*.08,y+ph*.08);cx.lineTo(x-pw*.75,y+ph*.46);cx.lineTo(x-pw*.38,y+ph*.45);cx.lineTo(x-pw*.06,y+ph*.22);cx.closePath();cx.fill();
+    const cgp=cx.createRadialGradient(x,y-ph*.22,1,x,y-ph*.22,pw*.13);cgp.addColorStop(0,col);cgp.addColorStop(1,'rgba(0,255,140,0)');cx.fillStyle=cgp;cx.beginPath();cx.ellipse(x,y-ph*.22,pw*.09,ph*.08,0,0,Math.PI*2);cx.fill();
+    const egp=cx.createRadialGradient(x,y+ph*.46,2,x,y+ph*.46,10);egp.addColorStop(0,'rgba(0,255,140,0.9)');egp.addColorStop(1,'rgba(0,120,80,0)');cx.fillStyle=egp;cx.beginPath();cx.ellipse(x,y+ph*.46,5,8,0,0,Math.PI*2);cx.fill();
+  } else {
+    // NOVA - destroyer
+    cx.fillStyle='#200010';cx.beginPath();cx.moveTo(x,y-ph*.48);cx.bezierCurveTo(x+pw*.46,y-ph*.06,x+pw*.48,y+ph*.14,x+pw*.32,y+ph*.44);cx.lineTo(x-pw*.32,y+ph*.44);cx.bezierCurveTo(x-pw*.48,y+ph*.14,x-pw*.46,y-ph*.06,x,y-ph*.48);cx.fill();
+    cx.fillStyle='#380020';cx.beginPath();cx.moveTo(x+pw*.3,y+ph*.04);cx.lineTo(x+pw*.9,y+ph*.42);cx.lineTo(x+pw*.52,y+ph*.44);cx.lineTo(x+pw*.24,y+ph*.18);cx.closePath();cx.fill();
+    cx.beginPath();cx.moveTo(x-pw*.3,y+ph*.04);cx.lineTo(x-pw*.9,y+ph*.42);cx.lineTo(x-pw*.52,y+ph*.44);cx.lineTo(x-pw*.24,y+ph*.18);cx.closePath();cx.fill();
+    cx.fillStyle=col+'cc';cx.fillRect(x+pw*.22-2,y+ph*.15,3,ph*.26);cx.fillRect(x-pw*.22-2,y+ph*.15,3,ph*.26);cx.fillRect(x+pw*.36-2,y+ph*.22,3,ph*.2);cx.fillRect(x-pw*.36-2,y+ph*.22,3,ph*.2);
+    const cgn=cx.createRadialGradient(x,y-ph*.12,2,x,y-ph*.12,pw*.2);cgn.addColorStop(0,col);cgn.addColorStop(1,'rgba(255,0,80,0)');cx.fillStyle=cgn;cx.beginPath();cx.ellipse(x,y-ph*.12,pw*.16,ph*.14,0,0,Math.PI*2);cx.fill();
+    const egn=cx.createRadialGradient(x,y+ph*.46,3,x,y+ph*.46,14);egn.addColorStop(0,'rgba(255,50,80,0.9)');egn.addColorStop(1,'rgba(180,0,40,0)');cx.fillStyle=egn;cx.beginPath();cx.ellipse(x,y+ph*.46,9,11,0,0,Math.PI*2);cx.fill();
+  }
+  cx.shadowBlur=0;
+}
+
+function drawShipPreviews(){
+  // Legacy - now using drawSingleShip
+  updateLbyShipCard(selectedShip);
+}
+
+// Stats saving on game end — called separately after the real gameOver
+function _saveRunStats(){
+  try{
+    const bs=parseInt(localStorage.getItem('exomniaBestScore')||'0');
+    const bw=parseInt(localStorage.getItem('exomniaBestWave')||'0');
+    const tk=parseInt(localStorage.getItem('exomniaTotalKills')||'0');
+    const gm=parseInt(localStorage.getItem('exomniaGames')||'0');
+    if(G.score>bs)localStorage.setItem('exomniaBestScore',G.score);
+    if(G.wave>bw)localStorage.setItem('exomniaBestWave',G.wave);
+    localStorage.setItem('exomniaTotalKills',tk+(G.kills||0));
+    localStorage.setItem('exomniaGames',gm+1);
+    // Save coins earned in game
+    const prevCoins=getLbyCoins();
+    const earned=G.coins||0;
+    setLbyCoins(prevCoins+earned);
+  }catch(e){}
+}
+
+// Patch gameOver: wrap with stats save (no recursion — we keep a ref before redefining)
+(function(){
+  const _orig=gameOver;
+  gameOver=function(){
+    _orig();
+    _saveRunStats();
+  };
+})();
 
 /* ═══ SETTINGS SYSTEM ═══ */
 const DEFAULTS={
@@ -1962,7 +2407,29 @@ window.addEventListener('load',()=>{
 
   setTimeout(()=>{
     $id('loading').classList.add('out');
-    setTimeout(()=>$id('loading').style.display='none',700);
-  },1900);
+    setTimeout(()=>{
+      $id('loading').style.display='none';
+      // Show lobby after loading — add 'visible' to fade it in smoothly
+      startSc.classList.add('gone');
+      const lobbyEl=$id('lobbyScreen');
+      if(lobbyEl){lobbyEl.classList.remove('gone');requestAnimationFrame(()=>lobbyEl.classList.add('visible'));}
+      // Remove black cover now that lobby is visible
+      const cover=$id('blackCover');
+      if(cover) cover.style.display='none';
+      refreshLobbyStats();
+    },1000);
+  },2800);
+
+  // Animated percentage counter
+  const pctEl=$id('loadPct');
+  const statMsgs=['INITIALIZING SYSTEMS...','LOADING ASSETS...','CALIBRATING WEAPONS...','CHARTING SECTORS...','ENGAGING DRIVES...','READY'];
+  let pct=0,msgI=0;
+  const pctTimer=setInterval(()=>{
+    pct=Math.min(100,pct+(Math.random()<.4?Math.floor(Math.random()*8)+1:Math.floor(Math.random()*3)));
+    if(pctEl)pctEl.textContent=pct+'%';
+    const mi=Math.floor(pct/20);
+    if(mi!==msgI&&mi<statMsgs.length){msgI=mi;const s=$id('lsub');if(s)s.textContent=statMsgs[mi];}
+    if(pct>=100){clearInterval(pctTimer);const s=$id('lsub');if(s)s.textContent='READY';}
+  },55);
   requestAnimationFrame(loop);
 });
