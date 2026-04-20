@@ -179,7 +179,7 @@ body{
   position:absolute;top:64px;right:8px;
   display:flex;flex-direction:column;gap:5px;z-index:20;
   pointer-events:auto;
-  max-height: 300px;
+  max-height: 800px;
   overflow-y: auto;
   padding-right: 5px;
   scrollbar-width: thin;
