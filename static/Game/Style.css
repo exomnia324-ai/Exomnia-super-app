@@ -182,7 +182,7 @@ body{
   max-height: 550px;
   overflow-y: auto;
   padding-right: 5px;
-  scrollbar-width: 64px;
+  scrollbar-width: 45px;
 }
 #weaponHUD::-webkit-scrollbar {
   width: 4px;
