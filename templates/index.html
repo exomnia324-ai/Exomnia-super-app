@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>EXOMNIA AIRCRAFT</title>
+<title>DEEP SPACE COMBAT</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='Game/Style.css') }}">
 </head>
 <body>
@@ -15,22 +15,104 @@
   <div id="noise"></div>
   <div id="alertFlash"></div>
 
-  <!-- START -->
-  <div id="startScreen">
-    <div class="stag">◈ SECTOR 7 · DEEP SPACE DEFENSE ◈</div>
-    <div class="stitle">EXOMNIA<br>AIRCRAFT</div>
-    <div class="sdesc">ULTIMATE COMBAT &nbsp;·&nbsp; DEEP SPACE</div>
-    <div class="sInfoRow">
-      <div class="sInfo"><div class="sInfoVal">10</div><div class="sInfoLbl">WAVES</div></div>
-      <div class="sInfo"><div class="sInfoVal">5</div><div class="sInfoLbl">WEAPONS</div></div>
-      <div class="sInfo"><div class="sInfoVal">∞</div><div class="sInfoLbl">COMBAT</div></div>
+  <!-- LOBBY -->
+  <div id="lobbyScreen" class="gone">
+
+    <!-- TOP BAR -->
+    <div id="lbyTopBar">
+      <div>
+        <div class="lby-logo-text">DEEP SPACE</div>
+        <div class="lby-logo-sub">◈ COMBAT DIVISION</div>
+      </div>
+      <div id="lbyCoinDisplay" id="lbyCoinAmt">0</div>
     </div>
-    <button id="launchBtn" onclick="startGame()">▶ LAUNCH MISSION</button>
-    <div class="shint">WASD/ARROWS · SPACE=FIRE · E=SPECIAL · Q=WEAPON</div>
+
+    <!-- MAIN ROW: Pilot + Ship -->
+    <div id="lbyMainRow">
+
+      <!-- PILOT CARD -->
+      <div id="lbyPilotCard">
+        <div class="lby-card-title">PILOT</div>
+        <div class="lby-avatar" id="pilotAvatar" onclick="cyclePilotEmoji()">
+          <span id="pilotEmoji">🧑‍🚀</span>
+          <span class="lby-avatar-hint">✎</span>
+        </div>
+        <input class="lby-callsign" id="callsignInput" maxlength="14" placeholder="CALLSIGN" spellcheck="false" autocomplete="off"/>
+        <div class="lby-rank-badge" id="pilotRank">◆ RECRUIT</div>
+        <div class="lby-pilot-stats">
+          <div class="lby-pstat"><span class="lby-pstat-lbl">BEST SCORE</span><span class="lby-pstat-val" id="pBestScore">0</span></div>
+          <div class="lby-pstat"><span class="lby-pstat-lbl">TOP WAVE</span><span class="lby-pstat-val" id="pBestWave">0</span></div>
+          <div class="lby-pstat"><span class="lby-pstat-lbl">KILLS</span><span class="lby-pstat-val" id="pTotalKills">0</span></div>
+        </div>
+        <div class="lby-games" id="pilotGames">0 MISSIONS</div>
+      </div>
+
+      <!-- SHIP PROFILE CARD -->
+      <div id="lbyShipCard">
+        <div class="lby-card-title">SPACECRAFT</div>
+        <canvas id="lbyShipCanvas" width="60" height="70"></canvas>
+        <div id="lbyShipName">VIPER</div>
+        <div id="lbyShipType">BALANCED</div>
+        <div class="lby-ship-bars">
+          <div class="lby-sbar-row"><span class="lby-sbar-lbl">ATK</span><div class="lby-sbar-track"><div class="lby-sbar-fill atk" id="shipBarAtk" style="width:60%"></div></div></div>
+          <div class="lby-sbar-row"><span class="lby-sbar-lbl">SPD</span><div class="lby-sbar-track"><div class="lby-sbar-fill spd" id="shipBarSpd" style="width:60%"></div></div></div>
+          <div class="lby-sbar-row"><span class="lby-sbar-lbl">DEF</span><div class="lby-sbar-track"><div class="lby-sbar-fill def" id="shipBarDef" style="width:60%"></div></div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- HANGAR + SHOP BUTTONS -->
+    <div id="lbyBtnRow">
+      <div class="lby-action-btn" id="hangarBtn" onclick="openLbyPanel('hangar')">🚀 HANGAR</div>
+      <div class="lby-action-btn" id="shopBtn" onclick="openLbyPanel('shop')">◈ SHOP</div>
+    </div>
+
+    <!-- MISSION MODE -->
+    <div id="lbyModeRow">
+      <div class="mode-btn selected" data-mode="normal" onclick="selectMode('normal')">
+        <div class="mode-icon">🎯</div>
+        <div class="mode-name">NORMAL</div>
+        <div class="mode-diff easy">STANDARD</div>
+        <div class="mode-desc">10 Waves</div>
+      </div>
+      <div class="mode-btn" data-mode="survival" onclick="selectMode('survival')">
+        <div class="mode-icon">🌊</div>
+        <div class="mode-name">SURVIVAL</div>
+        <div class="mode-diff hard">HARD</div>
+        <div class="mode-desc">Endless</div>
+      </div>
+      <div class="mode-btn" data-mode="blitz" onclick="selectMode('blitz')">
+        <div class="mode-icon">⚡</div>
+        <div class="mode-name">BLITZ</div>
+        <div class="mode-diff medium">2× SCORE</div>
+        <div class="mode-desc">Speed Run</div>
+      </div>
+    </div>
+
+    <!-- LAUNCH -->
+    <div id="lbyLaunchWrap">
+      <button id="lobbyLaunchBtn" onclick="launchFromLobby()">▶ &nbsp;LAUNCH MISSION</button>
+    </div>
+
   </div>
 
+  <!-- HANGAR / SHOP PANEL (fullscreen overlay) -->
+  <div id="lbyPanel">
+    <div id="lbyPanelHeader">
+      <div id="lbyPanelTitle">HANGAR</div>
+      <div id="lbyPanelClose" onclick="closeLbyPanel()">✕</div>
+    </div>
+    <div id="lbyPanelBody">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- START (hidden, kept for JS references) -->
+  <div id="startScreen" style="display:none;"></div>
+
   <!-- UI OVERLAY -->
-  <div id="ui">
+  <div id="ui" style="visibility:hidden;">
     <div id="topHUD">
       <div class="corner-l"></div>
       <div class="corner-r"></div>
@@ -85,13 +167,13 @@
   </div>
 
   <!-- MINIMAP -->
-  <div id="minimap">
+  <div id="minimap" style="visibility:hidden;">
     <canvas id="mmcv" width="75" height="75"></canvas>
     <div id="radarSweep"></div>
   </div>
 
   <!-- CONTROLS -->
-  <div id="ctrl">
+  <div id="ctrl" style="visibility:hidden;">
     <div id="joyWrap">
       <div id="joyBase">
         <div id="joyCross"></div>
@@ -160,7 +242,6 @@
     <div id="pauseTitle">PAUSED</div>
     <div class="mSep"></div>
     <div class="mBtn" onclick="togglePause()">▶ &nbsp;RESUME</div>
-    <div class="mBtn" style="color:var(--gold);border-color:rgba(255,204,0,0.3)" onclick="openShop()">🛒 &nbsp;WEAPON SHOP</div>
     <div class="mBtn" onclick="openSettings()">⚙ &nbsp;SETTINGS</div>
     <div class="mBtn" onclick="restartGame()">↺ &nbsp;RESTART</div>
     <div class="mSep"></div>
@@ -292,13 +373,78 @@
 
   <div id="toast"></div>
 
-  <!-- LOADING -->
+  <!-- BLACK COVER: hides game canvas until lobby is ready -->
+  <div id="blackCover" style="position:fixed;inset:0;background:#000;z-index:199;pointer-events:none;"></div>
+
+  <!-- LOADING / LOGO SCREEN -->
   <div id="loading">
-    <div id="loadTitle">EXOMNIA AIRCRAFT</div>
-    <div id="loadSub2">DEEP SPACE DEFENSE</div>
-    <div id="lbar"><div id="lfill"></div></div>
-    <div id="lsub">INITIALIZING COMBAT SYSTEMS</div>
-    <div class="ldots"><div class="ldot"></div><div class="ldot"></div><div class="ldot"></div></div>
+    <!-- corner brackets -->
+    <div class="load-bracket tl"></div>
+    <div class="load-bracket tr"></div>
+    <div class="load-bracket bl"></div>
+    <div class="load-bracket br"></div>
+    <!-- scanline -->
+    <div id="loadScanline"></div>
+
+    <!-- LOGO -->
+    <div id="logoWrap">
+      <div id="studioTag">DEEP SPACE COMMAND</div>
+
+      <!-- Animated ship icon -->
+      <svg id="logoShip" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="hullG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0a3060"/>
+            <stop offset="100%" stop-color="#020f28"/>
+          </linearGradient>
+          <linearGradient id="glowG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(0,229,255,0.0)"/>
+            <stop offset="100%" stop-color="rgba(0,229,255,0.9)"/>
+          </linearGradient>
+          <filter id="sf">
+            <feGaussianBlur stdDeviation="2.5" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- engine glow -->
+        <ellipse cx="40" cy="88" rx="10" ry="12" fill="rgba(0,100,255,0.6)" filter="url(#sf)"/>
+        <ellipse cx="40" cy="88" rx="5" ry="7" fill="rgba(120,220,255,0.9)"/>
+        <!-- hull -->
+        <path d="M40,4 C55,22 57,42 50,72 L30,72 C23,42 25,22 40,4 Z" fill="url(#hullG)" stroke="rgba(0,229,255,0.7)" stroke-width="0.8"/>
+        <!-- cockpit glow -->
+        <ellipse cx="40" cy="26" rx="6" ry="7" fill="rgba(0,229,255,0.85)" filter="url(#sf)"/>
+        <ellipse cx="40" cy="25" rx="3.5" ry="4.5" fill="rgba(200,240,255,0.95)"/>
+        <!-- left wing -->
+        <path d="M30,40 L8,70 L22,68 L32,52 Z" fill="#071830" stroke="rgba(0,229,255,0.4)" stroke-width="0.6"/>
+        <!-- right wing -->
+        <path d="M50,40 L72,70 L58,68 L48,52 Z" fill="#071830" stroke="rgba(0,229,255,0.4)" stroke-width="0.6"/>
+        <!-- wing accents -->
+        <line x1="30" y1="40" x2="10" y2="68" stroke="rgba(0,229,255,0.3)" stroke-width="0.5"/>
+        <line x1="50" y1="40" x2="70" y2="68" stroke="rgba(0,229,255,0.3)" stroke-width="0.5"/>
+        <!-- spine -->
+        <line x1="40" y1="6" x2="40" y2="70" stroke="rgba(0,229,255,0.4)" stroke-width="0.7"/>
+      </svg>
+
+      <!-- Hex ring decoration -->
+      <div id="logoHex">
+        <div class="logo-hex-ring"></div>
+        <div class="logo-hex-ring"></div>
+        <div class="logo-hex-ring"></div>
+      </div>
+
+      <div id="logoBadge">DEEP SPACE DEFENSE SYSTEM</div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div id="loadBottom">
+      <div id="loadStatusRow">
+        <div id="lsub">INITIALIZING...</div>
+        <div id="loadPct">0%</div>
+      </div>
+      <div id="lbar"><div id="lfill"></div></div>
+    </div>
+
+    <div id="loadVer">v2.0 · BUILD 2026</div>
   </div>
 </div>
 <script src="{{ url_for('static', filename='Game/game.js') }}"></script>
