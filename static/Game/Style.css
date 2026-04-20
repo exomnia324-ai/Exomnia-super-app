@@ -61,7 +61,7 @@ body{
   touch-action:none;
   -webkit-touch-callout:none;
 }
-#cv{position:absolute;inset:0;width:100%;height:100%;display:block;will-change:transform;image-rendering:pixelated;}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;will-change:transform;image-rendering:pixelated;visibility:hidden;}
 #ui{position:absolute;inset:0;pointer-events:none;z-index:10;will-change:contents;}
 
 /* ─── SCANLINES + VIGNETTE ─── */
@@ -179,20 +179,6 @@ body{
   position:absolute;top:64px;right:8px;
   display:flex;flex-direction:column;gap:5px;z-index:20;
   pointer-events:auto;
-  max-height: 550px;
-  overflow-y: auto;
-  padding-right: 5px;
-  scrollbar-width: 45px;
-}
-#weaponHUD::-webkit-scrollbar {
-  width: 4px;
-}
-#weaponHUD::-webkit-scrollbar-thumb {
-  background: rgba(0, 229, 255, 0.3);
-  border-radius: 10px;
-}
-#weaponHUD::-webkit-scrollbar-track {
-  background: transparent;
 }
 .wslot{
   width:52px;height:52px;border-radius:8px;
@@ -307,13 +293,13 @@ body{
 /* ─── MINIMAP ─── */
 #minimap{
   position:absolute;
-  top:calc(110x + env(safe-area-inset-top, 0px));
+  bottom:calc(142px + env(safe-area-inset-bottom, 0px));
   left:10px;
   width:75px;height:75px;z-index:20;
   border:1px solid rgba(0,229,255,0.35);border-radius:3px;
   background:rgba(0,5,15,0.9);overflow:hidden;
 }
-#minimap::before{content:'RADAR';position:absolute;top:10px;left:80%;transform:translateX(-50%);
+#minimap::before{content:'RADAR';position:absolute;top:2px;left:50%;transform:translateX(-50%);
   font-size:6px;letter-spacing:2px;color:rgba(0,229,255,0.75);font-family:'Courier New',monospace;font-weight:700;z-index:1;}
 #minimap canvas{width:100%;height:100%;}
 /* radar sweep */
@@ -651,28 +637,211 @@ body{
 .shint{font-size:clamp(8px,1.8vw,10px);letter-spacing:2px;color:rgba(0,229,255,0.18);
   font-family:'Courier New',monospace;text-align:center;}
 
-/* ─── LOADING ─── */
-#loading{position:absolute;inset:0;background:var(--bg);z-index:200;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
-  transition:opacity .7s;}
+/* ─── LOADING / LOGO SCREEN ─── */
+#loading{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 45%,#000d2a 0%,#000308 60%,#000 100%);
+  z-index:200;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0;overflow:hidden;
+  transition:opacity 1s ease;
+}
 #loading.out{opacity:0;pointer-events:none;}
-#loading::before{content:'';position:absolute;inset:0;
-  background:radial-gradient(ellipse at center,rgba(0,50,100,0.15) 0%,transparent 60%);}
-#loadTitle{font-family:'Courier New',monospace;font-weight:900;font-size:clamp(14px,4.5vw,24px);
-  letter-spacing:7px;color:var(--c1);text-shadow:var(--glow1);}
-#loadSub2{font-size:9px;letter-spacing:3px;color:rgba(0,229,255,0.25);font-family:'Courier New',monospace;}
-#lbar{width:min(280px,70vw);height:2px;background:rgba(0,229,255,0.07);border-radius:1px;overflow:hidden;
-  border:1px solid rgba(0,229,255,0.1);}
-#lfill{height:100%;background:linear-gradient(90deg,#003388,var(--c1));box-shadow:var(--glow1);animation:lLoad 1.85s ease forwards;}
-@keyframes lLoad{0%{width:0}100%{width:100%}}
-#lsub{font-size:9px;letter-spacing:3px;color:rgba(0,229,255,0.3);animation:blink 1.1s step-end infinite;
-  font-family:'Courier New',monospace;}
-@keyframes blink{0%,100%{opacity:1;}50%{opacity:0;}}
-.ldots{display:flex;gap:6px;margin-top:4px;}
-.ldot{width:4px;height:4px;border-radius:50%;background:var(--c1);animation:ldotAnim 1.4s ease infinite;}
-.ldot:nth-child(2){animation-delay:.18s;}
-.ldot:nth-child(3){animation-delay:.36s;}
-@keyframes ldotAnim{0%,80%,100%{transform:scale(0.4);opacity:.3}40%{transform:scale(1);opacity:1}}
+
+/* starfield behind logo */
+#loading::before{
+  content:'';position:absolute;inset:0;
+  background-image:
+    radial-gradient(1px 1px at 15% 20%,rgba(255,255,255,0.8) 0%,transparent 100%),
+    radial-gradient(1px 1px at 35% 10%,rgba(255,255,255,0.6) 0%,transparent 100%),
+    radial-gradient(1.5px 1.5px at 55% 30%,rgba(0,229,255,0.9) 0%,transparent 100%),
+    radial-gradient(1px 1px at 72% 15%,rgba(255,255,255,0.7) 0%,transparent 100%),
+    radial-gradient(1px 1px at 88% 40%,rgba(255,255,255,0.5) 0%,transparent 100%),
+    radial-gradient(1px 1px at 20% 65%,rgba(255,255,255,0.6) 0%,transparent 100%),
+    radial-gradient(1.5px 1.5px at 45% 75%,rgba(0,229,255,0.7) 0%,transparent 100%),
+    radial-gradient(1px 1px at 80% 80%,rgba(255,255,255,0.5) 0%,transparent 100%),
+    radial-gradient(1px 1px at 60% 90%,rgba(255,255,255,0.4) 0%,transparent 100%),
+    radial-gradient(1px 1px at 10% 85%,rgba(255,255,255,0.6) 0%,transparent 100%);
+  pointer-events:none;
+  animation:twinkleLoad 3s ease-in-out infinite alternate;
+}
+@keyframes twinkleLoad{0%{opacity:.5;}100%{opacity:1;}}
+
+/* center glow orb */
+#loading::after{
+  content:'';position:absolute;
+  width:min(320px,80vw);height:min(320px,80vw);
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(0,80,180,0.18) 0%,rgba(0,40,100,0.08) 50%,transparent 70%);
+  pointer-events:none;
+  animation:orbPulse 2.5s ease-in-out infinite;
+}
+@keyframes orbPulse{0%,100%{transform:scale(0.9);opacity:.6;}50%{transform:scale(1.1);opacity:1;}}
+
+/* ── LOGO WRAP ── */
+#logoWrap{
+  display:flex;flex-direction:column;align-items:center;
+  gap:6px;margin-bottom:32px;
+  position:relative;z-index:2;
+  animation:logoEntry 1s cubic-bezier(0.22,1,0.36,1) forwards;
+  opacity:0;
+}
+@keyframes logoEntry{
+  0%{opacity:0;transform:translateY(30px) scale(0.92);}
+  100%{opacity:1;transform:translateY(0) scale(1);}
+}
+
+/* Ship SVG logo */
+#logoShip{
+  width:clamp(70px,18vw,110px);
+  filter:drop-shadow(0 0 18px rgba(0,229,255,0.9)) drop-shadow(0 0 40px rgba(0,229,255,0.4));
+  animation:shipHover 3s ease-in-out infinite, logoEntry 1s cubic-bezier(0.22,1,0.36,1) forwards;
+  opacity:0;margin-bottom:4px;
+}
+@keyframes shipHover{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+
+/* Logo hex badge */
+#logoHex{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  margin-bottom:2px;
+}
+.logo-hex-ring{
+  position:absolute;
+  border-radius:50%;border:1px solid rgba(0,229,255,0.25);
+  animation:hexSpin 8s linear infinite;
+}
+.logo-hex-ring:nth-child(1){width:130px;height:130px;}
+.logo-hex-ring:nth-child(2){width:108px;height:108px;animation-direction:reverse;animation-duration:6s;border-color:rgba(0,150,255,0.15);}
+.logo-hex-ring:nth-child(3){width:86px;height:86px;border-style:dashed;border-color:rgba(0,229,255,0.1);}
+@keyframes hexSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+
+/* Studio tag */
+#studioTag{
+  font-family:'Courier New',monospace;font-size:clamp(7px,1.8vw,9px);
+  letter-spacing:8px;color:rgba(0,229,255,0.3);
+  margin-bottom:6px;
+  animation:fadeIn 1s ease .3s forwards;opacity:0;
+}
+
+/* Main title */
+#logoTitle{
+  font-family:'Courier New',monospace;font-weight:900;
+  font-size:clamp(32px,10vw,64px);
+  letter-spacing:6px;color:#fff;
+  text-shadow:
+    0 0 20px rgba(0,229,255,1),
+    0 0 40px rgba(0,229,255,0.6),
+    0 0 80px rgba(0,229,255,0.2);
+  line-height:1;
+  animation:titleFlicker 4s ease 0.8s infinite;
+}
+@keyframes titleFlicker{
+  0%,92%,100%{opacity:1;}
+  93%{opacity:.85;}94%{opacity:1;}96%{opacity:.9;}97%{opacity:1;}
+}
+
+/* Sub title */
+#logoSub{
+  font-family:'Courier New',monospace;font-size:clamp(8px,2.2vw,12px);
+  letter-spacing:7px;color:rgba(0,229,255,0.45);
+  margin-top:4px;
+  animation:fadeIn 1s ease .6s forwards;opacity:0;
+}
+
+/* Edition badge */
+#logoBadge{
+  margin-top:10px;
+  display:flex;align-items:center;gap:8px;
+  background:rgba(0,229,255,0.06);
+  border:1px solid rgba(0,229,255,0.2);
+  border-radius:3px;padding:4px 16px;
+  font-family:'Courier New',monospace;font-size:clamp(7px,1.8vw,9px);
+  letter-spacing:4px;color:rgba(0,229,255,0.5);
+  animation:fadeIn 1s ease .9s forwards;opacity:0;
+}
+#logoBadge::before,#logoBadge::after{content:'◆';font-size:5px;color:var(--c1);}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── PROGRESS AREA ── */
+#loadBottom{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  position:relative;z-index:2;
+  width:min(300px,75vw);
+  animation:fadeIn 1s ease .4s forwards;opacity:0;
+}
+
+#lbar{
+  width:100%;height:2px;
+  background:rgba(0,229,255,0.07);
+  border-radius:1px;overflow:hidden;
+  border:1px solid rgba(0,229,255,0.1);
+  position:relative;
+}
+#lbar::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(0,229,255,0.3),transparent);
+  animation:lScan 1.8s ease-in-out infinite;
+}
+@keyframes lScan{0%{transform:translateX(-100%);}100%{transform:translateX(100%);}}
+#lfill{
+  height:100%;
+  background:linear-gradient(90deg,#003388,#0055cc,var(--c1));
+  box-shadow:0 0 10px var(--c1),0 0 20px rgba(0,229,255,0.4);
+  animation:lLoad 2.4s cubic-bezier(0.4,0,0.2,1) forwards;
+  width:0;
+}
+@keyframes lLoad{0%{width:0;}60%{width:75%;}85%{width:92%;}100%{width:100%;}}
+
+/* status row */
+#loadStatusRow{
+  display:flex;align-items:center;justify-content:space-between;
+  width:100%;
+}
+#lsub{
+  font-size:8px;letter-spacing:2px;color:rgba(0,229,255,0.35);
+  font-family:'Courier New',monospace;
+  animation:statusCycle 2.4s step-end forwards;
+}
+#loadPct{
+  font-size:8px;letter-spacing:1px;color:rgba(0,229,255,0.4);
+  font-family:'Courier New',monospace;font-weight:700;
+}
+
+/* corner brackets */
+.load-bracket{
+  position:absolute;width:14px;height:14px;
+  border-color:rgba(0,229,255,0.3);border-style:solid;
+}
+.load-bracket.tl{top:8px;left:8px;border-width:1px 0 0 1px;}
+.load-bracket.tr{top:8px;right:8px;border-width:1px 1px 0 0;}
+.load-bracket.bl{bottom:8px;left:8px;border-width:0 0 1px 1px;}
+.load-bracket.br{bottom:8px;right:8px;border-width:0 1px 1px 0;}
+
+/* version */
+#loadVer{
+  position:absolute;bottom:16px;
+  font-size:7px;letter-spacing:3px;color:rgba(0,229,255,0.15);
+  font-family:'Courier New',monospace;
+  z-index:2;
+}
+
+/* Scan line overlay */
+#loadScanline{
+  position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px);
+}
+/* horizontal scan beam */
+#loadScanline::after{
+  content:'';position:absolute;left:0;right:0;height:80px;
+  background:linear-gradient(180deg,transparent,rgba(0,229,255,0.03),transparent);
+  animation:scanBeam 4s linear infinite;
+}
+@keyframes scanBeam{0%{top:-80px;}100%{top:100%;}}
+
+#loadTitle{display:none;}
+#loadSub2{display:none;}
+.ldots{display:none;}
 
 /* ─── SETTINGS PANEL ─── */
 #settingsPanel{
@@ -863,9 +1032,318 @@ body{
 }
 .shopCloseBtn:active{background:rgba(0,229,255,0.18);}
 
+.floatTxt{position:absolute;pointer-events:none;font-family:'Courier New',monospace;
   font-weight:700;font-size:12px;z-index:30;
   animation:fUp .9s ease forwards;text-shadow:0 0 10px currentColor;}
 @keyframes fUp{0%{opacity:1;transform:translateY(0) scale(1);}100%{opacity:0;transform:translateY(-58px) scale(.7);}}
+
+/* ─── LOBBY SCREEN ─── */
+#lobbyScreen{
+  position:absolute;inset:0;
+  background:#000510;
+  z-index:125;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  overflow-y:auto;overflow-x:hidden;
+  padding:0 0 20px;
+  gap:0;
+  opacity:0;
+  transition:opacity 0.35s ease;
+}
+#lobbyScreen.visible{opacity:1;}
+#lobbyScreen.gone{display:none;}
+
+/* ── NEW LOBBY TOP BAR ── */
+#lbyTopBar{
+  width:100%;padding:10px 14px 8px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(180deg,rgba(0,4,18,0.99) 0%,rgba(0,4,18,0.7) 100%);
+  border-bottom:1px solid rgba(0,229,255,0.1);
+  position:relative;z-index:2;flex-shrink:0;
+}
+#lbyTopBar::after{content:'';position:absolute;bottom:0;left:8%;right:8%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,229,255,0.4),transparent);}
+.lby-logo-text{
+  font-family:'Courier New',monospace;font-weight:900;
+  font-size:clamp(12px,3.5vw,18px);letter-spacing:5px;color:var(--c1);
+  text-shadow:0 0 20px var(--c1),0 0 40px rgba(0,229,255,0.3);
+}
+.lby-logo-sub{font-size:7px;letter-spacing:4px;color:rgba(0,229,255,0.3);font-family:'Courier New',monospace;margin-top:1px;}
+
+/* coin display in top bar */
+#lbyCoinDisplay{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(255,204,0,0.06);border:1px solid rgba(255,204,0,0.25);
+  border-radius:4px;padding:5px 10px;
+  font-family:'Courier New',monospace;font-weight:900;
+  font-size:clamp(12px,3.5vw,16px);letter-spacing:2px;color:var(--gold);
+  text-shadow:0 0 10px rgba(255,204,0,0.6);
+}
+#lbyCoinDisplay::before{content:'◈';font-size:10px;}
+
+/* ── MAIN CARD ROW ── */
+#lbyMainRow{
+  width:100%;max-width:500px;
+  display:flex;gap:10px;padding:12px 12px 0;
+  position:relative;z-index:1;flex-shrink:0;
+}
+
+/* ── PILOT CARD ── */
+#lbyPilotCard{
+  flex:1;min-width:0;
+  background:linear-gradient(145deg,rgba(0,12,34,0.97),rgba(0,5,18,0.99));
+  border:1px solid rgba(0,229,255,0.18);border-radius:10px;
+  padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;
+  position:relative;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);
+}
+#lbyPilotCard::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,229,255,0.4),transparent);}
+.lby-card-title{font-size:7px;letter-spacing:4px;color:rgba(0,229,255,0.4);font-family:'Courier New',monospace;font-weight:700;margin-bottom:2px;}
+.lby-avatar{
+  width:50px;height:50px;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#0d2848,#040f20);
+  border:2px solid rgba(0,229,255,0.5);
+  display:flex;align-items:center;justify-content:center;font-size:22px;
+  box-shadow:0 0 16px rgba(0,229,255,0.3);
+  cursor:pointer;transition:all .2s;position:relative;
+  animation:avatarPulse 3s ease infinite;
+}
+.lby-avatar:active{transform:scale(0.88);}
+.lby-avatar-hint{position:absolute;bottom:-1px;right:-1px;width:14px;height:14px;border-radius:50%;
+  background:#00e5ff;display:flex;align-items:center;justify-content:center;font-size:8px;color:#000;font-weight:900;}
+.lby-callsign{
+  font-family:'Courier New',monospace;font-weight:900;font-size:clamp(11px,3vw,14px);
+  color:#fff;letter-spacing:2px;border:none;background:transparent;outline:none;
+  width:100%;text-align:center;padding:2px 0;
+  border-bottom:1px solid rgba(0,229,255,0.15);text-shadow:0 0 8px rgba(0,229,255,0.4);
+}
+.lby-callsign::placeholder{color:rgba(0,229,255,0.2);}
+.lby-rank-badge{
+  font-size:7px;letter-spacing:2px;color:var(--gold);font-family:'Courier New',monospace;
+  background:rgba(255,204,0,0.07);border:1px solid rgba(255,204,0,0.2);
+  padding:2px 7px;border-radius:2px;text-shadow:0 0 6px rgba(255,204,0,0.4);white-space:nowrap;
+}
+.lby-pilot-stats{width:100%;display:flex;flex-direction:column;gap:3px;margin-top:2px;}
+.lby-pstat{display:flex;justify-content:space-between;align-items:center;
+  font-family:'Courier New',monospace;font-size:8px;letter-spacing:1px;}
+.lby-pstat-lbl{color:rgba(0,229,255,0.35);}
+.lby-pstat-val{color:var(--c1);font-weight:900;}
+.lby-games{font-size:7px;letter-spacing:2px;color:rgba(0,229,255,0.22);font-family:'Courier New',monospace;}
+
+/* ── SHIP PROFILE CARD ── */
+#lbyShipCard{
+  flex:1;min-width:0;
+  background:linear-gradient(145deg,rgba(0,12,34,0.97),rgba(0,5,18,0.99));
+  border:1px solid rgba(0,229,255,0.18);border-radius:10px;
+  padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;
+  position:relative;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);
+}
+#lbyShipCard::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,229,255,0.4),transparent);}
+#lbyShipCanvas{width:60px;height:70px;display:block;}
+#lbyShipName{font-family:'Courier New',monospace;font-weight:900;font-size:clamp(11px,3vw,14px);
+  color:var(--c1);letter-spacing:3px;text-shadow:0 0 10px var(--c1);}
+#lbyShipType{font-size:6px;letter-spacing:2px;color:rgba(0,229,255,0.3);font-family:'Courier New',monospace;
+  background:rgba(0,229,255,0.05);border:1px solid rgba(0,229,255,0.12);padding:1px 6px;border-radius:2px;}
+.lby-ship-bars{width:100%;display:flex;flex-direction:column;gap:4px;margin-top:2px;}
+.lby-sbar-row{display:flex;align-items:center;gap:5px;}
+.lby-sbar-lbl{font-size:6px;letter-spacing:1px;color:rgba(0,229,255,0.35);font-family:'Courier New',monospace;width:18px;text-align:right;}
+.lby-sbar-track{flex:1;height:4px;background:rgba(0,229,255,0.07);border-radius:2px;overflow:hidden;}
+.lby-sbar-fill{height:100%;border-radius:2px;transition:width .5s ease;}
+.lby-sbar-fill.atk{background:linear-gradient(90deg,#ff4422,#ff7744);box-shadow:0 0 5px rgba(255,68,34,0.6);}
+.lby-sbar-fill.spd{background:linear-gradient(90deg,#0088ff,#00e5ff);box-shadow:0 0 5px rgba(0,229,255,0.6);}
+.lby-sbar-fill.def{background:linear-gradient(90deg,#0044cc,#44aaff);box-shadow:0 0 5px rgba(68,170,255,0.6);}
+
+/* ── BUTTON ROW ── */
+#lbyBtnRow{
+  width:100%;max-width:500px;
+  display:flex;gap:8px;padding:10px 12px 0;
+  position:relative;z-index:1;flex-shrink:0;
+}
+.lby-action-btn{
+  flex:1;padding:10px 0;border-radius:7px;
+  font-family:'Courier New',monospace;font-weight:700;
+  font-size:clamp(9px,2.5vw,12px);letter-spacing:4px;
+  cursor:pointer;transition:all .18s;text-align:center;
+  position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  touch-action:manipulation;
+}
+.lby-action-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:50%;
+  background:linear-gradient(180deg,rgba(255,255,255,0.05),transparent);}
+#hangarBtn{
+  color:var(--c1);border:1px solid rgba(0,229,255,0.35);
+  background:linear-gradient(145deg,rgba(0,229,255,0.07),rgba(0,229,255,0.02));
+}
+#hangarBtn:active{background:rgba(0,229,255,0.16);box-shadow:0 0 18px rgba(0,229,255,0.3);}
+#shopBtn{
+  color:var(--gold);border:1px solid rgba(255,204,0,0.35);
+  background:linear-gradient(145deg,rgba(255,204,0,0.07),rgba(255,204,0,0.02));
+}
+#shopBtn:active{background:rgba(255,204,0,0.14);box-shadow:0 0 18px rgba(255,204,0,0.3);}
+
+/* ── MODE ROW ── */
+#lbyModeRow{
+  width:100%;max-width:500px;
+  display:flex;gap:8px;padding:10px 12px 0;
+  position:relative;z-index:1;flex-shrink:0;
+}
+
+/* ── LAUNCH BTN ── */
+#lbyLaunchWrap{
+  width:100%;max-width:500px;
+  padding:10px 12px 0;
+  position:relative;z-index:1;flex-shrink:0;
+}
+
+/* ── HANGAR / SHOP PANEL ── */
+#lbyPanel{
+  position:fixed;inset:0;z-index:130;
+  background:rgba(0,1,10,0.96);
+  display:none;flex-direction:column;
+  backdrop-filter:blur(6px);
+}
+#lbyPanel.open{display:flex;}
+#lbyPanelHeader{
+  padding:14px 14px 12px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid rgba(0,229,255,0.12);
+  background:rgba(0,4,18,0.98);flex-shrink:0;
+}
+#lbyPanelTitle{
+  font-family:'Courier New',monospace;font-weight:900;
+  font-size:clamp(13px,3.5vw,18px);letter-spacing:5px;color:var(--c1);
+  text-shadow:0 0 16px var(--c1);
+}
+#lbyPanelClose{
+  width:34px;height:34px;border-radius:5px;
+  border:1px solid rgba(0,229,255,0.25);
+  background:rgba(0,229,255,0.05);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;color:var(--c1);cursor:pointer;
+  touch-action:manipulation;
+}
+#lbyPanelClose:active{background:rgba(0,229,255,0.18);}
+#lbyPanelBody{
+  flex:1;overflow-y:auto;
+  padding:14px 12px;
+  display:flex;flex-direction:column;gap:10px;
+}
+
+/* Hangar grid */
+#hangarGrid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+}
+.hgr-card{
+  border-radius:10px;padding:10px 8px 8px;text-align:center;
+  border:1px solid rgba(0,229,255,0.12);
+  background:linear-gradient(145deg,rgba(0,11,30,0.97),rgba(0,4,16,0.99));
+  cursor:pointer;transition:all .2s;position:relative;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  touch-action:manipulation;
+}
+.hgr-card.hgr-selected{
+  border-color:var(--c1);
+  box-shadow:0 0 20px rgba(0,229,255,0.3),inset 0 0 14px rgba(0,229,255,0.06);
+  background:linear-gradient(145deg,rgba(0,20,50,0.98),rgba(0,8,28,1));
+}
+.hgr-card.hgr-selected::after{
+  content:'✔ ACTIVE';position:absolute;bottom:5px;left:50%;transform:translateX(-50%);
+  font-size:5px;letter-spacing:2px;color:var(--c1);font-family:'Courier New',monospace;font-weight:900;
+  text-shadow:0 0 6px var(--c1);white-space:nowrap;
+}
+.hgr-card:active{transform:scale(0.92);}
+.hgr-canvas{width:54px;height:64px;display:block;}
+.hgr-name{font-family:'Courier New',monospace;font-weight:900;font-size:clamp(8px,2.2vw,10px);letter-spacing:2px;color:var(--c1);}
+.hgr-type{font-size:6px;letter-spacing:1px;color:rgba(0,229,255,0.3);font-family:'Courier New',monospace;
+  background:rgba(0,229,255,0.05);border:1px solid rgba(0,229,255,0.1);padding:1px 5px;border-radius:2px;}
+
+/* Shop items */
+#shopGrid{
+  display:flex;flex-direction:column;gap:10px;
+}
+.shop-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px;border-radius:10px;
+  border:1px solid rgba(255,204,0,0.15);
+  background:linear-gradient(135deg,rgba(0,12,30,0.97),rgba(0,5,18,0.99));
+  position:relative;overflow:hidden;
+  touch-action:manipulation;
+}
+.shop-item::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,204,0,0.3),transparent);}
+.shop-item.owned{border-color:rgba(0,229,255,0.2);}
+.shop-item.owned::before{background:linear-gradient(90deg,transparent,rgba(0,229,255,0.3),transparent);}
+.shop-item-canvas{width:50px;height:60px;flex-shrink:0;display:block;}
+.shop-item-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}
+.shop-item-name{font-family:'Courier New',monospace;font-weight:900;font-size:clamp(11px,3vw,14px);color:#fff;letter-spacing:2px;}
+.shop-item-type{font-size:6px;letter-spacing:2px;color:rgba(0,229,255,0.3);font-family:'Courier New',monospace;
+  background:rgba(0,229,255,0.05);border:1px solid rgba(0,229,255,0.1);padding:1px 6px;border-radius:2px;width:fit-content;}
+.shop-item-desc{font-size:8px;letter-spacing:.5px;color:rgba(0,229,255,0.4);font-family:'Courier New',monospace;line-height:1.5;}
+.shop-item-bars{display:flex;flex-direction:column;gap:3px;margin-top:2px;}
+.shop-bar-r{display:flex;align-items:center;gap:4px;}
+.shop-bar-l{font-size:5px;letter-spacing:1px;color:rgba(0,229,255,0.3);font-family:'Courier New',monospace;width:16px;text-align:right;}
+.shop-bar-t{flex:1;height:3px;background:rgba(0,229,255,0.07);border-radius:1px;overflow:hidden;}
+.shop-bar-f{height:100%;border-radius:1px;}
+.shop-bar-f.atk{background:linear-gradient(90deg,#ff4422,#ff7744);}
+.shop-bar-f.spd{background:linear-gradient(90deg,#0088ff,#00e5ff);}
+.shop-bar-f.def{background:linear-gradient(90deg,#0044cc,#44aaff);}
+.shop-buy-btn{
+  flex-shrink:0;padding:8px 12px;border-radius:6px;
+  font-family:'Courier New',monospace;font-weight:700;font-size:clamp(9px,2.5vw,11px);
+  letter-spacing:2px;cursor:pointer;transition:all .18s;text-align:center;
+  touch-action:manipulation;display:flex;flex-direction:column;align-items:center;gap:2px;
+}
+.shop-buy-btn.buy{
+  color:var(--gold);border:1px solid rgba(255,204,0,0.4);
+  background:linear-gradient(145deg,rgba(255,204,0,0.1),rgba(255,204,0,0.02));
+}
+.shop-buy-btn.buy:active{background:rgba(255,204,0,0.2);}
+.shop-buy-btn.owned-badge{
+  color:var(--c1);border:1px solid rgba(0,229,255,0.25);
+  background:rgba(0,229,255,0.04);cursor:default;
+}
+.shop-price{font-size:10px;font-weight:900;letter-spacing:1px;}
+.shop-price-lbl{font-size:6px;letter-spacing:1px;opacity:.6;}
+
+/* mode buttons (reused) */
+.mode-btn{
+  flex:1;padding:10px 5px 9px;border-radius:8px;text-align:center;
+  cursor:pointer;position:relative;overflow:hidden;
+  border:1px solid rgba(0,229,255,0.1);
+  background:linear-gradient(145deg,rgba(0,10,28,0.97),rgba(0,4,15,0.99));
+  transition:all .2s;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.mode-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,229,255,0.15),transparent);}
+.mode-btn.selected{border-color:var(--c1);box-shadow:0 0 20px rgba(0,229,255,0.22);}
+.mode-btn:active{transform:scale(0.93);}
+.mode-icon{font-size:20px;line-height:1;margin-bottom:3px;}
+.mode-name{font-family:'Courier New',monospace;font-weight:900;font-size:clamp(7px,2vw,9px);letter-spacing:2px;color:var(--c1);}
+.mode-diff{font-size:6px;letter-spacing:1px;font-family:'Courier New',monospace;margin-top:2px;padding:1px 5px;border-radius:2px;}
+.mode-diff.easy{color:#00ff88;background:rgba(0,255,136,.07);border:1px solid rgba(0,255,136,.15);}
+.mode-diff.hard{color:#ff6644;background:rgba(255,100,68,.07);border:1px solid rgba(255,100,68,.15);}
+.mode-diff.medium{color:var(--gold);background:rgba(255,204,0,.07);border:1px solid rgba(255,204,0,.15);}
+.mode-desc{font-size:6px;letter-spacing:.5px;color:rgba(0,229,255,0.25);font-family:'Courier New',monospace;margin-top:2px;}
+
+/* Launch button */
+#lobbyLaunchBtn{
+  width:100%;padding:16px 0;border-radius:8px;
+  border:2px solid rgba(0,229,255,0.8);
+  background:linear-gradient(135deg,rgba(0,229,255,0.1),rgba(0,100,255,0.06));
+  font-family:'Courier New',monospace;font-weight:700;
+  font-size:clamp(12px,3.5vw,16px);letter-spacing:7px;
+  color:var(--c1);cursor:pointer;pointer-events:auto;
+  animation:launchPulse 2s ease infinite;transition:all .2s;
+  position:relative;overflow:hidden;
+}
+@keyframes launchPulse{
+  0%,100%{box-shadow:0 0 18px rgba(0,229,255,0.25);}
+  50%{box-shadow:0 0 40px rgba(0,229,255,0.6),0 0 70px rgba(0,229,255,0.15);}
+}
+#lobbyLaunchBtn::before{content:'';position:absolute;top:0;left:0;right:0;height:50%;
+  background:linear-gradient(180deg,rgba(255,255,255,0.06),transparent);}
+#lobbyLaunchBtn:active{background:rgba(0,229,255,0.22);transform:scale(0.98);}
 
 /* pause button */
 #pauseBtn{
