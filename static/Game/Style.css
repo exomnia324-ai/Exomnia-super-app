@@ -179,6 +179,9 @@ body{
   position:absolute;top:64px;right:8px;
   display:flex;flex-direction:column;gap:5px;z-index:20;
   pointer-events:auto;
+max-height:300pc;overflow-y:auto;
+padding --number:5px;
+scrollbar-width: thin;
 }
 .wslot{
   width:52px;height:52px;border-radius:8px;
