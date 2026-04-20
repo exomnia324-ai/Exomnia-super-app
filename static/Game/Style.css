@@ -179,10 +179,10 @@ body{
   position:absolute;top:64px;right:8px;
   display:flex;flex-direction:column;gap:5px;z-index:20;
   pointer-events:auto;
-  max-height: 500px;
+  max-height: 550px;
   overflow-y: auto;
   padding-right: 5px;
-  scrollbar-width: thin;
+  scrollbar-width: 64px;
 }
 #weaponHUD::-webkit-scrollbar {
   width: 4px;
