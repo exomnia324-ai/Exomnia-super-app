@@ -299,7 +299,7 @@ body{
   border:1px solid rgba(0,229,255,0.35);border-radius:3px;
   background:rgba(0,5,15,0.9);overflow:hidden;
 }
-#minimap::before{content:'RADAR';position:absolute;top:2px;left:50%;transform:translateX(-10%);
+#minimap::before{content:'RADAR';position:absolute;top:2px;left:50%;transform:translateX(0%);
   font-size:6px;letter-spacing:2px;color:rgba(0,229,255,0.75);font-family:'Courier New',monospace;font-weight:700;z-index:1;}
 #minimap canvas{width:100%;height:100%;}
 /* radar sweep */
