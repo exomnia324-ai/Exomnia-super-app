@@ -37,7 +37,7 @@ def get_db():
 # ---------- ROUTES ----------
 @app.route('/')
 def home():
-    return send_file('index.html')  
+    return send_file('templates/index.html')  
 
 # ── Ping ──
 @app.route('/api/ping')
