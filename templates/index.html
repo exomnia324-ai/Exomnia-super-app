@@ -33,11 +33,14 @@
       <!-- PILOT CARD -->
       <div id="lbyPilotCard">
         <div class="lby-card-title">PILOT</div>
-        <div class="lby-avatar" id="pilotAvatar" onclick="cyclePilotEmoji()">
+        <div class="lby-avatar" id="pilotAvatar" onclick="openEmojiPicker()">
           <span id="pilotEmoji">🧑‍🚀</span>
           <span class="lby-avatar-hint">✎</span>
         </div>
-        <input class="lby-callsign" id="callsignInput" maxlength="14" placeholder="CALLSIGN" spellcheck="false" autocomplete="off"/>
+        <div style="display:flex;align-items:center;gap:4px;width:100%;">
+          <input class="lby-callsign" id="callsignInput" maxlength="14" placeholder="CALLSIGN" spellcheck="false" autocomplete="off" readonly style="flex:1;cursor:default;"/>
+          <div id="nameEditBtn" onclick="openNameEdit()" style="background:rgba(255,204,0,0.1);border:1px solid rgba(255,204,0,0.35);border-radius:4px;padding:4px 6px;cursor:pointer;font-size:10px;color:#ffcc00;font-family:'Courier New',monospace;white-space:nowrap;">✎ 100◈</div>
+        </div>
         <div class="lby-rank-badge" id="pilotRank">◆ RECRUIT</div>
         <div class="lby-pilot-stats">
           <div class="lby-pstat"><span class="lby-pstat-lbl">BEST SCORE</span><span class="lby-pstat-val" id="pBestScore">0</span></div>
@@ -371,6 +374,31 @@
     <div class="shopCloseBtn" onclick="closeShop()">← BACK TO MISSION</div>
   </div>
 
+  <!-- EMOJI PICKER MODAL -->
+  <div id="emojiPickerModal" style="display:none;position:fixed;inset:0;background:rgba(0,2,10,0.92);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(8px);">
+    <div style="background:linear-gradient(145deg,rgba(0,12,34,0.98),rgba(0,5,18,0.99));border:1px solid rgba(0,229,255,0.25);border-radius:12px;padding:20px;width:min(320px,88vw);display:flex;flex-direction:column;align-items:center;gap:14px;">
+      <div style="font-family:'Courier New',monospace;font-weight:900;font-size:14px;letter-spacing:5px;color:#00e5ff;text-shadow:0 0 15px #00e5ff;">CHOOSE AVATAR</div>
+      <div style="font-size:8px;letter-spacing:3px;color:rgba(0,229,255,0.35);font-family:'Courier New',monospace;">SELECT YOUR PILOT ICON</div>
+      <div id="emojiGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;"></div>
+      <div onclick="closeEmojiPicker()" style="padding:10px 30px;border:1px solid rgba(0,229,255,0.25);border-radius:6px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:4px;color:#00e5ff;cursor:pointer;">CANCEL</div>
+    </div>
+  </div>
+
+  <!-- NAME EDIT MODAL -->
+  <div id="nameEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,2,10,0.92);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(8px);">
+    <div style="background:linear-gradient(145deg,rgba(0,12,34,0.98),rgba(0,5,18,0.99));border:1px solid rgba(255,204,0,0.3);border-radius:12px;padding:24px 20px;width:min(320px,88vw);display:flex;flex-direction:column;align-items:center;gap:14px;">
+      <div style="font-family:'Courier New',monospace;font-weight:900;font-size:14px;letter-spacing:5px;color:#ffcc00;text-shadow:0 0 15px #ffcc00;">CHANGE CALLSIGN</div>
+      <div style="font-size:8px;letter-spacing:2px;color:rgba(255,204,0,0.5);font-family:'Courier New',monospace;">COSTS 100 ◈ COINS</div>
+      <input id="nameEditInput" maxlength="14" placeholder="ENTER CALLSIGN" spellcheck="false" autocomplete="off"
+        style="width:100%;background:rgba(0,0,0,0.5);border:1px solid rgba(255,204,0,0.35);border-radius:6px;padding:10px 12px;font-family:'Courier New',monospace;font-size:14px;font-weight:900;letter-spacing:3px;color:#ffcc00;text-align:center;outline:none;"/>
+      <div id="nameEditCoinsLeft" style="font-size:9px;letter-spacing:2px;color:rgba(255,204,0,0.4);font-family:'Courier New',monospace;"></div>
+      <div style="display:flex;gap:10px;width:100%;">
+        <div onclick="closeNameEdit()" style="flex:1;padding:11px 0;border:1px solid rgba(0,229,255,0.2);border-radius:6px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;color:rgba(0,229,255,0.5);cursor:pointer;text-align:center;">CANCEL</div>
+        <div onclick="confirmNameEdit()" style="flex:1;padding:11px 0;border:1px solid rgba(255,204,0,0.4);border-radius:6px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;color:#ffcc00;cursor:pointer;text-align:center;background:rgba(255,204,0,0.07);">CONFIRM</div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <!-- BLACK COVER: hides game canvas until lobby is ready -->
@@ -447,6 +475,7 @@
     <div id="loadVer">v2.0 · BUILD 2026</div>
   </div>
 </div>
+
 <script src="{{ url_for('static', filename='Game/game.js') }}"></script>
 </body>
 </html>
