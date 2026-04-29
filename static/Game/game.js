@@ -47,17 +47,23 @@ resize();
 // type: 'bullet'=standard, 'missile'=homing, 'railgun'=piercing, 'shotgun'=spread, 'emp'=aoe, 'nuke'=mega
 const WEAPONS=[
   {name:'PULSE',    color:'#00e5ff',scolor:'rgba(0,229,255,',w:5, h:18,spd:18,dmg:22, spread:1, icon:'🔵',type:'bullet',  cost:0,   owned:true,  desc:'Standard pulse cannon'},
-  {name:'PLASMA',   color:'#ff3366',scolor:'rgba(255,51,102,',w:8, h:8, spd:13,dmg:35, spread:3, icon:'🔴',type:'bullet',  cost:0,   owned:true,  desc:'Heavy plasma rounds'},
-  {name:'LASER',    color:'#00ff88',scolor:'rgba(0,255,136,',w:3, h:28,spd:24,dmg:18, spread:0, icon:'💚',type:'bullet',  cost:0,   owned:true,  desc:'Precision laser beam'},
+  {name:'PLASMA',   color:'#ff3366',scolor:'rgba(255,51,102,',w:8, h:8, spd:13,dmg:35, spread:3, icon:'🔴',type:'bullet',  cost:40,  owned:false, desc:'Heavy plasma rounds'},
+  {name:'LASER',    color:'#00ff88',scolor:'rgba(0,255,136,',w:3, h:28,spd:24,dmg:18, spread:0, icon:'💚',type:'bullet',  cost:35,  owned:false, desc:'Precision laser beam'},
   {name:'MISSILE',  color:'#ff8800',scolor:'rgba(255,136,0,', w:6, h:14,spd:10,dmg:80, spread:0, icon:'🚀',type:'missile', cost:50,  owned:false, desc:'Homing missile — tracks enemies'},
   {name:'RAILGUN',  color:'#aa44ff',scolor:'rgba(170,68,255,',w:4, h:35,spd:30,dmg:120,spread:0, icon:'⚡',type:'railgun', cost:80,  owned:false, desc:'Pierces through all enemies'},
   {name:'GATLING',  color:'#ffdd00',scolor:'rgba(255,221,0,', w:4, h:12,spd:22,dmg:14, spread:5, icon:'🔥',type:'bullet',  cost:60,  owned:false, desc:'High-speed rotary cannon'},
   {name:'SHOTGUN',  color:'#ff6644',scolor:'rgba(255,102,68,',w:6, h:10,spd:14,dmg:28, spread:8, icon:'💢',type:'shotgun', cost:70,  owned:false, desc:'8-pellet wide spread burst'},
   {name:'EMP',      color:'#00ddff',scolor:'rgba(0,221,255,', w:12,h:12,spd:9, dmg:55, spread:0, icon:'☢️',type:'emp',     cost:100, owned:false, desc:'Area pulse — stuns enemies'},
   {name:'NUKE',     color:'#ff2200',scolor:'rgba(255,34,0,',  w:16,h:16,spd:7, dmg:300,spread:0, icon:'☠️',type:'nuke',    cost:150, owned:false, desc:'Massive warhead — slow reload'},
+  {name:'TWIN',     color:'#00ffcc',scolor:'rgba(0,255,204,',w:5, h:18,spd:20,dmg:28, spread:0, icon:'🔷',type:'twin',    cost:90,  owned:false, desc:'Dual side-by-side cannons'},
+  {name:'VORTEX',   color:'#cc00ff',scolor:'rgba(204,0,255,',w:10,h:10,spd:8, dmg:90, spread:0, icon:'🌀',type:'vortex',  cost:120, owned:false, desc:'Spinning vortex — pulls enemies in'},
+  {name:'FLARE',    color:'#ff9900',scolor:'rgba(255,153,0,',w:7, h:7, spd:11,dmg:45, spread:6, icon:'🔆',type:'flare',   cost:75,  owned:false, desc:'Scatter flares — bounces off walls'},
+  {name:'FREEZE',   color:'#aaddff',scolor:'rgba(170,221,255,',w:8,h:8,spd:12,dmg:30, spread:0, icon:'❄️',type:'freeze',  cost:85,  owned:false, desc:'Cryo blast — slows all enemies'},
+  {name:'CHAIN',    color:'#ffff00',scolor:'rgba(255,255,0,', w:6, h:6, spd:15,dmg:50, spread:0, icon:'⚡',type:'chain',   cost:110, owned:false, desc:'Lightning — chains between enemies'},
+  {name:'BLACKHOLE',color:'#6600cc',scolor:'rgba(102,0,204,',w:14,h:14,spd:5, dmg:180,spread:0, icon:'🕳️',type:'blackhole',cost:200,owned:false, desc:'Singularity — sucks & destroys all'},
 ];
 // Per-weapon fire rate overrides (ms)
-const WEAPON_RATES={PULSE:150,PLASMA:280,LASER:90,MISSILE:600,RAILGUN:900,GATLING:60,SHOTGUN:700,EMP:1200,NUKE:3000};
+const WEAPON_RATES={PULSE:150,PLASMA:280,LASER:90,MISSILE:600,RAILGUN:900,GATLING:60,SHOTGUN:700,EMP:1200,NUKE:3000,TWIN:130,VORTEX:800,FLARE:500,FREEZE:900,CHAIN:600,BLACKHOLE:4000};
 
 /* ═══ GAME STATE ═══ */
 let G={};
@@ -184,6 +190,11 @@ function update(){
       G.particles.push({x:b.x,y:b.y,vx:rnd(-.5,.5),vy:rnd(.2,1),r:rnd(2,5),c:'#ff8844',life:220,ml:220});
     }
     b.y+=b.dy*f;b.x+=b.dx*f;
+    // flare bounces off walls
+    if(b.type==='flare'){
+      if(b.x<0||b.x>cw){b.dx*=-1;b.x=clamp(b.x,0,cw);if(b.bounces!==undefined){b.bounces--;if(b.bounces<0){G.bullets.splice(i,1);continue;}}}
+      if(b.y<0){b.dy*=-1;b.y=0;if(b.bounces!==undefined){b.bounces--;if(b.bounces<0){G.bullets.splice(i,1);continue;}}}
+    }
     if(b.y<-30||b.y>ch+30||b.x<-20||b.x>cw+20)G.bullets.splice(i,1);
   }
   // railgun beams
@@ -193,14 +204,17 @@ function update(){
   for(let i=G.eBullets.length-1;i>=0;i--){const b=G.eBullets[i];b.y+=b.dy*f;b.x+=b.dx*f;if(b.y>ch+30||b.x<-20||b.x>cw+20||b.y<-20)G.eBullets.splice(i,1);}
 
   for(const e of G.enemies){
-    e.t+=dt;e.y+=e.dy*f;e.x+=e.dx*f;
+    e.t+=dt;
+    const slowFactor=G.activePU.timeslow?0.3:1; // TIME SLOW power-up
+    e.y+=e.dy*f*slowFactor;e.x+=e.dx*f*slowFactor;
     if(e.sway)e.x=e.bx+Math.sin(e.t*.002)*65;
     if(e.x<e.w/2||e.x>CV.width-e.w/2)e.dx*=-1;
     if(e.y>CV.height+60)e.hp=0;
     e.shotT+=dt;
-    const sr=e.elite?1100:e.type==='tank'?2000:e.type==='fast'?1800:2400;
+    // Sniper fires less often but from far away
+    const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'?2000:e.type==='fast'?1800:2400;
     if(e.shotT>sr){e.shotT=0;eFire(e);}
-    if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':'#ff4400',life:220,ml:220});}
+    if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':'#ff4400',life:220,ml:220});}
   }
   for(let i=G.enemies.length-1;i>=0;i--){if(G.enemies[i].hp<=0)G.enemies.splice(i,1);}
   if(G.bossOn)updateBoss();
@@ -305,6 +319,55 @@ function doFire(){
     }
     if(G.bossOn)G.bossHp-=dmg*.7;
     bigBurst(G.px,G.py-100);shake(20,2.0);toast_('☠️ NUKE DETONATED!');
+  } else if(w.type==='twin'){
+    for(const ox of [-10,10]){
+      G.bullets.push({x:G.px+ox,y:G.py-G.ph*.47,dx:0,dy:-w.spd,dmg,crit,w:w.w,h:w.h,color:w.color,sc:w.scolor,wIdx:G.wIdx,type:'bullet'});
+    }
+  } else if(w.type==='vortex'){
+    if(!G.empBlasts)G.empBlasts=[];
+    G.empBlasts.push({x:G.px,y:G.py-80,r:0,maxR:130,life:600,color:w.color});
+    for(let j=G.enemies.length-1;j>=0;j--){
+      const e=G.enemies[j];const d=Math.hypot(e.x-G.px,e.y-G.py);
+      if(d<160){e.x+=(G.px-e.x)*.18;e.y+=((G.py-80)-e.y)*.18;e.hp-=dmg*(1-d/160);if(e.hp<=0)killEnemy(e,j);}
+    }
+    burst(G.px,G.py-80,w.color,14);shake(3,.4);
+  } else if(w.type==='flare'){
+    for(let i=0;i<5;i++){
+      const a=(i/4-0.5)*60*Math.PI/180;
+      G.bullets.push({x:G.px,y:G.py-G.ph*.47,dx:Math.sin(a)*w.spd,dy:-Math.cos(a)*w.spd,dmg,crit,w:w.w,h:w.h,color:w.color,sc:w.scolor,wIdx:G.wIdx,type:'flare',bounces:3});
+    }
+  } else if(w.type==='freeze'){
+    if(!G.empBlasts)G.empBlasts=[];
+    G.empBlasts.push({x:G.px,y:G.py,r:0,maxR:200,life:500,color:w.color});
+    for(let j=G.enemies.length-1;j>=0;j--){
+      const e=G.enemies[j];const d=Math.hypot(e.x-G.px,e.y-G.py);
+      if(d<220){e.hp-=dmg*(1-d/220);e.dy=Math.max(e.dy*.3,.3);e.dx*=.3;if(!e.frozenT)e.frozenT=2500;spark(e.x,e.y,w.color);if(e.hp<=0)killEnemy(e,j);}
+    }
+    burst(G.px,G.py,w.color,16);shake(4,.5);
+  } else if(w.type==='chain'){
+    const maxChain=6;let remaining=[...G.enemies];let cx=G.px,cy=G.py;
+    if(!G.railBeams)G.railBeams=[];
+    let px2=G.px,py2=G.py;
+    for(let c=0;c<maxChain&&remaining.length>0;c++){
+      let closest=null,cd=9999,ci=-1;
+      for(let j=0;j<remaining.length;j++){const d=Math.hypot(remaining[j].x-cx,remaining[j].y-cy);if(d<cd){cd=d;closest=remaining[j];ci=j;}}
+      if(!closest||cd>250)break;
+      closest.hp-=dmg*(1-c*.12);spark(closest.x,closest.y,w.color);
+      G.railBeams.push({x:px2,y:py2,x2:closest.x,y2:closest.y,life:200,color:w.color,chain:true});
+      px2=closest.x;py2=closest.y;cx=closest.x;cy=closest.y;
+      const gi=G.enemies.indexOf(closest);if(closest.hp<=0&&gi>=0)killEnemy(closest,gi);
+      remaining.splice(ci,1);
+    }
+    shake(3,.3);
+  } else if(w.type==='blackhole'){
+    if(!G.empBlasts)G.empBlasts=[];
+    G.empBlasts.push({x:G.px,y:G.py-120,r:0,maxR:CV.width,life:900,color:'#6600cc'});
+    G.empBlasts.push({x:G.px,y:G.py-120,r:0,maxR:CV.width*.6,life:750,color:'#aa00ff'});
+    for(let j=G.enemies.length-1;j>=0;j--){
+      const e=G.enemies[j];e.x+=(G.px-e.x)*.35;e.y+=((G.py-120)-e.y)*.35;e.hp-=dmg;if(e.hp<=0)killEnemy(e,j);
+    }
+    if(G.bossOn)G.bossHp-=dmg*.8;
+    bigBurst(G.px,G.py-120);shake(25,2.5);toast_('🕳️ SINGULARITY!');
   } else {
     // standard bullet (PULSE/PLASMA/LASER/GATLING)
     const shots=G.activePU.triple?3:w.name==='GATLING'?3:1;
@@ -320,6 +383,18 @@ function doFire(){
 /* ── ENEMY FIRE ── */
 function eFire(e){
   const dx=G.px-e.x,dy=G.py-e.y,d=Math.sqrt(dx*dx+dy*dy)||1;
+
+  if(e.type==='sniper'){
+    // Sniper: single fast precise bullet with laser sight warning
+    const sp=8.5;
+    G.eBullets.push({x:e.x,y:e.y+e.h*.4,dx:(dx/d)*sp,dy:(dy/d)*sp,dmg:35,sniper:true});
+    // Particle trail for sniper charge-up effect
+    if(G.particles.length<300){
+      for(let i=0;i<6;i++) G.particles.push({x:e.x+rnd(-5,5),y:e.y+rnd(-5,5),vx:rnd(-1,1),vy:rnd(-1,1),r:rnd(1,3),c:'#ff0044',life:180,ml:180});
+    }
+    return;
+  }
+
   const sp=e.elite?5.5:e.type==='fast'?4.5:3.5;
   const count=e.elite?3:1;
   for(let i=0;i<count;i++){
@@ -331,18 +406,33 @@ function eFire(e){
 /* ── BOSS ── */
 function updateBoss(){
   G.bossT+=G.dt;const f=G.dt/16;
-  G.bossX+=G.bossDir*1.8*f;
+  const slowFactor=G.activePU.timeslow?0.4:1;
+  G.bossX+=G.bossDir*1.8*f*slowFactor;
   if(G.bossX>CV.width-100||G.bossX<100)G.bossDir*=-1;
-  const targetY=G.bossPhase===2?130:110;
+  const targetY=G.bossPhase===3?90:G.bossPhase===2?130:110;
   G.bossY+=(targetY-G.bossY)*.02*f;
-  const fireRate=G.bossHp<G.bossMaxHp*.4?350:G.bossHp<G.bossMaxHp*.6?550:800;
+  const fireRate=G.bossPhase===3?220:G.bossHp<G.bossMaxHp*.4?350:G.bossHp<G.bossMaxHp*.6?550:800;
   if(G.bossT%fireRate<20)bossShoot();
+
+  // Phase 2 at 50% HP
   if(G.bossHp<G.bossMaxHp*.5&&G.bossPhase===1){
     G.bossPhase=2;
     SFX.boss_phase2();
     $id('bossPhaseLabel').textContent='PHASE II — ENRAGED';
     toast_('⚠ PHASE 2 ACTIVATED — FULL ASSAULT!');
     shake(15,1.2);
+  }
+  // Phase 3 at 20% HP — CRITICAL
+  if(G.bossHp<G.bossMaxHp*.2&&G.bossPhase===2){
+    G.bossPhase=3;
+    SFX.boss_phase2();
+    $id('bossPhaseLabel').textContent='⚠ PHASE III — CRITICAL BREACH ⚠';
+    toast_('☠ PHASE 3 — CRITICAL BREACH!');
+    shake(25,2.0);
+    // Spawn 3 mini enemies as last resort
+    for(let i=0;i<3;i++){
+      G.enemies.push({x:G.bossX+rnd(-80,80),bx:G.bossX,y:G.bossY+80,dx:rnd(-2,2),dy:2.5,w:24,h:24,hp:40,maxHp:40,type:'fast',sway:false,elite:true,shotT:500,t:0});
+    }
   }
   bossFill.style.width=Math.max(0,G.bossHp/G.bossMaxHp*100)+'%';
   if(G.bossHp<=0)killBoss();
@@ -352,10 +442,18 @@ function updateBoss(){
 function bossShoot(){
   const dx=G.px-G.bossX,dy=G.py-G.bossY;
   const d=Math.sqrt(dx*dx+dy*dy)||1;
-  const sp=5.5,count=G.bossPhase===2?5:3;
+  const sp=G.bossPhase===3?7:5.5;
+  const count=G.bossPhase===3?7:G.bossPhase===2?5:3;
   for(let i=0;i<count;i++){
     const a=((i-(count-1)/2)*18)*Math.PI/180;
-    G.eBullets.push({x:G.bossX,y:G.bossY+60,dx:(dx/d*Math.cos(a)-dy/d*Math.sin(a))*sp,dy:(dx/d*Math.sin(a)+dy/d*Math.cos(a))*sp,dmg:20});
+    G.eBullets.push({x:G.bossX,y:G.bossY+60,dx:(dx/d*Math.cos(a)-dy/d*Math.sin(a))*sp,dy:(dx/d*Math.sin(a)+dy/d*Math.cos(a))*sp,dmg:G.bossPhase===3?30:20});
+  }
+  // Phase 3 adds a spiral ring shot every other fire
+  if(G.bossPhase===3&&G.bossT%500<30){
+    for(let i=0;i<8;i++){
+      const a=(i/8)*Math.PI*2;
+      G.eBullets.push({x:G.bossX,y:G.bossY+30,dx:Math.cos(a)*4,dy:Math.sin(a)*4,dmg:15});
+    }
   }
 }
 
@@ -473,8 +571,15 @@ function spawnEnemy(){
   if(G.wSpawned>=G.wMax||G.over)return;
   const r=Math.random(),w=G.wave;
   let type,hp,spd,ew,eh,sway=false,elite=false;
-  if(r<.15&&w>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
-  else if(r<.35){type='fast';hp=45+w*10;spd=2.5;ew=28;eh=28;sway=true;}
+
+  // Formation spawn every 5th enemy in wave
+  if(G.wSpawned>0&&G.wSpawned%5===0&&w>=2){
+    spawnFormation(); return;
+  }
+
+  if(r<.10&&w>=4){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;} // NEW: sniper
+  else if(r<.20&&w>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
+  else if(r<.38){type='fast';hp=45+w*10;spd=2.5;ew=28;eh=28;sway=true;}
   else{type='normal';hp=65+w*20;spd=1.3;ew=34;eh=34;}
   if(w>=3&&Math.random()<.22){elite=true;hp=Math.round(hp*2);}
   const bx=rnd(50,CV.width-50);
@@ -482,8 +587,20 @@ function spawnEnemy(){
   G.wSpawned++;
 }
 
+function spawnFormation(){
+  // V-shape formation of 3 fast enemies
+  const cx=rnd(80,CV.width-80);
+  const positions=[{ox:0,oy:0},{ox:-45,oy:30},{ox:45,oy:30}];
+  const w=G.wave;
+  for(const p of positions){
+    const hp=40+w*8;
+    G.enemies.push({x:cx+p.ox,bx:cx+p.ox,y:-60+p.oy,dx:(Math.random()-.5)*1.2,dy:2.0,w:28,h:28,hp,maxHp:hp,type:'fast',sway:false,elite:false,shotT:rnd(600,2000),t:0,formation:true});
+  }
+  G.wSpawned+=3;
+}
+
 function spawnBoss(){
-  const names=['DESTROYER','NEMESIS','VOIDLORD','ANNIHILATOR','OBLIVION'];
+  const names=['DESTROYER','NEMESIS','VOIDLORD','ANNIHILATOR','OBLIVION','REAPER','APOCALYPSE'];
   G.bossName=names[Math.min(Math.floor(G.wave/3)-1,names.length-1)]||'DESTROYER';
   G.bossHp=1000+G.wave*300;G.bossMaxHp=G.bossHp;
   G.bossX=CV.width/2;G.bossY=110;G.bossDir=1;G.bossT=0;G.bossPhase=1;
@@ -504,16 +621,25 @@ function advWave(){
 /* ── DROPS ── */
 function spawnDrop(x,y,forced){
   const r=Math.random();
-  const type=forced||(r<.70?'coin':r<.82?'health':r<.92?'triple':'rapid');
+  const type=forced||(r<.60?'coin':r<.72?'health':r<.80?'triple':r<.88?'rapid':r<.94?'timeslow':'powerfull');
   G.drops.push({x,y,type,t:0});
 }
 function pickDrop(d){
-  if(d.type==='coin'){const amt=Math.floor(Math.random()*2)+2;G.coins+=amt;coEl.textContent=fmtNum(G.coins);addScore(10*amt);floatText(d.x,d.y,'◈ +'+amt+' COINS','#00ff88');SFX.pickup_coin();}
+  if(d.type==='coin'){
+    const streak=G._coinStreak||0;
+    const bonus=Math.min(streak,5);
+    const amt=Math.floor(Math.random()*2)+2+bonus;
+    G._coinStreak=(streak||0)+1;
+    G.coins+=amt;coEl.textContent=fmtNum(G.coins);addScore(10*amt);
+    floatText(d.x,d.y,streak>=3?'◈ +'+amt+' STREAK!':'◈ +'+amt+' COINS','#00ff88');
+    SFX.pickup_coin();
+  }
   else if(d.type==='health'){G.lives=Math.min(6,G.lives+1);hpEl.textContent=G.lives;floatText(d.x,d.y,'+ HP','#ff4488');SFX.pickup_health();}
   else if(d.type==='triple'){G.activePU.triple=7000;floatText(d.x,d.y,'✦ TRIPLE','#00e5ff');SFX.pickup_powerup();}
   else if(d.type==='rapid'){G.activePU.rapid=6000;floatText(d.x,d.y,'⚡ RAPID','#ffcc00');SFX.pickup_powerup();}
   else if(d.type==='shield'){G.activePU.shield=5000;floatText(d.x,d.y,'◉ INVULN','#44aaff');SFX.pickup_powerup();}
   else if(d.type==='powerfull'){G.activePU.powerfull=6000;floatText(d.x,d.y,'▲ POWER','#ff6600');SFX.pickup_powerup();}
+  else if(d.type==='timeslow'){G.activePU.timeslow=5000;floatText(d.x,d.y,'⏱ TIME SLOW','#cc44ff');SFX.pickup_powerup();toast_('⏱ TIME DILATION ACTIVE!');}
   burst(d.x,d.y,'#00ff88',8);
 }
 
@@ -530,12 +656,10 @@ function doSpecial(){
 }
 
 function cycleWeapon(){
-  const owned=WEAPONS.filter(w=>w.owned);
-  if(owned.length===0)return;
-  const cur=WEAPONS[G.wIdx];
-  const curOwnedIdx=owned.indexOf(cur);
-  const next=owned[(curOwnedIdx+1)%owned.length];
-  G.wIdx=WEAPONS.indexOf(next);
+  const indices=getShipWeaponIndices();
+  if(indices.length===0)return;
+  const cur=indices.indexOf(G.wIdx);
+  G.wIdx=indices[(cur+1)%indices.length];
   toast_('⟳ WEAPON: '+WEAPONS[G.wIdx].name);updateWeaponHUD();
 }
 
@@ -559,6 +683,8 @@ function gameOver(){
   $id('eWave').textContent=G.wave;$id('eScore').textContent=G.score;
   $id('eKills').textContent=G.kills;$id('eCombo').textContent=G.maxCombo;
   endScreen.classList.add('on');
+  // ── Save score to server ──
+  API.saveRun();
 }
 
 /* ═══ DRAW ═══ */
@@ -584,13 +710,30 @@ function draw(){
   for(const d of G.drops)drawDrop(d);
   // railgun beams
   if(G.railBeams){for(const rb of G.railBeams){
-    const a=rb.life/180;
+    const a=rb.life/200;
     glow(rb.color,20);
-    CX.globalAlpha=a;
-    CX.strokeStyle=rb.color;CX.lineWidth=4;
-    CX.beginPath();CX.moveTo(rb.x,0);CX.lineTo(rb.x,rb.h);CX.stroke();
-    CX.strokeStyle='#ffffff';CX.lineWidth=1.5;
-    CX.beginPath();CX.moveTo(rb.x,0);CX.lineTo(rb.x,rb.h);CX.stroke();
+    CX.globalAlpha=Math.max(0,a);
+    CX.strokeStyle=rb.color;
+    if(rb.chain){
+      // chain lightning — jagged line between two points
+      CX.lineWidth=3;
+      CX.beginPath();CX.moveTo(rb.x,rb.y);
+      const steps=6;
+      for(let s=1;s<steps;s++){
+        const t=s/steps;
+        const jx=rb.x+(rb.x2-rb.x)*t+rnd(-12,12);
+        const jy=rb.y+(rb.y2-rb.y)*t+rnd(-12,12);
+        CX.lineTo(jx,jy);
+      }
+      CX.lineTo(rb.x2,rb.y2);CX.stroke();
+      CX.strokeStyle='#ffffff';CX.lineWidth=1;
+      CX.beginPath();CX.moveTo(rb.x,rb.y);CX.lineTo(rb.x2,rb.y2);CX.stroke();
+    } else {
+      CX.lineWidth=4;
+      CX.beginPath();CX.moveTo(rb.x,0);CX.lineTo(rb.x,rb.h);CX.stroke();
+      CX.strokeStyle='#ffffff';CX.lineWidth=1.5;
+      CX.beginPath();CX.moveTo(rb.x,0);CX.lineTo(rb.x,rb.h);CX.stroke();
+    }
     CX.globalAlpha=1;noGlow();
   }}
   // emp/nuke blasts
@@ -1372,34 +1515,25 @@ function updateSkillDots(){
 function updateWeaponHUD(){
   const hudEl=$id('weaponHUD');
   hudEl.innerHTML='';
-  WEAPONS.forEach((w,wIdx)=>{
-    const slot=document.createElement('div');
+  const shipWpnIndices=getShipWeaponIndices();
+  shipWpnIndices.forEach((wIdx,slotNum)=>{
+    const w=WEAPONS[wIdx];
+    if(!w)return;
     const isActive=wIdx===G.wIdx;
-    const isOwned=w.owned;
-    slot.className='wslot'+(isActive?' active':'')+(isOwned?'':' locked');
+    const slot=document.createElement('div');
+    slot.className='wslot'+(isActive?' active':'');
     slot.id='ws'+wIdx;
-    slot.innerHTML=`<span class="wnum">${wIdx+1}</span>${w.icon}<span class="wname">${w.name}</span><div class="wbar"></div>`;
-    if(isOwned){
-      // touchstart for instant mobile response
-      slot.addEventListener('touchstart',(ev)=>{
-        ev.stopPropagation();
-        if(G.wIdx===wIdx) return;
-        G.wIdx=wIdx;
-        SFX.ui_click();
-        updateWeaponHUD();
-        toast_('⚔ '+w.name);
-      },{passive:true});
-      slot.addEventListener('click',(ev)=>{
-        ev.stopPropagation();
-        if(G.wIdx===wIdx) return;
-        G.wIdx=wIdx;
-        SFX.ui_click();
-        updateWeaponHUD();
-        toast_('⚔ '+w.name);
-      });
-    } else {
-      slot.title='Locked — buy in Shop';
-    }
+    slot.innerHTML=`<span class="wnum">${slotNum+1}</span>${w.icon}<span class="wname">${w.name}</span><div class="wbar"></div>`;
+    slot.addEventListener('touchstart',(ev)=>{
+      ev.stopPropagation();
+      if(G.wIdx===wIdx)return;
+      G.wIdx=wIdx;SFX.ui_click();updateWeaponHUD();toast_('⚔ '+w.name);
+    },{passive:true});
+    slot.addEventListener('click',(ev)=>{
+      ev.stopPropagation();
+      if(G.wIdx===wIdx)return;
+      G.wIdx=wIdx;SFX.ui_click();updateWeaponHUD();toast_('⚔ '+w.name);
+    });
     hudEl.appendChild(slot);
   });
 }
@@ -1513,6 +1647,10 @@ function restartGame(){
   // Re-apply selected ship & mode bonuses after initG resets G
   applyShipBonuses(selectedShip);
   applyModeBonuses(selectedMode);
+  // Set starting weapon — first owned weapon of current ship's loadout
+  const shipIndices=getShipWeaponIndices();
+  if(shipIndices.length>0){G.wIdx=shipIndices[0];}
+  else{const pulseIdx=WEAPONS.findIndex(w=>w.owned);G.wIdx=pulseIdx>=0?pulseIdx:0;}
   waveEl.textContent='1';hpEl.textContent='3';scEl.textContent='0';coEl.textContent='0';
   shEl.textContent='100';shFill.style.width='100%';xpFill.style.width='0%';
   lvlBadge.textContent='LVL 1';updateSkillDots();updateWeaponHUD();puPanel.innerHTML='';
@@ -1543,16 +1681,37 @@ let selectedMode='normal';
 
 // All ships data (index 0-2 = default owned, 3-4 = purchasable)
 const PILOT_SHIPS=[
-  {color:'#00e5ff',accent:'#0077ff',w:40,h:50,type:'viper',  name:'VIPER',  badge:'BALANCED',   atk:60,spd:60,def:60, price:0},
-  {color:'#cc44ff',accent:'#7700cc',w:32,h:56,type:'wraith', name:'WRAITH', badge:'INTERCEPTOR', atk:45,spd:88,def:42, price:0},
-  {color:'#ff8800',accent:'#cc4400',w:52,h:44,type:'titan',  name:'TITAN',  badge:'GUNSHIP',     atk:85,spd:38,def:80, price:0},
-  {color:'#00ff8c',accent:'#00aa55',w:44,h:52,type:'phantom',name:'PHANTOM',badge:'STEALTH',     atk:70,spd:75,def:50, price:500},
-  {color:'#ff2255',accent:'#aa0033',w:48,h:48,type:'nova',   name:'NOVA',   badge:'DESTROYER',   atk:95,spd:55,def:70, price:1200},
+  {color:'#00e5ff',accent:'#0077ff',w:40,h:50,type:'viper',  name:'VIPER',  badge:'BALANCED',   atk:60,spd:60,def:60, price:0,    tier:1, weapons:['PULSE','LASER','TWIN','GATLING','MISSILE']},
+  {color:'#cc44ff',accent:'#7700cc',w:32,h:56,type:'wraith', name:'WRAITH', badge:'INTERCEPTOR', atk:45,spd:88,def:42, price:300,  tier:1, weapons:['PULSE','LASER','PLASMA','CHAIN','FLARE']},
+  {color:'#ff8800',accent:'#cc4400',w:52,h:44,type:'titan',  name:'TITAN',  badge:'GUNSHIP',     atk:85,spd:38,def:80, price:500,  tier:2, weapons:['GATLING','SHOTGUN','MISSILE','RAILGUN','EMP']},
+  {color:'#00ff8c',accent:'#00aa55',w:44,h:52,type:'phantom',name:'PHANTOM',badge:'STEALTH',     atk:70,spd:75,def:50, price:500,  tier:3, weapons:['LASER','TWIN','CHAIN','VORTEX','FREEZE']},
+  {color:'#ff2255',accent:'#aa0033',w:48,h:48,type:'nova',   name:'NOVA',   badge:'DESTROYER',   atk:95,spd:55,def:70, price:1200, tier:4, weapons:['RAILGUN','EMP','VORTEX','NUKE','BLACKHOLE']},
 ];
+
+// Weapon tier — ship must be >= this tier to equip
+const WEAPON_TIER={
+  PULSE:1, PLASMA:1, LASER:1, TWIN:1,
+  GATLING:2, SHOTGUN:2, FLARE:2, MISSILE:2,
+  FREEZE:2, RAILGUN:3, EMP:3, CHAIN:3, VORTEX:3,
+  NUKE:4, BLACKHOLE:4,
+};
+
+function getShipTier(){
+  const s=PILOT_SHIPS[selectedShip]||PILOT_SHIPS[0];
+  return s.tier||1;
+}
+function canUseWeapon(wName){
+  return (WEAPON_TIER[wName]||1)<=getShipTier();
+}
+// Returns weapon indices available for current ship
+function getShipWeaponIndices(){
+  const ship=PILOT_SHIPS[selectedShip]||PILOT_SHIPS[0];
+  return (ship.weapons||['PULSE']).map(name=>WEAPONS.findIndex(w=>w.name===name)).filter(i=>i>=0&&WEAPONS[i].owned);
+}
 
 function getOwnedShips(){
   try{
-    const o=JSON.parse(localStorage.getItem('exomniaOwnedShips')||'[0,1,2]');
+    const o=JSON.parse(localStorage.getItem('exomniaOwnedShips')||'[0]');
     return o;
   }catch(e){return [0,1,2];}
 }
@@ -1705,44 +1864,63 @@ function openLbyPanel(type){
       tabShip.style.cssText='flex:1;padding:9px 0;border-radius:5px;font-family:Courier New,monospace;font-weight:900;font-size:11px;letter-spacing:3px;text-align:center;cursor:pointer;transition:all .18s;border:1px solid rgba(0,229,255,0.2);color:rgba(0,229,255,0.45);background:rgba(0,229,255,0.03);';
       content.innerHTML='';
       const coins=getLbyCoins();
+      const shipTier=PILOT_SHIPS[selectedShip]?PILOT_SHIPS[selectedShip].tier:1;
+      const tierColors=['','#00e5ff','#ff8800','#aa44ff','#ff2255'];
+
+      const tierBanner=document.createElement('div');
+      const shipName=PILOT_SHIPS[selectedShip]?PILOT_SHIPS[selectedShip].name:'VIPER';
+      const shipWpns=PILOT_SHIPS[selectedShip]?PILOT_SHIPS[selectedShip].weapons:[];
+      tierBanner.style.cssText=`font-family:Courier New,monospace;font-size:10px;letter-spacing:2px;color:${tierColors[shipTier]};background:rgba(0,0,0,0.4);border:1px solid ${tierColors[shipTier]}44;border-radius:4px;padding:6px 12px;margin-bottom:10px;text-align:center;`;
+      tierBanner.textContent=`${shipName} LOADOUT: ${shipWpns.join(' · ')}`;
+      content.appendChild(tierBanner);
+
       const wGrid=document.createElement('div');
       wGrid.className='shopGrid';
       wGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(min(150px,42vw),1fr));gap:10px;width:100%;';
-      WEAPONS.forEach((w,idx)=>{
-        const card=document.createElement('div');
-        card.className='shopCard'+(w.owned?' owned':'')+(w.owned&&G.wIdx===idx?' active-wep':'')+(!w.owned&&coins<w.cost?' cant-afford':'');
-        const ownedBadge=w.owned
-          ?`<div class="shopPrice owned-lbl">✔ OWNED</div><div class="shopEquip">${G&&G.wIdx===idx?'▶ EQUIPPED':'TAP TO EQUIP'}</div>`
-          :`<div class="shopPrice">◈${w.cost}</div>`;
-        card.innerHTML=`<div class="shopIcon">${w.icon}</div>
-          <div class="shopName">${w.name}</div>
-          <div class="shopDesc">${w.desc}</div>
-          <div class="shopStats">
-            <div class="shopStat dmg">DMG ${w.dmg}</div>
-            <div class="shopStat spd">SPD ${w.spd}</div>
-          </div>${ownedBadge}`;
-        if(w.owned){
-          card.onclick=()=>{
-            // equip on lobby (will apply when game starts)
-            WEAPONS.forEach((_,i)=>WEAPONS[i]._lobbyEquip=false);
-            w._lobbyEquip=true;
-            showToast('◈ '+w.name+' EQUIPPED');
-            renderWpnTab();
-          };
-        } else {
-          card.onclick=()=>{
-            if(coins<w.cost){showToast('✕ NOT ENOUGH COINS');return;}
-            w.owned=true;
-            addLbyCoins(-w.cost);
-            const coinRowEl=$id('lbyShopCoinRow');
-            if(coinRowEl)coinRowEl.textContent='◈ COINS: '+getLbyCoins();
-            SFX.pickup_powerup&&SFX.pickup_powerup();
-            showToast('✔ '+w.name+' UNLOCKED');
-            renderWpnTab();
-          };
-        }
-        wGrid.appendChild(card);
-      });
+
+      function renderLbyWpnGrid(){
+        wGrid.innerHTML='';
+        const lbyCoins=getLbyCoins();
+        WEAPONS.forEach((w,idx)=>{
+          if(!shipWpns.includes(w.name)) return; // only show this ship's weapons
+          const isOwned=w.owned;
+          const canAfford=lbyCoins>=w.cost;
+          const card=document.createElement('div');
+          let cls='shopCard';
+          if(isOwned) cls+=' owned';
+          if(!isOwned&&!canAfford) cls+=' cant-afford';
+          card.className=cls;
+          let badge;
+          if(isOwned){
+            badge=`<div class="shopPrice owned-lbl">✔ OWNED</div><div class="shopEquip" style="color:rgba(0,229,255,0.4)">AVAILABLE IN GAME</div>`;
+          } else {
+            badge=`<div class="shopPrice">◈ ${w.cost} COINS</div>`;
+          }
+          card.innerHTML=`<div class="shopIcon">${w.icon}</div>
+            <div class="shopName">${w.name}</div>
+            <div class="shopDesc">${w.desc}</div>
+            <div class="shopStats">
+              <div class="shopStat dmg">DMG ${w.dmg}</div>
+              <div class="shopStat spd">SPD ${w.spd}</div>
+            </div>${badge}`;
+          if(!isOwned){
+            card.onclick=()=>{
+              const coins=getLbyCoins();
+              if(coins<w.cost){showToast('◈ NOT ENOUGH COINS!');return;}
+              setLbyCoins(coins-w.cost);
+              w.owned=true;
+              const topCoin=document.getElementById('lbyCoinDisplay');
+              if(topCoin) topCoin.textContent=getLbyCoins();
+              showToast('✔ PURCHASED: '+w.name);
+              renderLbyWpnGrid();
+            };
+          } else {
+            card.onclick=()=>showToast('✔ '+w.name+' ALREADY OWNED');
+          }
+          wGrid.appendChild(card);
+        });
+      }
+      renderLbyWpnGrid();
       content.appendChild(wGrid);
     }
 
@@ -1755,12 +1933,54 @@ function closeLbyPanel(){
   $id('lbyPanel').classList.remove('open');
 }
 
-const PILOT_EMOJIS=['🧑‍🚀','👨‍✈️','👩‍✈️','🤖','👾','🦾','🧬','⚡'];
+const PILOT_EMOJIS=['🧑‍🚀','👨‍✈️','👩‍✈️','🤖','👾','🦾','🧬','⚡','🦅','🐉','🔥','💎','🌟','🎯','⚔️','🛸'];
 let _emojiIdx=0;
-function cyclePilotEmoji(){
-  _emojiIdx=(_emojiIdx+1)%PILOT_EMOJIS.length;
-  $id('pilotEmoji').textContent=PILOT_EMOJIS[_emojiIdx];
-  try{localStorage.setItem('exomniaEmoji',_emojiIdx);}catch(e){}
+
+function openEmojiPicker(){
+  const modal=$id('emojiPickerModal');
+  const grid=$id('emojiGrid');
+  grid.innerHTML='';
+  PILOT_EMOJIS.forEach((em,i)=>{
+    const btn=document.createElement('div');
+    btn.textContent=em;
+    btn.style.cssText='font-size:28px;text-align:center;padding:10px;border-radius:8px;cursor:pointer;border:2px solid '+(i===_emojiIdx?'rgba(0,229,255,0.7)':'rgba(0,229,255,0.1)')+';background:'+(i===_emojiIdx?'rgba(0,229,255,0.12)':'rgba(0,0,0,0.3)')+';transition:all .15s;';
+    btn.onclick=()=>{
+      _emojiIdx=i;
+      $id('pilotEmoji').textContent=em;
+      try{localStorage.setItem('exomniaEmoji',i);}catch(e){}
+      closeEmojiPicker();
+    };
+    grid.appendChild(btn);
+  });
+  modal.style.display='flex';
+}
+function closeEmojiPicker(){
+  $id('emojiPickerModal').style.display='none';
+}
+
+function openNameEdit(){
+  const coins=getLbyCoins();
+  const modal=$id('nameEditModal');
+  $id('nameEditInput').value=$id('callsignInput').value||'';
+  $id('nameEditCoinsLeft').textContent='YOUR COINS: ◈ '+coins;
+  modal.style.display='flex';
+  setTimeout(()=>$id('nameEditInput').focus(),100);
+}
+function closeNameEdit(){
+  $id('nameEditModal').style.display='none';
+}
+function confirmNameEdit(){
+  const coins=getLbyCoins();
+  if(coins<100){showToast('◈ NOT ENOUGH COINS! NEED 100');return;}
+  const newName=($id('nameEditInput').value||'').trim().toUpperCase();
+  if(!newName){showToast('⚠ ENTER A CALLSIGN!');return;}
+  setLbyCoins(coins-100);
+  $id('callsignInput').value=newName;
+  try{localStorage.setItem('exomniaCallsign',newName);}catch(e){}
+  const topCoin=$id('lbyCoinDisplay');
+  if(topCoin) topCoin.textContent=getLbyCoins();
+  closeNameEdit();
+  showToast('✔ CALLSIGN UPDATED: '+newName);
 }
 
 function selectMode(m){
@@ -1778,6 +1998,17 @@ function launchFromLobby(){
   CV.style.visibility='visible';
   $id('ui').style.visibility='visible';
   $id('minimap').style.visibility='visible';
+  // Reposition & resize minimap to match stats panel width
+  setTimeout(()=>{
+    const skillPanel=$id('skillPanel');
+    const minimap=$id('minimap');
+    if(skillPanel&&minimap){
+      const sr=skillPanel.getBoundingClientRect();
+      minimap.style.top=(sr.bottom+6)+'px';
+      minimap.style.width=sr.width+'px';
+      minimap.style.height=sr.width+'px';
+    }
+  },50);
   $id('ctrl').style.visibility='visible';
   SFX.init();SFX.resume();
   restartGame();
@@ -1827,6 +2058,8 @@ function refreshLobbyStats(){
     updateLbyShipCard(selectedShip);
     // Coin display
     setLbyCoins(getLbyCoins());
+    // ── Sync stats from server ──
+    if (typeof API !== 'undefined') API.syncLobbyStats();
   }catch(e){}
 }
 
@@ -2347,7 +2580,7 @@ const SFX = (function(){
   // Weapon sound dispatcher
   function weaponSound(wName){
     init();resume();
-    const map={PULSE:shoot_pulse,LASER:shoot_laser,PLASMA:shoot_plasma,MISSILE:shoot_missile,GATLING:shoot_gatling,SHOTGUN:shoot_shotgun,EMP:shoot_emp,RAILGUN:shoot_railgun,NUKE:shoot_nuke};
+    const map={PULSE:shoot_pulse,LASER:shoot_laser,PLASMA:shoot_plasma,MISSILE:shoot_missile,GATLING:shoot_gatling,SHOTGUN:shoot_shotgun,EMP:shoot_emp,RAILGUN:shoot_railgun,NUKE:shoot_nuke,TWIN:shoot_pulse,VORTEX:shoot_emp,FLARE:shoot_shotgun,FREEZE:shoot_emp,CHAIN:shoot_railgun,BLACKHOLE:shoot_nuke};
     (map[wName]||shoot_pulse)();
   }
 
@@ -2373,9 +2606,236 @@ window.openShop=openShop;window.closeShop=closeShop;
 
 window.startGame=startGame;window.doSpecial=doSpecial;window.cycleWeapon=cycleWeapon;window.upgrade=upgrade;
 
+/* ═══════════════════════════════════════════════
+   API MODULE — Server + Database Integration
+   Server চালু না থাকলে silently fail করবে
+   ════════════════════════════════════════════════ */
+const API = (() => {
+  const BASE = ''; // same-origin — Flask serves both HTML and API
+
+  // ── Callsign helper ──
+  function getCallsign() {
+    return (($id('callsignInput') && $id('callsignInput').value) || '').trim().toUpperCase() || 'PILOT';
+  }
+  function getShipName() {
+    const s = PILOT_SHIPS[typeof selectedShip !== 'undefined' ? selectedShip : 0];
+    return s ? s.name : 'VIPER';
+  }
+  function getAvatarEmoji() {
+    const avatars = ['🚀','👾','🛸','⚡','🔥','💀','🌀','🎯'];
+    try {
+      const stored = localStorage.getItem('dsc_avatar');
+      if (stored) return stored;
+    } catch(e){}
+    return avatars[0];
+  }
+
+  // ── Generic fetch wrapper — never throws ──
+  async function apiFetch(path, opts = {}) {
+    try {
+      const res = await fetch(BASE + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      // Server offline — silent fail
+      return null;
+    }
+  }
+
+  // ── Save run after game over ──
+  async function saveRun() {
+    const callsign = getCallsign();
+    const body = {
+      callsign,
+      avatar:  getAvatarEmoji(),
+      score:   G.score  || 0,
+      wave:    G.wave   || 1,
+      kills:   G.kills  || 0,
+      combo:   G.maxCombo || 0,
+      coins:   G.coins  || 0,
+      ship:    getShipName(),
+    };
+    const data = await apiFetch('/api/run', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+    if (!data) return;
+    if (data.new_best) {
+      setTimeout(() => toast_('🏆 NEW PERSONAL BEST SAVED!'), 600);
+    }
+    // Refresh lobby stats after save
+    if (typeof refreshLobbyStats === 'function') setTimeout(refreshLobbyStats, 800);
+  }
+
+  // ── Save score (simple endpoint) ──
+  function saveScore(score) {
+    fetch('/save_score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player: "player1",
+        score: score
+      })
+    });
+  }
+
+  // ── Load player profile ──
+  async function loadPlayer(callsign) {
+    if (!callsign) callsign = getCallsign();
+    return await apiFetch('/api/player/' + encodeURIComponent(callsign));
+  }
+
+  // ── Load leaderboard ──
+  async function loadLeaderboard(limit = 10) {
+    return await apiFetch('/api/leaderboard?limit=' + limit);
+  }
+
+  // ── Global stats ──
+  async function loadStats() {
+    return await apiFetch('/api/stats');
+  }
+
+  // ── Show leaderboard overlay inside lobby ──
+  async function showLeaderboard() {
+    let el = $id('lbyLeaderboard');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'lbyLeaderboard';
+      el.style.cssText = `
+        position:fixed;inset:0;z-index:200;
+        background:rgba(0,2,14,0.97);
+        display:flex;flex-direction:column;align-items:center;
+        overflow-y:auto;padding:20px 12px 40px;
+        font-family:'Courier New',monospace;
+      `;
+      el.innerHTML = `
+        <div style="font-size:clamp(14px,4vw,22px);letter-spacing:6px;color:#00e5ff;
+          text-shadow:0 0 20px #00e5ff;margin-bottom:4px;font-weight:900;">🏆 LEADERBOARD</div>
+        <div style="font-size:8px;letter-spacing:3px;color:rgba(0,229,255,0.35);margin-bottom:18px;">GLOBAL TOP PILOTS</div>
+        <div id="lbyLbRows" style="width:100%;max-width:440px;display:flex;flex-direction:column;gap:6px;">
+          <div style="color:rgba(0,229,255,0.4);font-size:10px;letter-spacing:2px;text-align:center;">LOADING...</div>
+        </div>
+        <div onclick="document.getElementById('lbyLeaderboard').remove()"
+          style="margin-top:24px;padding:12px 36px;border:1px solid rgba(0,229,255,0.3);
+          border-radius:5px;color:#00e5ff;letter-spacing:4px;font-size:11px;
+          cursor:pointer;font-weight:700;">✕ CLOSE</div>
+      `;
+      document.body.appendChild(el);
+    } else {
+      el.style.display = 'flex';
+    }
+
+    const data = await loadLeaderboard(20);
+    const container = $id('lbyLbRows');
+    if (!container) return;
+
+    if (!data || !data.board || data.board.length === 0) {
+      container.innerHTML = `<div style="color:rgba(255,100,100,0.7);font-size:10px;letter-spacing:2px;text-align:center;">
+        NO SCORES YET — BE THE FIRST!</div>`;
+      return;
+    }
+
+    const myCS = getCallsign();
+    const rankColors = ['#ffd700','#c0c0c0','#cd7f32'];
+
+    container.innerHTML = data.board.map((p, i) => {
+      const isMe = p.callsign === myCS;
+      const rc = rankColors[i] || 'rgba(0,229,255,0.6)';
+      return `<div style="
+        display:flex;align-items:center;gap:10px;
+        background:${isMe ? 'rgba(0,229,255,0.08)' : 'rgba(0,5,18,0.7)'};
+        border:1px solid ${isMe ? 'rgba(0,229,255,0.4)' : 'rgba(0,229,255,0.1)'};
+        border-radius:5px;padding:8px 12px;
+      ">
+        <div style="color:${rc};font-weight:900;font-size:13px;width:28px;text-align:center;">#${p.rank}</div>
+        <div style="font-size:18px;">${p.avatar || '🚀'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="color:${isMe ? '#00e5ff' : '#fff'};font-weight:900;font-size:12px;
+            letter-spacing:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${p.callsign}${isMe ? ' ◀ YOU' : ''}
+          </div>
+          <div style="color:rgba(0,229,255,0.4);font-size:8px;letter-spacing:1px;margin-top:1px;">
+            WAVE ${p.best_wave} · ${p.total_kills} KILLS · ${p.games_played} GAMES
+          </div>
+        </div>
+        <div style="color:#ffdd00;font-weight:900;font-size:13px;letter-spacing:1px;white-space:nowrap;">
+          ${Number(p.best_score).toLocaleString()}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Inject leaderboard button into lobby ──
+  function injectLobbyButton() {
+    // Wait for lobby DOM
+    const tryInject = () => {
+      const btnRow = $id('lbyBtnRow');
+      if (!btnRow) { setTimeout(tryInject, 400); return; }
+      if ($id('lbyLbBtn')) return; // already injected
+
+      const btn = document.createElement('div');
+      btn.id = 'lbyLbBtn';
+      btn.className = 'lby-action-btn';
+      btn.style.cssText = `
+        flex:none;width:52px;padding:10px 0;border-radius:7px;
+        font-size:20px;cursor:pointer;
+        border:1px solid rgba(255,204,0,0.35);
+        background:linear-gradient(145deg,rgba(255,204,0,0.07),rgba(255,204,0,0.02));
+        display:flex;align-items:center;justify-content:center;
+        touch-action:manipulation;
+      `;
+      btn.innerHTML = '🏆';
+      btn.title = 'Leaderboard';
+      btn.onclick = () => showLeaderboard();
+      btnRow.appendChild(btn);
+    };
+    tryInject();
+  }
+
+  // ── Ping server & show connection status ──
+  async function checkServer() {
+    const data = await apiFetch('/api/ping');
+    if (data && data.ok) {
+      console.log('%c[DSC Server] Online ✓', 'color:#00e5ff;font-weight:bold');
+      injectLobbyButton();
+    } else {
+      console.warn('[DSC Server] Offline — scores will not be saved');
+    }
+  }
+
+  // ── Refresh lobby stats from server ──
+  async function syncLobbyStats() {
+    const cs = getCallsign();
+    if (!cs || cs === 'PILOT') return;
+    const data = await loadPlayer(cs);
+    if (!data || !data.player) return;
+    const p = data.player;
+
+    // Update lobby stat display elements if they exist
+    const map = {
+      'lbyStatGames': p.games_played,
+      'lbyStatBest':  Number(p.best_score).toLocaleString(),
+      'lbyStatKills': p.total_kills,
+      'lbyRankBadge': p.rank ? '#' + p.rank + ' GLOBAL' : null,
+    };
+    for (const [id, val] of Object.entries(map)) {
+      const el = $id(id);
+      if (el && val !== null) el.textContent = val;
+    }
+  }
+
+  // Public API
+  return { saveRun, saveScore, loadPlayer, loadLeaderboard, loadStats, showLeaderboard, checkServer, syncLobbyStats };
+})();
+
 /* ═══ BOOT ═══ */
 window.addEventListener('load',()=>{
   initBG();updateSkillDots();updateWeaponHUD();
+  // ── Connect to server ──
+  API.checkServer();
 
   /* ── JS Safe-area fallback for browsers that ignore env() in CSS ──
      Reads the ctrl bar's actual rendered height, then repositions
@@ -2392,9 +2852,18 @@ window.addEventListener('load',()=>{
     const bHUD     = $id('bossHUD');
 
     if(xpWrap)   xpWrap.style.bottom  = aboveCtrl + 'px';
-    if(minimap)  minimap.style.bottom = aboveCtrl + 'px';
     if(puPan)    puPan.style.bottom   = aboveCtrl + 'px';
     if(bHUD)     bHUD.style.bottom    = (aboveCtrl + 10) + 'px';
+
+    // Position minimap just below skillPanel
+    const skillPanel = $id('skillPanel');
+    if(minimap && skillPanel){
+      const sr = skillPanel.getBoundingClientRect();
+      minimap.style.top = (sr.bottom + 6) + 'px';
+      minimap.style.width = sr.width + 'px';
+      minimap.style.height = sr.width + 'px';
+      minimap.style.bottom = '';
+    }
   }
 
   // Run on load, resize, and orientation change
