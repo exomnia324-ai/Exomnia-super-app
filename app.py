@@ -37,7 +37,7 @@ def get_db():
 # ---------- ROUTES ----------
 @app.route('/')
 def home():
-    return send_file('gameup18.html')   # ⚠️ filename check কর
+    return send_file('index.html')  
 
 # ── Ping ──
 @app.route('/api/ping')
