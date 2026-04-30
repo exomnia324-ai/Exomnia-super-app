@@ -52,7 +52,10 @@ def ping():
 def save_run():
     try:
         data = request.json or {}
-        
+    try:
+    score = max(0, int(data.get("score", 0)))
+except (ValueError, TypeError):
+    score = 0    
         callsign = str(data.get("callsign", "PILOT"))[:50]
         avatar = str(data.get("avatar", "🚀"))[:10]
         score = max(0, int(data.get("score", 0)))
