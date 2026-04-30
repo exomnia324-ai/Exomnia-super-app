@@ -109,12 +109,16 @@ def get_player(callsign):
                 return jsonify({"player": None})
 
             c.execute("""
-                SELECT COUNT(DISTINCT callsign) + 1 as rnk
-                FROM (
-                    SELECT callsign, MAX(score) as best_score
-                    FROM scores
-                    GROUP BY callsign
-                ) t
+    SELECT COUNT(DISTINCT t.callsign) + 1 as rnk
+    FROM (
+        SELECT callsign, MAX(score) as best_score
+        FROM scores
+        GROUP BY callsign
+    ) t
+    WHERE t.best_score > (
+        SELECT MAX(score) FROM scores WHERE callsign = ?
+    )
+""", (callsign,))
                 c.execute("""
     SELECT COUNT(DISTINCT callsign) + 1 as rnk
     FROM scores s1
