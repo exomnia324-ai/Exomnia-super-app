@@ -115,8 +115,14 @@ def get_player(callsign):
                     FROM scores
                     GROUP BY callsign
                 ) t
-                WHERE best_score > (
-                    SELECT MAX(score) FROM scores WHERE callsign = ?
+                c.execute("""
+    SELECT COUNT(DISTINCT callsign) + 1 as rnk
+    FROM scores s1
+    WHERE s1.score > (
+        SELECT MAX(s2.score) FROM scores s2 WHERE s2.callsign = ?
+    )
+    GROUP BY callsign
+""", (callsign,))
                 )
             """, (callsign,))
             rank_row = c.fetchone()
