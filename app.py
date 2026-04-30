@@ -6,7 +6,7 @@ import logging
 
 app = Flask(__name__)
 CORS(app)
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.DEBUG) 
 
 DB_PATH = os.environ.get("DB_PATH", "game.db")
 
