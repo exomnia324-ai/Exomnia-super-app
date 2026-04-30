@@ -1,4 +1,4 @@
-from flask import Flask, send_file, request, jsonify
+from flask import Flask, send_file, request, jsonify, render_template
 from flask_cors import CORS
 import sqlite3
 import os
@@ -42,7 +42,7 @@ def get_db():
 
 @app.route('/')
 def home():
-    return render_templates('index.html')
+    return render_template('index.html')
 
 @app.route('/api/ping')
 def ping():
@@ -52,17 +52,34 @@ def ping():
 def save_run():
     try:
         data = request.json or {}
-    try:
-    score = max(0, int(data.get("score", 0)))
-except (ValueError, TypeError):
-    score = 0    
         callsign = str(data.get("callsign", "PILOT"))[:50]
         avatar = str(data.get("avatar", "🚀"))[:10]
-        score = max(0, int(data.get("score", 0)))
-        wave = max(1, int(data.get("wave", 1)))
-        kills = max(0, int(data.get("kills", 0)))
-        combo = max(0, int(data.get("combo", 0)))
-        coins = max(0, int(data.get("coins", 0)))
+        
+        try:
+            score = max(0, int(data.get("score", 0)))
+        except (ValueError, TypeError):
+            score = 0
+        
+        try:
+            wave = max(1, int(data.get("wave", 1)))
+        except (ValueError, TypeError):
+            wave = 1
+        
+        try:
+            kills = max(0, int(data.get("kills", 0)))
+        except (ValueError, TypeError):
+            kills = 0
+        
+        try:
+            combo = max(0, int(data.get("combo", 0)))
+        except (ValueError, TypeError):
+            combo = 0
+        
+        try:
+            coins = max(0, int(data.get("coins", 0)))
+        except (ValueError, TypeError):
+            coins = 0
+        
         ship = str(data.get("ship", ""))[:50]
 
         conn = get_db()
@@ -112,26 +129,17 @@ def get_player(callsign):
                 return jsonify({"player": None})
 
             c.execute("""
-    SELECT COUNT(DISTINCT t.callsign) + 1 as rnk
-    FROM (
-        SELECT callsign, MAX(score) as best_score
-        FROM scores
-        GROUP BY callsign
-    ) t
-    WHERE t.best_score > (
-        SELECT MAX(score) FROM scores WHERE callsign = ?
-    )
-""", (callsign,))
-                c.execute("""
-    SELECT COUNT(DISTINCT callsign) + 1 as rnk
-    FROM scores s1
-    WHERE s1.score > (
-        SELECT MAX(s2.score) FROM scores s2 WHERE s2.callsign = ?
-    )
-    GROUP BY callsign
-""", (callsign,))
+                SELECT COUNT(DISTINCT callsign) + 1 as rnk
+                FROM (
+                    SELECT callsign, MAX(score) as best_score
+                    FROM scores
+                    GROUP BY callsign
+                ) t
+                WHERE t.best_score > (
+                    SELECT MAX(score) FROM scores WHERE callsign = ?
                 )
             """, (callsign,))
+            
             rank_row = c.fetchone()
 
             return jsonify({
