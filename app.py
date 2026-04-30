@@ -42,7 +42,7 @@ def get_db():
 
 @app.route('/')
 def home():
-    return send_file('templates/index.html')
+    return render_templates('index.html')
 
 @app.route('/api/ping')
 def ping():
