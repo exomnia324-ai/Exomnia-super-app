@@ -1,75 +1,57 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2 import pool
+import psycopg
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 import os
 import logging
-import urllib.parse
 
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-# ---------------- DATABASE CONFIG ---------------- #
+# ---------------- DATABASE ---------------- #
 
-db_pool = None
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-def get_db_config():
-    DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise Exception("DATABASE_URL not set")
 
-    if DATABASE_URL:
-        result = urllib.parse.urlparse(DATABASE_URL)
-        return {
-            'database': result.path[1:],
-            'user': result.username,
-            'password': result.password,
-            'host': result.hostname,
-            'port': result.port
-        }
-    else:
-        return {
-            'host': os.environ.get("DB_HOST", "localhost"),
-            'port': int(os.environ.get("DB_PORT", 5432)),
-            'database': os.environ.get("DB_NAME", "game_db"),
-            'user': os.environ.get("DB_USER", "postgres"),
-            'password': os.environ.get("DB_PASSWORD", "password")
-        }
+db_pool = ConnectionPool(conninfo=DATABASE_URL)
 
-def init_connection_pool():
-    global db_pool
-    if db_pool is None:
-        config = get_db_config()
-        db_pool = psycopg2.pool.SimpleConnectionPool(1, 20, **config)
-        logging.info("DB Pool created")
+def get_db():
+    return db_pool.getconn()
+
+def return_db(conn):
+    db_pool.putconn(conn)
 
 def init_db():
     conn = None
     try:
         conn = get_db()
-        c = conn.cursor()
+        with conn.cursor() as c:
 
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS scores (
-            id SERIAL PRIMARY KEY,
-            callsign VARCHAR(50) NOT NULL,
-            avatar VARCHAR(10) DEFAULT '🚀',
-            score INTEGER DEFAULT 0,
-            wave INTEGER DEFAULT 1,
-            kills INTEGER DEFAULT 0,
-            combo INTEGER DEFAULT 0,
-            coins INTEGER DEFAULT 0,
-            ship VARCHAR(50) DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        """)
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS scores (
+                id SERIAL PRIMARY KEY,
+                callsign VARCHAR(50) NOT NULL,
+                avatar VARCHAR(10) DEFAULT '🚀',
+                score INTEGER DEFAULT 0,
+                wave INTEGER DEFAULT 1,
+                kills INTEGER DEFAULT 0,
+                combo INTEGER DEFAULT 0,
+                coins INTEGER DEFAULT 0,
+                ship VARCHAR(50) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
 
-        c.execute("CREATE INDEX IF NOT EXISTS idx_callsign ON scores(callsign);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_score ON scores(score DESC);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON scores(created_at);")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_callsign ON scores(callsign);")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_score ON scores(score DESC);")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON scores(created_at);")
 
         conn.commit()
-        logging.info("DB Initialized")
+        logging.info("DB Ready")
 
     except Exception as e:
         logging.error(f"DB init error: {e}")
@@ -77,13 +59,12 @@ def init_db():
         if conn:
             return_db(conn)
 
-def get_db():
-    init_connection_pool()
-    return db_pool.getconn()
-
-def return_db(conn):
-    if db_pool and conn:
-        db_pool.putconn(conn)
+# Init DB on first request (safe for Render)
+@app.before_request
+def before_request():
+    if not hasattr(app, "db_initialized"):
+        init_db()
+        app.db_initialized = True
 
 # ---------------- ROUTES ---------------- #
 
@@ -114,17 +95,17 @@ def save_run():
         ship = str(data.get("ship", ""))[:50]
 
         conn = get_db()
-        c = conn.cursor()
 
-        c.execute("SELECT MAX(score) FROM scores WHERE callsign=%s", (callsign,))
-        prev_best = c.fetchone()[0] or 0
+        with conn.cursor() as c:
+            c.execute("SELECT MAX(score) FROM scores WHERE callsign=%s", (callsign,))
+            prev_best = c.fetchone()[0] or 0
 
-        new_best = score > prev_best
+            new_best = score > prev_best
 
-        c.execute("""
-            INSERT INTO scores (callsign, avatar, score, wave, kills, combo, coins, ship)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (callsign, avatar, score, wave, kills, combo, coins, ship))
+            c.execute("""
+                INSERT INTO scores (callsign, avatar, score, wave, kills, combo, coins, ship)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (callsign, avatar, score, wave, kills, combo, coins, ship))
 
         conn.commit()
 
@@ -143,20 +124,20 @@ def get_player(callsign):
     conn = None
     try:
         conn = get_db()
-        c = conn.cursor(cursor_factory=RealDictCursor)
 
-        c.execute("""
-            SELECT callsign, avatar,
-                   MAX(score) as best_score,
-                   MAX(wave) as best_wave,
-                   SUM(kills) as total_kills,
-                   COUNT(*) as games_played
-            FROM scores
-            WHERE callsign=%s
-            GROUP BY callsign
-        """, (callsign,))
+        with conn.cursor(row_factory=dict_row) as c:
+            c.execute("""
+                SELECT callsign, avatar,
+                       MAX(score) as best_score,
+                       MAX(wave) as best_wave,
+                       SUM(kills) as total_kills,
+                       COUNT(*) as games_played
+                FROM scores
+                WHERE callsign=%s
+                GROUP BY callsign
+            """, (callsign,))
 
-        row = c.fetchone()
+            row = c.fetchone()
 
         if not row:
             return jsonify({"player": None})
@@ -179,18 +160,18 @@ def leaderboard():
         limit = max(1, min(100, limit))
 
         conn = get_db()
-        c = conn.cursor(cursor_factory=RealDictCursor)
 
-        c.execute("""
-            SELECT callsign, avatar,
-                   MAX(score) as best_score
-            FROM scores
-            GROUP BY callsign
-            ORDER BY best_score DESC
-            LIMIT %s
-        """, (limit,))
+        with conn.cursor(row_factory=dict_row) as c:
+            c.execute("""
+                SELECT callsign, avatar,
+                       MAX(score) as best_score
+                FROM scores
+                GROUP BY callsign
+                ORDER BY best_score DESC
+                LIMIT %s
+            """, (limit,))
 
-        rows = c.fetchall()
+            rows = c.fetchall()
 
         board = []
         for i, r in enumerate(rows, 1):
@@ -216,10 +197,10 @@ def stats():
     conn = None
     try:
         conn = get_db()
-        c = conn.cursor()
 
-        c.execute("SELECT COUNT(DISTINCT callsign), COUNT(*), MAX(score) FROM scores")
-        row = c.fetchone()
+        with conn.cursor() as c:
+            c.execute("SELECT COUNT(DISTINCT callsign), COUNT(*), MAX(score) FROM scores")
+            row = c.fetchone()
 
         return jsonify({
             "total_players": row[0] or 0,
@@ -234,7 +215,8 @@ def stats():
         if conn:
             return_db(conn)
 
-# ---------------- MAIN ---------------- #
+
+# ---------------- RUN ---------------- #
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
