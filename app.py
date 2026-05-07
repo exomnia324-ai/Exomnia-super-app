@@ -37,6 +37,7 @@ def init_db():
                 callsign VARCHAR(50) NOT NULL,
                 avatar VARCHAR(10) DEFAULT '🚀',
                 score INTEGER DEFAULT 0,
+                leaderboard INTEGER DEFAULT 1,
                 wave INTEGER DEFAULT 1,
                 kills INTEGER DEFAULT 0,
                 combo INTEGER DEFAULT 0,
