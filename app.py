@@ -31,7 +31,6 @@ def init_db():
     try:
         conn = get_db()
         with conn.cursor() as c:
-
             c.execute("""
             CREATE TABLE IF NOT EXISTS scores (
                 id SERIAL PRIMARY KEY,
@@ -46,21 +45,17 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
-
             c.execute("CREATE INDEX IF NOT EXISTS idx_callsign ON scores(callsign);")
             c.execute("CREATE INDEX IF NOT EXISTS idx_score ON scores(score DESC);")
             c.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON scores(created_at);")
-
         conn.commit()
         logging.info("DB Ready")
-
     except Exception as e:
         logging.error(f"DB init error: {e}")
     finally:
         if conn:
             return_db(conn)
 
-# Init DB on first request (safe for Render)
 @app.before_request
 def before_request():
     if not hasattr(app, "db_initialized"):
@@ -84,34 +79,26 @@ def save_run():
     conn = None
     try:
         data = request.json or {}
-
         callsign = str(data.get("callsign", "PILOT"))[:50]
-        avatar = str(data.get("avatar", "🚀"))[:10]
-
-        score = max(0, int(data.get("score", 0)))
-        wave = max(1, int(data.get("wave", 1)))
-        kills = max(0, int(data.get("kills", 0)))
-        combo = max(0, int(data.get("combo", 0)))
-        coins = max(0, int(data.get("coins", 0)))
-        ship = str(data.get("ship", ""))[:50]
+        avatar   = str(data.get("avatar", "🚀"))[:10]
+        score    = max(0, int(data.get("score", 0)))
+        wave     = max(1, int(data.get("wave", 1)))
+        kills    = max(0, int(data.get("kills", 0)))
+        combo    = max(0, int(data.get("combo", 0)))
+        coins    = max(0, int(data.get("coins", 0)))
+        ship     = str(data.get("ship", ""))[:50]
 
         conn = get_db()
-
         with conn.cursor() as c:
             c.execute("SELECT MAX(score) FROM scores WHERE callsign=%s", (callsign,))
             prev_best = c.fetchone()[0] or 0
-
             new_best = score > prev_best
-
             c.execute("""
                 INSERT INTO scores (callsign, avatar, score, wave, kills, combo, coins, ship)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             """, (callsign, avatar, score, wave, kills, combo, coins, ship))
-
         conn.commit()
-
         return jsonify({"status": "ok", "new_best": new_best})
-
     except Exception as e:
         logging.error(f"save_run error: {e}")
         return jsonify({"status": "error"}), 500
@@ -125,14 +112,13 @@ def get_player(callsign):
     conn = None
     try:
         conn = get_db()
-
         with conn.cursor(row_factory=dict_row) as c:
             c.execute("""
                 SELECT callsign, avatar,
                        MAX(score) as best_score,
-                       MAX(wave) as best_wave,
+                       MAX(wave)  as best_wave,
                        SUM(kills) as total_kills,
-                       COUNT(*) as games_played
+                       COUNT(*)   as games_played
                 FROM scores
                 WHERE callsign=%s
                 GROUP BY callsign
@@ -142,7 +128,7 @@ def get_player(callsign):
             if not row:
                 return jsonify({"player": None})
 
-            # Calculate global rank
+            # Global rank
             c.execute("""
                 SELECT COUNT(*) as cnt FROM (
                     SELECT callsign, MAX(score) as best_score
@@ -155,7 +141,6 @@ def get_player(callsign):
         player = dict(row)
         player["rank"] = rank
         return jsonify({"player": player})
-
     except Exception as e:
         logging.error(e)
         return jsonify({"player": None}), 500
@@ -172,36 +157,33 @@ def leaderboard():
         limit = max(1, min(100, limit))
 
         conn = get_db()
-
         with conn.cursor(row_factory=dict_row) as c:
             c.execute("""
                 SELECT callsign, avatar,
                        MAX(score) as best_score,
-                       MAX(wave) as best_wave,
+                       MAX(wave)  as best_wave,
                        SUM(kills) as total_kills,
-                       COUNT(*) as games_played
+                       COUNT(*)   as games_played
                 FROM scores
                 GROUP BY callsign
                 ORDER BY best_score DESC
                 LIMIT %s
             """, (limit,))
-
             rows = c.fetchall()
 
         board = []
         for i, r in enumerate(rows, 1):
             board.append({
-                "rank": i,
-                "callsign": r["callsign"],
-                "avatar": r["avatar"],
-                "best_score": r["best_score"],
-                "best_wave": r["best_wave"],
-                "total_kills": r["total_kills"],
-                "games_played": r["games_played"]
+                "rank":         i,
+                "callsign":     r["callsign"],
+                "avatar":       r["avatar"],
+                "best_score":   r["best_score"],
+                "best_wave":    r["best_wave"],
+                "total_kills":  r["total_kills"],
+                "games_played": r["games_played"],
             })
 
         return jsonify({"board": board})
-
     except Exception as e:
         logging.error(e)
         return jsonify({"board": []}), 500
@@ -215,17 +197,14 @@ def stats():
     conn = None
     try:
         conn = get_db()
-
         with conn.cursor() as c:
             c.execute("SELECT COUNT(DISTINCT callsign), COUNT(*), MAX(score) FROM scores")
             row = c.fetchone()
-
         return jsonify({
             "total_players": row[0] or 0,
-            "total_games": row[1] or 0,
-            "top_score": row[2] or 0
+            "total_games":   row[1] or 0,
+            "top_score":     row[2] or 0,
         })
-
     except Exception as e:
         logging.error(e)
         return jsonify({}), 500
