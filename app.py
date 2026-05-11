@@ -165,7 +165,10 @@ def leaderboard():
         with conn.cursor(row_factory=dict_row) as c:
             c.execute("""
                 SELECT callsign, avatar,
-                       MAX(score) as best_score
+                       MAX(score) as best_score,
+                       MAX(wave) as best_wave,
+                       SUM(kills) as total_kills,
+                       COUNT(*) as games_played
                 FROM scores
                 GROUP BY callsign
                 ORDER BY best_score DESC
@@ -180,7 +183,10 @@ def leaderboard():
                 "rank": i,
                 "callsign": r["callsign"],
                 "avatar": r["avatar"],
-                "best_score": r["best_score"]
+                "best_score": r["best_score"],
+                "best_wave": r["best_wave"],
+                "total_kills": r["total_kills"],
+                "games_played": r["games_played"]
             })
 
         return jsonify({"board": board})
