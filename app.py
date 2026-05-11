@@ -137,13 +137,24 @@ def get_player(callsign):
                 WHERE callsign=%s
                 GROUP BY callsign
             """, (callsign,))
-
             row = c.fetchone()
 
-        if not row:
-            return jsonify({"player": None})
+            if not row:
+                return jsonify({"player": None})
 
-        return jsonify({"player": row})
+            # Calculate global rank
+            c.execute("""
+                SELECT COUNT(*) as cnt FROM (
+                    SELECT callsign, MAX(score) as best_score
+                    FROM scores GROUP BY callsign
+                ) ranked WHERE best_score > %s
+            """, (row["best_score"],))
+            rank_row = c.fetchone()
+            rank = (rank_row["cnt"] + 1) if rank_row else 1
+
+        player = dict(row)
+        player["rank"] = rank
+        return jsonify({"player": player})
 
     except Exception as e:
         logging.error(e)
