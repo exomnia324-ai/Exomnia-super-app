@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import psycopg
@@ -6,15 +5,13 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 import os
 import logging
+import traceback
 
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-# ---------------- DATABASE ---------------- #
-
 DATABASE_URL = os.environ.get("DATABASE_URL")
-
 if not DATABASE_URL:
     raise Exception("DATABASE_URL not set")
 
@@ -35,7 +32,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS scores (
                 id SERIAL PRIMARY KEY,
                 callsign VARCHAR(50) NOT NULL,
-                avatar VARCHAR(10) DEFAULT '🚀',
+                avatar VARCHAR(20) DEFAULT '🚀',
                 score INTEGER DEFAULT 0,
                 wave INTEGER DEFAULT 1,
                 kills INTEGER DEFAULT 0,
@@ -47,7 +44,6 @@ def init_db():
             """)
             c.execute("CREATE INDEX IF NOT EXISTS idx_callsign ON scores(callsign);")
             c.execute("CREATE INDEX IF NOT EXISTS idx_score ON scores(score DESC);")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON scores(created_at);")
         conn.commit()
         logging.info("DB Ready")
     except Exception as e:
@@ -62,17 +58,29 @@ def before_request():
         init_db()
         app.db_initialized = True
 
-# ---------------- ROUTES ---------------- #
-
 @app.route('/')
 def home():
     return render_template('index.html')
-
 
 @app.route('/api/ping')
 def ping():
     return jsonify({"ok": True})
 
+# DEBUG endpoint — delete after fix
+@app.route('/api/debug')
+def debug():
+    conn = None
+    try:
+        conn = get_db()
+        with conn.cursor() as c:
+            c.execute("SELECT id, callsign, score, wave, kills FROM scores ORDER BY score DESC LIMIT 10")
+            rows = c.fetchall()
+        return jsonify({"rows": [{"id":r[0],"callsign":r[1],"score":r[2],"wave":r[3],"kills":r[4]} for r in rows]})
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()})
+    finally:
+        if conn:
+            return_db(conn)
 
 @app.route('/api/run', methods=['POST'])
 def save_run():
@@ -80,14 +88,13 @@ def save_run():
     try:
         data = request.json or {}
         callsign = str(data.get("callsign", "PILOT"))[:50]
-        avatar   = str(data.get("avatar", "🚀"))[:10]
+        avatar   = str(data.get("avatar", "🚀"))[:20]
         score    = max(0, int(data.get("score", 0)))
         wave     = max(1, int(data.get("wave", 1)))
         kills    = max(0, int(data.get("kills", 0)))
         combo    = max(0, int(data.get("combo", 0)))
         coins    = max(0, int(data.get("coins", 0)))
         ship     = str(data.get("ship", ""))[:50]
-
         conn = get_db()
         with conn.cursor() as c:
             c.execute("SELECT MAX(score) FROM scores WHERE callsign=%s", (callsign,))
@@ -100,12 +107,11 @@ def save_run():
         conn.commit()
         return jsonify({"status": "ok", "new_best": new_best})
     except Exception as e:
-        logging.error(f"save_run error: {e}")
-        return jsonify({"status": "error"}), 500
+        logging.error(f"save_run error: {e}\n{traceback.format_exc()}")
+        return jsonify({"status": "error", "error": str(e)}), 500
     finally:
         if conn:
             return_db(conn)
-
 
 @app.route('/api/player/<callsign>')
 def get_player(callsign):
@@ -121,14 +127,11 @@ def get_player(callsign):
                        COUNT(*)   as games_played
                 FROM scores
                 WHERE callsign=%s
-                GROUP BY callsign
+                GROUP BY callsign, avatar
             """, (callsign,))
             row = c.fetchone()
-
             if not row:
                 return jsonify({"player": None})
-
-            # Global rank
             c.execute("""
                 SELECT COUNT(*) as cnt FROM (
                     SELECT callsign, MAX(score) as best_score
@@ -137,17 +140,15 @@ def get_player(callsign):
             """, (row["best_score"],))
             rank_row = c.fetchone()
             rank = (rank_row["cnt"] + 1) if rank_row else 1
-
         player = dict(row)
         player["rank"] = rank
         return jsonify({"player": player})
     except Exception as e:
-        logging.error(e)
-        return jsonify({"player": None}), 500
+        logging.error(f"get_player error: {e}\n{traceback.format_exc()}")
+        return jsonify({"player": None, "error": str(e)}), 500
     finally:
         if conn:
             return_db(conn)
-
 
 @app.route('/api/leaderboard')
 def leaderboard():
@@ -155,7 +156,6 @@ def leaderboard():
     try:
         limit = int(request.args.get("limit", 10))
         limit = max(1, min(100, limit))
-
         conn = get_db()
         with conn.cursor(row_factory=dict_row) as c:
             c.execute("""
@@ -165,12 +165,11 @@ def leaderboard():
                        SUM(kills) as total_kills,
                        COUNT(*)   as games_played
                 FROM scores
-                GROUP BY callsign
+                GROUP BY callsign, avatar
                 ORDER BY best_score DESC
                 LIMIT %s
             """, (limit,))
             rows = c.fetchall()
-
         board = []
         for i, r in enumerate(rows, 1):
             board.append({
@@ -182,15 +181,13 @@ def leaderboard():
                 "total_kills":  r["total_kills"],
                 "games_played": r["games_played"],
             })
-
         return jsonify({"board": board})
     except Exception as e:
-        logging.error(e)
-        return jsonify({"board": []}), 500
+        logging.error(f"leaderboard error: {e}\n{traceback.format_exc()}")
+        return jsonify({"board": [], "error": str(e)}), 500
     finally:
         if conn:
             return_db(conn)
-
 
 @app.route('/api/stats')
 def stats():
@@ -211,9 +208,6 @@ def stats():
     finally:
         if conn:
             return_db(conn)
-
-
-# ---------------- RUN ---------------- #
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
