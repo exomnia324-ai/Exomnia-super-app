@@ -683,6 +683,19 @@ function gameOver(){
   $id('eWave').textContent=G.wave;$id('eScore').textContent=G.score;
   $id('eKills').textContent=G.kills;$id('eCombo').textContent=G.maxCombo;
   endScreen.classList.add('on');
+  // ── Save stats to localStorage so lobby shows updated values ──
+  try{
+    const prevBest=parseInt(localStorage.getItem('exomniaBestScore')||'0');
+    const prevWave=parseInt(localStorage.getItem('exomniaBestWave')||'0');
+    const prevKills=parseInt(localStorage.getItem('exomniaTotalKills')||'0');
+    const prevGames=parseInt(localStorage.getItem('exomniaGames')||'0');
+    const prevCoins=parseInt(localStorage.getItem('exomniaTotalCoins')||'0');
+    if(G.score>prevBest)localStorage.setItem('exomniaBestScore',G.score);
+    if(G.wave>prevWave)localStorage.setItem('exomniaBestWave',G.wave);
+    localStorage.setItem('exomniaTotalKills',prevKills+G.kills);
+    localStorage.setItem('exomniaGames',prevGames+1);
+    localStorage.setItem('exomniaTotalCoins',prevCoins+G.coins);
+  }catch(e){}
   // ── Save score to server ──
   API.saveRun();
 }
