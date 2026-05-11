@@ -676,14 +676,14 @@ function upgrade(type){
   if(type==='shield'){G.shMax+=20;G.shield=Math.min(G.shield+20,G.shMax);}
 }
 
-function gameOver(){
+async function gameOver(){
   G.over=true;G.alive=false;
   SFX.game_over();
   $id('endTitle').textContent='GAME OVER';$id('endTitle').className='lose';
   $id('eWave').textContent=G.wave;$id('eScore').textContent=G.score;
   $id('eKills').textContent=G.kills;$id('eCombo').textContent=G.maxCombo;
   endScreen.classList.add('on');
-  // ── Save stats to localStorage so lobby shows updated values ──
+  // ── Save stats to localStorage ──
   try{
     const prevBest=parseInt(localStorage.getItem('exomniaBestScore')||'0');
     const prevWave=parseInt(localStorage.getItem('exomniaBestWave')||'0');
@@ -696,8 +696,13 @@ function gameOver(){
     localStorage.setItem('exomniaGames',prevGames+1);
     localStorage.setItem('exomniaTotalCoins',prevCoins+G.coins);
   }catch(e){}
-  // ── Save score to server ──
-  API.saveRun();
+  // ── Save to server and wait ──
+  await API.saveRun();
+}
+
+function showEndLeaderboard(){
+  // Show leaderboard overlay (reuses API.showLeaderboard)
+  if(typeof API !== 'undefined') API.showLeaderboard();
 }
 
 /* ═══ DRAW ═══ */
@@ -2618,6 +2623,7 @@ window.toggleSetting=toggleSetting;
 window.openShop=openShop;window.closeShop=closeShop;
 
 window.startGame=startGame;window.doSpecial=doSpecial;window.cycleWeapon=cycleWeapon;window.upgrade=upgrade;
+window.showEndLeaderboard=showEndLeaderboard;
 
 /* ═══════════════════════════════════════════════
    API MODULE — Server + Database Integration
