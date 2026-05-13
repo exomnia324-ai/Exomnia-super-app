@@ -28,8 +28,7 @@ function resize(){
     CV.width  = document.documentElement.clientWidth  || window.innerWidth;
     CV.height = document.documentElement.clientHeight || window.innerHeight;
   }
-  _bgDirty=true;
-  if(G.stars1&&G.stars1.length) _renderStaticBG();
+  if(typeof _renderStaticBG==='function' && G.stars1&&G.stars1.length) _renderStaticBG();
 }
 // Listen on both resize events for full coverage
 window.addEventListener('resize', resize);
@@ -234,6 +233,9 @@ const ADE = {
 };
 
 /* ── BACKGROUND ── */
+// Offscreen canvas for static BG (galaxy clusters + pixel dust)
+let _bgCanvas=null, _bgCtx=null, _bgDirty=true;
+
 function initBG(){
   const W=CV.width, H=CV.height;
 
@@ -307,12 +309,9 @@ function initBG(){
     col: i%2===0?'rgba(180,200,255':'rgba(255,220,180'
   });
 
-  // ── Pre-render static background to offscreen canvas ──
-  _renderStaticBG();
+  // Static BG will be rendered after this function returns (called externally)
 }
 
-// Offscreen canvas for galaxy clusters + deep nebulae (never changes)
-let _bgCanvas=null, _bgCtx=null, _bgDirty=true;
 function _renderStaticBG(){
   if(!_bgCanvas){
     _bgCanvas=document.createElement('canvas');
@@ -329,7 +328,7 @@ function _renderStaticBG(){
   cx.fillStyle=baseGrad; cx.fillRect(0,0,W,H);
 
   // Galaxy clusters
-  for(const g of G.galaxyClusters){
+  if(G.galaxyClusters) for(const g of G.galaxyClusters){
     cx.save();
     cx.translate(g.x,g.y); cx.rotate(g.angle);
     const gg=cx.createRadialGradient(0,0,2,0,0,g.rx);
@@ -1044,11 +1043,11 @@ function draw(){
   }
 
   // ── Layer 1: Distant micro-stars ──
-  _drawRichStars(G.stars1,.55,t,false);
+  if(G.stars1) _drawRichStars(G.stars1,.55,t,false);
   // ── Layer 2: Mid stars ──
-  _drawRichStars(G.stars2,.8,t,false);
+  if(G.stars2) _drawRichStars(G.stars2,.8,t,false);
   // ── Layer 3: Bright foreground stars with optional flare ──
-  _drawRichStars(G.stars3,1.0,t,true);
+  if(G.stars3) _drawRichStars(G.stars3,1.0,t,true);
 
   for(const d of G.drops)drawDrop(d);
   // railgun beams
@@ -1995,7 +1994,7 @@ function restartGame(){
   pauseMenu.classList.remove('on');endScreen.classList.remove('on');lvlUp.classList.remove('on');
   bossHUD.classList.remove('on');$id('pauseBtn').textContent='⏸';
   ADE.reset();
-  initG();initBG();
+  initG();initBG();_renderStaticBG();
   // Re-apply selected ship & mode bonuses after initG resets G
   applyShipBonuses(selectedShip);
   applyModeBonuses(selectedMode);
@@ -3202,7 +3201,7 @@ const API = (() => {
 /* ═══ BOOT ═══ */
 window.addEventListener('load',()=>{
   loadOwnedWeapons();
-  initBG();updateSkillDots();updateWeaponHUD();
+  initBG();_renderStaticBG();updateSkillDots();updateWeaponHUD();
   // ── Connect to server ──
   API.checkServer();
 
