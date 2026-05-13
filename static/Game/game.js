@@ -28,6 +28,8 @@ function resize(){
     CV.width  = document.documentElement.clientWidth  || window.innerWidth;
     CV.height = document.documentElement.clientHeight || window.innerHeight;
   }
+  _bgDirty=true;
+  if(G.stars1&&G.stars1.length) _renderStaticBG();
 }
 // Listen on both resize events for full coverage
 window.addEventListener('resize', resize);
@@ -233,13 +235,121 @@ const ADE = {
 
 /* ── BACKGROUND ── */
 function initBG(){
-  G.stars1=[];G.stars2=[];G.stars3=[];
-  for(let i=0;i<90;i++)G.stars1.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.3+Math.random()*.5,a:.25+Math.random()*.5,twinkleSpd:rnd(1,3),twinkleOff:rnd(0,6.28)});
-  for(let i=0;i<55;i++)G.stars2.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.7+Math.random()*.8,a:.4+Math.random()*.4,twinkleSpd:rnd(.5,2),twinkleOff:rnd(0,6.28)});
-  for(let i=0;i<28;i++)G.stars3.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:1.1+Math.random()*1.2,a:.5+Math.random()*.4,twinkleSpd:rnd(.3,1.5),twinkleOff:rnd(0,6.28)});
+  const W=CV.width, H=CV.height;
+
+  // ── Layer 1: Distant micro-stars (very slow, barely visible) ──
+  G.stars1=[];
+  for(let i=0;i<120;i++) G.stars1.push({
+    x:rnd(0,W), y:rnd(0,H),
+    r:.25+Math.random()*.4,
+    a:.15+Math.random()*.3,
+    twinkleSpd:rnd(.4,1.2), twinkleOff:rnd(0,6.28),
+    col: Math.random()<.15?'#ffd8aa': Math.random()<.15?'#aad4ff':'#e8f0ff'
+  });
+
+  // ── Layer 2: Mid stars ──
+  G.stars2=[];
+  for(let i=0;i<70;i++) G.stars2.push({
+    x:rnd(0,W), y:rnd(0,H),
+    r:.6+Math.random()*.7,
+    a:.3+Math.random()*.4,
+    twinkleSpd:rnd(.3,1.5), twinkleOff:rnd(0,6.28),
+    col: Math.random()<.12?'#ffcc88': Math.random()<.18?'#88ccff': Math.random()<.08?'#ffaaaa':'#ffffff'
+  });
+
+  // ── Layer 3: Bright foreground stars with cross-flare ──
+  G.stars3=[];
+  for(let i=0;i<35;i++) G.stars3.push({
+    x:rnd(0,W), y:rnd(0,H),
+    r:.9+Math.random()*1.4,
+    a:.55+Math.random()*.4,
+    twinkleSpd:rnd(.2,1.0), twinkleOff:rnd(0,6.28),
+    col: Math.random()<.15?'#ffddaa': Math.random()<.2?'#aaddff':'#ffffff',
+    flare: Math.random()<.25  // some stars get a cross-lens flare
+  });
+
+  // ── Nebulae: slow drifting color clouds ──
   G.nebulae=[];
-  const nc=['rgba(0,35,90','rgba(50,0,110','rgba(0,70,70','rgba(90,20,0'];
-  for(let i=0;i<6;i++)G.nebulae.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:rnd(90,200),c:nc[i%nc.length],spd:.03+Math.random()*.06});
+  const nebulaColors=[
+    {c:'rgba(0,40,120',  hue:'blue'},
+    {c:'rgba(60,0,130',  hue:'purple'},
+    {c:'rgba(0,80,80',   hue:'teal'},
+    {c:'rgba(100,20,0',  hue:'red'},
+    {c:'rgba(0,60,100',  hue:'blue'},
+    {c:'rgba(40,0,90',   hue:'purple'},
+    {c:'rgba(0,100,60',  hue:'green'},
+    {c:'rgba(80,30,0',   hue:'amber'},
+  ];
+  for(let i=0;i<8;i++){
+    const nc=nebulaColors[i%nebulaColors.length];
+    G.nebulae.push({
+      x:rnd(-100,W+100), y:rnd(-100,H+100),
+      r:rnd(100,260),
+      c:nc.c, hue:nc.hue,
+      spd:.015+Math.random()*.04,
+      drift: (Math.random()-.5)*.008,   // slight horizontal drift
+      alpha: .06+Math.random()*.07,
+      pulse: Math.random()*6.28, pulseSpd:rnd(.003,.012)
+    });
+  }
+
+  // ── Shooting stars pool ──
+  G.shootingStars=[];
+  G._nextShootingStar=rnd(2000,6000); // ms until next one
+
+  // ── Distant galaxy clusters (static, very faint) ──
+  G.galaxyClusters=[];
+  for(let i=0;i<4;i++) G.galaxyClusters.push({
+    x:rnd(W*.1,W*.9), y:rnd(H*.05,H*.6),
+    rx:rnd(40,100), ry:rnd(18,45),
+    angle:rnd(0,Math.PI),
+    alpha:rnd(.018,.04),
+    col: i%2===0?'rgba(180,200,255':'rgba(255,220,180'
+  });
+
+  // ── Pre-render static background to offscreen canvas ──
+  _renderStaticBG();
+}
+
+// Offscreen canvas for galaxy clusters + deep nebulae (never changes)
+let _bgCanvas=null, _bgCtx=null, _bgDirty=true;
+function _renderStaticBG(){
+  if(!_bgCanvas){
+    _bgCanvas=document.createElement('canvas');
+    _bgCtx=_bgCanvas.getContext('2d',{alpha:false});
+  }
+  _bgCanvas.width=CV.width; _bgCanvas.height=CV.height;
+  const cx=_bgCtx, W=CV.width, H=CV.height;
+
+  // Deep space base — subtle gradient, not flat black
+  const baseGrad=cx.createRadialGradient(W*.45,H*.35,0,W*.45,H*.35,Math.max(W,H)*.9);
+  baseGrad.addColorStop(0,'#00050f');
+  baseGrad.addColorStop(.45,'#000308');
+  baseGrad.addColorStop(1,'#000104');
+  cx.fillStyle=baseGrad; cx.fillRect(0,0,W,H);
+
+  // Galaxy clusters
+  for(const g of G.galaxyClusters){
+    cx.save();
+    cx.translate(g.x,g.y); cx.rotate(g.angle);
+    const gg=cx.createRadialGradient(0,0,2,0,0,g.rx);
+    gg.addColorStop(0,g.col+','+g.alpha*3+')');
+    gg.addColorStop(.4,g.col+','+g.alpha+')');
+    gg.addColorStop(1,'transparent');
+    cx.fillStyle=gg;
+    cx.scale(1,g.ry/g.rx);
+    cx.beginPath(); cx.arc(0,0,g.rx,0,Math.PI*2); cx.fill();
+    cx.restore();
+  }
+
+  // A few hundred very faint pixel-dust stars in the static layer
+  for(let i=0;i<200;i++){
+    cx.globalAlpha=.04+Math.random()*.1;
+    cx.fillStyle='#c8d8ff';
+    cx.fillRect(rnd(0,W),rnd(0,H),.8,.8);
+  }
+  cx.globalAlpha=1;
+  _bgDirty=false;
 }
 
 /* ═══ MAIN LOOP ═══ */
@@ -272,10 +382,30 @@ function update(){
   const dt=G.dt,f=dt/16;
   G.frame++;
 
-  for(const s of G.stars1){s.y+=.18*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
-  for(const s of G.stars2){s.y+=.45*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
-  for(const s of G.stars3){s.y+=1.0*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
-  for(const n of G.nebulae){n.y+=n.spd*f;if(n.y>CV.height+300)n.y=-300;}
+  for(const s of G.stars1){s.y+=.12*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
+  for(const s of G.stars2){s.y+=.32*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
+  for(const s of G.stars3){s.y+=.75*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
+  for(const n of G.nebulae){
+    n.y+=n.spd*f; n.x+=n.drift*f; n.pulse+=n.pulseSpd*f;
+    if(n.y>CV.height+300)n.y=-300;
+    if(n.x>CV.width+300)n.x=-300; else if(n.x<-300)n.x=CV.width+300;
+  }
+  // Shooting stars
+  if(G.shootingStars){
+    G._nextShootingStar-=G.dt;
+    if(G._nextShootingStar<=0){
+      G._nextShootingStar=rnd(3000,9000);
+      const sx=rnd(0,CV.width*.7), sy=rnd(0,CV.height*.3);
+      G.shootingStars.push({x:sx,y:sy,vx:rnd(4,9),vy:rnd(2,5),life:500,ml:500,trail:[]});
+    }
+    for(let i=G.shootingStars.length-1;i>=0;i--){
+      const ss=G.shootingStars[i];
+      ss.trail.push({x:ss.x,y:ss.y});
+      if(ss.trail.length>14)ss.trail.shift();
+      ss.x+=ss.vx*f; ss.y+=ss.vy*f; ss.life-=G.dt;
+      if(ss.life<=0)G.shootingStars.splice(i,1);
+    }
+  }
 
   G.shakeAmt=Math.max(0,G.shakeAmt-G.shakeDecay*f);
   ADE.tick(dt);
@@ -865,20 +995,60 @@ function draw(){
   const sw=G.shakeAmt>0;
   if(sw){CX.save();CX.translate(rnd(-G.shakeAmt,G.shakeAmt),rnd(-G.shakeAmt*.5,G.shakeAmt*.5));}
   CX.clearRect(0,0,CV.width,CV.height);
-  CX.fillStyle='#00020a';CX.fillRect(0,0,CV.width,CV.height);
 
-  // nebulae - draw every 3 frames (slow moving, won't notice)
-  if(G.frame%3===0){for(const n of G.nebulae){
-    const g=CX.createRadialGradient(n.x,n.y,10,n.x,n.y,n.r);
-    g.addColorStop(0,n.c+',0.12)');g.addColorStop(1,'transparent');
-    CX.fillStyle=g;CX.beginPath();CX.arc(n.x,n.y,n.r,0,Math.PI*2);CX.fill();
-  }}
+  // ── Static deep-space base (galaxy clusters + pixel dust) ──
+  if(_bgCanvas && _bgCanvas.width===CV.width && _bgCanvas.height===CV.height){
+    CX.drawImage(_bgCanvas,0,0);
+  } else {
+    CX.fillStyle='#00020a'; CX.fillRect(0,0,CV.width,CV.height);
+  }
 
-  // stars with twinkle
   const t=G._t||0;
-  drawStars(G.stars1,'#aaddff',.6,t);
-  drawStars(G.stars2,'#cceeff',.8,t);
-  drawStars(G.stars3,'#ffffff',1,t);
+
+  // ── Dynamic nebulae — pulsing color clouds ──
+  if(G.frame%2===0 && G.nebulae){
+    for(const n of G.nebulae){
+      const pulse=0.8+Math.sin(n.pulse)*0.2;
+      const alpha=n.alpha*pulse;
+      const g=CX.createRadialGradient(n.x,n.y,8,n.x,n.y,n.r*pulse);
+      g.addColorStop(0,n.c+','+Math.min(.18,alpha*2)+')');
+      g.addColorStop(.5,n.c+','+alpha+')');
+      g.addColorStop(1,'transparent');
+      CX.fillStyle=g; CX.beginPath(); CX.arc(n.x,n.y,n.r*pulse,0,Math.PI*2); CX.fill();
+    }
+  }
+
+  // ── Shooting stars ──
+  if(G.shootingStars){
+    for(const ss of G.shootingStars){
+      const a=ss.life/ss.ml;
+      if(ss.trail.length>1){
+        for(let i=1;i<ss.trail.length;i++){
+          const ta=(i/ss.trail.length)*a*.7;
+          CX.globalAlpha=ta;
+          CX.strokeStyle='#ffffff';
+          CX.lineWidth=1.2*(i/ss.trail.length);
+          CX.beginPath();
+          CX.moveTo(ss.trail[i-1].x,ss.trail[i-1].y);
+          CX.lineTo(ss.trail[i].x,ss.trail[i].y);
+          CX.stroke();
+        }
+      }
+      // Head glow
+      CX.globalAlpha=a;
+      CX.fillStyle='#ffffff';
+      CX.shadowBlur=8; CX.shadowColor='#aaddff';
+      CX.beginPath(); CX.arc(ss.x,ss.y,1.5,0,Math.PI*2); CX.fill();
+      CX.shadowBlur=0; CX.globalAlpha=1;
+    }
+  }
+
+  // ── Layer 1: Distant micro-stars ──
+  _drawRichStars(G.stars1,.55,t,false);
+  // ── Layer 2: Mid stars ──
+  _drawRichStars(G.stars2,.8,t,false);
+  // ── Layer 3: Bright foreground stars with optional flare ──
+  _drawRichStars(G.stars3,1.0,t,true);
 
   for(const d of G.drops)drawDrop(d);
   // railgun beams
@@ -946,12 +1116,20 @@ function draw(){
   drawFloatTexts(G.dt/16);
 }
 
-function drawStars(arr,col,maxA,t){
-  CX.fillStyle=col;
+function _drawRichStars(arr,maxA,t,allowFlare){
   for(const s of arr){
-    const twinkle=s.r>0.8?(.75+Math.sin(t*s.twinkleSpd+s.twinkleOff)*.25):0.8;
-    CX.globalAlpha=s.a*maxA*twinkle;
+    const twinkle=.72+Math.sin(t*s.twinkleSpd+s.twinkleOff)*.28;
+    const alpha=s.a*maxA*twinkle;
+    CX.globalAlpha=alpha;
+    CX.fillStyle=s.col||'#ffffff';
     CX.fillRect(s.x-s.r,s.y-s.r,s.r*2,s.r*2);
+    // Cross lens flare on large bright stars
+    if(allowFlare && s.flare && s.r>1.2 && twinkle>.85){
+      const fl=s.r*3.5*twinkle;
+      CX.globalAlpha=alpha*.35;
+      CX.fillRect(s.x-fl,s.y-s.r*.4,fl*2,s.r*.8);  // horizontal
+      CX.fillRect(s.x-s.r*.4,s.y-fl,s.r*.8,fl*2);   // vertical
+    }
   }
   CX.globalAlpha=1;
 }
