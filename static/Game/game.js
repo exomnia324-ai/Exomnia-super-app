@@ -1,6 +1,8 @@
 'use strict';
 // cache math functions for hot paths
 const _sin=Math.sin,_cos=Math.cos,_sqrt=Math.sqrt,_abs=Math.abs,_min=Math.min,_max=Math.max,_atan2=Math.atan2,_PI=Math.PI,_rnd=Math.random,_floor=Math.floor;
+// Offscreen BG canvas — declared here so resize() can safely reference it
+let _bgCanvas=null,_bgCtx=null,_bgDirty=true;
 const CV=document.getElementById('cv');
 const CX=CV.getContext('2d',{alpha:false,desynchronized:true});
 const MM=document.getElementById('mmcv');
@@ -233,8 +235,7 @@ const ADE = {
 };
 
 /* ── BACKGROUND ── */
-// Offscreen canvas for static BG (galaxy clusters + pixel dust)
-let _bgCanvas=null, _bgCtx=null, _bgDirty=true;
+
 
 function initBG(){
   const W=CV.width, H=CV.height;
