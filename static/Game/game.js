@@ -1727,6 +1727,19 @@ function getShipWeaponIndices(){
   return (ship.weapons||['PULSE']).map(name=>WEAPONS.findIndex(w=>w.name===name)).filter(i=>i>=0&&WEAPONS[i].owned);
 }
 
+function saveOwnedWeapons(){
+  try{
+    const owned=WEAPONS.filter(w=>w.owned).map(w=>w.name);
+    localStorage.setItem('exomniaOwnedWeapons',JSON.stringify(owned));
+  }catch(e){}
+}
+function loadOwnedWeapons(){
+  try{
+    const owned=JSON.parse(localStorage.getItem('exomniaOwnedWeapons')||'null');
+    if(!Array.isArray(owned))return;
+    WEAPONS.forEach(w=>{ if(owned.includes(w.name)) w.owned=true; });
+  }catch(e){}
+}
 function getOwnedShips(){
   try{
     const o=JSON.parse(localStorage.getItem('exomniaOwnedShips')||'[0]');
@@ -1927,6 +1940,7 @@ function openLbyPanel(type){
               if(coins<w.cost){showToast('◈ NOT ENOUGH COINS!');return;}
               setLbyCoins(coins-w.cost);
               w.owned=true;
+              saveOwnedWeapons();
               const topCoin=document.getElementById('lbyCoinDisplay');
               if(topCoin) topCoin.textContent=getLbyCoins();
               showToast('✔ PURCHASED: '+w.name);
@@ -2305,6 +2319,7 @@ function shopAction(idx){
     G.coins-=w.cost;
     coEl.textContent=fmtNum(G.coins);
     w.owned=true;
+    saveOwnedWeapons();
     G.wIdx=idx;
     toast_('✔ PURCHASED & EQUIPPED: '+w.name);
     renderShop();
@@ -2852,6 +2867,7 @@ const API = (() => {
 
 /* ═══ BOOT ═══ */
 window.addEventListener('load',()=>{
+  loadOwnedWeapons();
   initBG();updateSkillDots();updateWeaponHUD();
   // ── Connect to server ──
   API.checkServer();
