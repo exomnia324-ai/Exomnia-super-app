@@ -1,8 +1,6 @@
 'use strict';
 // cache math functions for hot paths
 const _sin=Math.sin,_cos=Math.cos,_sqrt=Math.sqrt,_abs=Math.abs,_min=Math.min,_max=Math.max,_atan2=Math.atan2,_PI=Math.PI,_rnd=Math.random,_floor=Math.floor;
-// Offscreen BG canvas — declared here so resize() can safely reference it
-let _bgCanvas=null,_bgCtx=null,_bgDirty=true;
 const CV=document.getElementById('cv');
 const CX=CV.getContext('2d',{alpha:false,desynchronized:true});
 const MM=document.getElementById('mmcv');
@@ -30,7 +28,6 @@ function resize(){
     CV.width  = document.documentElement.clientWidth  || window.innerWidth;
     CV.height = document.documentElement.clientHeight || window.innerHeight;
   }
-  if(typeof _renderStaticBG==='function' && G.stars1&&G.stars1.length) _renderStaticBG();
 }
 // Listen on both resize events for full coverage
 window.addEventListener('resize', resize);
@@ -99,257 +96,18 @@ function initG(){
 }
 initG();
 
-/* ═══ ADAPTIVE DIFFICULTY ENGINE ═══
-   Tracks player performance in real-time and adjusts:
-   - Enemy speed, HP, fire rate, spawn rate
-   - Boss aggression and pattern complexity
-   - Drop rates and power-up frequency
-   - Enemy type weights (more elites/snipers if player is dominating)
-*/
-const ADE = {
-  // Rolling performance window (last 15 seconds)
-  killsInWindow: [],
-  damageInWindow: [],
-  windowMs: 15000,
-
-  // Current difficulty multiplier (0.5 = easy, 1.0 = normal, 2.0 = hard)
-  diffMult: 1.0,
-  targetDiff: 1.0,
-
-  // Smoothed player performance score (0-100)
-  perfScore: 50,
-
-  // Streak tracking
-  deathCount: 0,
-  consecutiveWavesNoDeath: 0,
-
-  // Dynamic drop rate boost when player is struggling
-  dropBoost: 0,
-
-  // Called each time a kill happens
-  onKill(wave) {
-    const now = performance.now();
-    this.killsInWindow.push(now);
-    this._prune(now);
-    this._recalc(wave);
-  },
-
-  // Called each time player takes damage
-  onDamage(wave) {
-    const now = performance.now();
-    this.damageInWindow.push(now);
-    this._prune(now);
-    this._recalc(wave);
-  },
-
-  onDeath() {
-    this.deathCount++;
-    this.consecutiveWavesNoDeath = 0;
-    // Ease off after death — give player breathing room
-    this.targetDiff = Math.max(0.55, this.targetDiff - 0.22);
-    this.dropBoost = Math.min(3, this.dropBoost + 1);
-  },
-
-  onWaveClear(wave) {
-    this.consecutiveWavesNoDeath++;
-    // Reward clean waves with escalation
-    if (this.consecutiveWavesNoDeath >= 2) {
-      this.targetDiff = Math.min(2.2, this.targetDiff + 0.1 * this.consecutiveWavesNoDeath);
-    }
-    this.dropBoost = Math.max(0, this.dropBoost - 0.5);
-  },
-
-  _prune(now) {
-    const cutoff = now - this.windowMs;
-    this.killsInWindow  = this.killsInWindow.filter(t => t > cutoff);
-    this.damageInWindow = this.damageInWindow.filter(t => t > cutoff);
-  },
-
-  _recalc(wave) {
-    // kills per second in window
-    const kps = this.killsInWindow.length / (this.windowMs / 1000);
-    // damage hits per second
-    const dps = this.damageInWindow.length / (this.windowMs / 1000);
-
-    // perf score: high kills + low damage = high score
-    const rawPerf = Math.min(100, (kps * 28) - (dps * 30) + 50);
-    // Smooth it
-    this.perfScore = this.perfScore * 0.88 + rawPerf * 0.12;
-
-    // Target difficulty from performance + wave base
-    const waveBase = 1.0 + (wave - 1) * 0.07; // gradual wave escalation
-    const perfDelta = (this.perfScore - 50) / 100; // -0.5 to +0.5
-    this.targetDiff = Math.max(0.5, Math.min(2.2, waveBase + perfDelta * 0.8));
-  },
-
-  // Smoothly move current diff toward target (called every frame)
-  tick(dtMs) {
-    const speed = 0.003 * (dtMs / 16);
-    if (this.diffMult < this.targetDiff) {
-      this.diffMult = Math.min(this.targetDiff, this.diffMult + speed);
-    } else {
-      this.diffMult = Math.max(this.targetDiff, this.diffMult - speed * 0.5);
-    }
-  },
-
-  // Enemy HP multiplier
-  hpMult()   { return 0.6 + this.diffMult * 0.5; },
-  // Enemy speed multiplier
-  spdMult()  { return 0.7 + this.diffMult * 0.4; },
-  // Enemy fire rate multiplier (lower = faster shots)
-  fireMult() { return Math.max(0.45, 1.3 - this.diffMult * 0.35); },
-  // Spawn rate multiplier (1 = normal, <1 = faster spawns)
-  spawnMult(){ return Math.max(0.5, 1.2 - this.diffMult * 0.2); },
-  // Elite chance (0.0 - 0.5)
-  eliteChance(baseWave) {
-    const base = baseWave >= 3 ? 0.22 : 0.08;
-    return Math.min(0.55, base + (this.diffMult - 1.0) * 0.18);
-  },
-  // Sniper chance
-  sniperChance(baseWave) {
-    if (baseWave < 3) return 0;
-    return Math.min(0.25, 0.08 + (this.diffMult - 1.0) * 0.12);
-  },
-  // Drop rate multiplier (higher when struggling)
-  dropRate() { return 0.7 + this.dropBoost * 0.1 + Math.max(0, (1.0 - this.diffMult) * 0.3); },
-
-  reset() {
-    this.killsInWindow = [];
-    this.damageInWindow = [];
-    this.diffMult = 1.0;
-    this.targetDiff = 1.0;
-    this.perfScore = 50;
-    this.deathCount = 0;
-    this.consecutiveWavesNoDeath = 0;
-    this.dropBoost = 0;
-  },
-
-  // Visual feedback: returns a string for HUD
-  label() {
-    if (this.diffMult < 0.7)  return '◌ EASING';
-    if (this.diffMult < 0.95) return '◈ NORMAL';
-    if (this.diffMult < 1.3)  return '◆ INTENSE';
-    if (this.diffMult < 1.7)  return '◈ BRUTAL';
-    return '☠ EXTREME';
-  },
-};
-
 /* ── BACKGROUND ── */
-
-
 function initBG(){
-  const W=CV.width, H=CV.height;
-
-  // ── Layer 1: Distant micro-stars (very slow, barely visible) ──
-  G.stars1=[];
-  for(let i=0;i<120;i++) G.stars1.push({
-    x:rnd(0,W), y:rnd(0,H),
-    r:.25+Math.random()*.4,
-    a:.15+Math.random()*.3,
-    twinkleSpd:rnd(.4,1.2), twinkleOff:rnd(0,6.28),
-    col: Math.random()<.15?'#ffd8aa': Math.random()<.15?'#aad4ff':'#e8f0ff'
-  });
-
-  // ── Layer 2: Mid stars ──
-  G.stars2=[];
-  for(let i=0;i<70;i++) G.stars2.push({
-    x:rnd(0,W), y:rnd(0,H),
-    r:.6+Math.random()*.7,
-    a:.3+Math.random()*.4,
-    twinkleSpd:rnd(.3,1.5), twinkleOff:rnd(0,6.28),
-    col: Math.random()<.12?'#ffcc88': Math.random()<.18?'#88ccff': Math.random()<.08?'#ffaaaa':'#ffffff'
-  });
-
-  // ── Layer 3: Bright foreground stars with cross-flare ──
-  G.stars3=[];
-  for(let i=0;i<35;i++) G.stars3.push({
-    x:rnd(0,W), y:rnd(0,H),
-    r:.9+Math.random()*1.4,
-    a:.55+Math.random()*.4,
-    twinkleSpd:rnd(.2,1.0), twinkleOff:rnd(0,6.28),
-    col: Math.random()<.15?'#ffddaa': Math.random()<.2?'#aaddff':'#ffffff',
-    flare: Math.random()<.25  // some stars get a cross-lens flare
-  });
-
-  // ── Nebulae: slow drifting color clouds ──
+  G.stars1=[];G.stars2=[];G.stars3=[];
+  const starCols=['#ffffff','#ffffff','#ffffff','#cce8ff','#ffd8b0','#ffcccc','#ddeeff'];
+  for(let i=0;i<110;i++)G.stars1.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.25+Math.random()*.45,a:.15+Math.random()*.35,twinkleSpd:rnd(.4,1.5),twinkleOff:rnd(0,6.28),col:starCols[_floor(_rnd()*starCols.length)]});
+  for(let i=0;i<65;i++)G.stars2.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.55+Math.random()*.75,a:.3+Math.random()*.4,twinkleSpd:rnd(.3,1.2),twinkleOff:rnd(0,6.28),col:starCols[_floor(_rnd()*starCols.length)]});
+  for(let i=0;i<30;i++)G.stars3.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.9+Math.random()*1.3,a:.5+Math.random()*.4,twinkleSpd:rnd(.2,1.0),twinkleOff:rnd(0,6.28),col:starCols[_floor(_rnd()*starCols.length)],flare:Math.random()<.3});
   G.nebulae=[];
-  const nebulaColors=[
-    {c:'rgba(0,40,120',  hue:'blue'},
-    {c:'rgba(60,0,130',  hue:'purple'},
-    {c:'rgba(0,80,80',   hue:'teal'},
-    {c:'rgba(100,20,0',  hue:'red'},
-    {c:'rgba(0,60,100',  hue:'blue'},
-    {c:'rgba(40,0,90',   hue:'purple'},
-    {c:'rgba(0,100,60',  hue:'green'},
-    {c:'rgba(80,30,0',   hue:'amber'},
-  ];
-  for(let i=0;i<8;i++){
-    const nc=nebulaColors[i%nebulaColors.length];
-    G.nebulae.push({
-      x:rnd(-100,W+100), y:rnd(-100,H+100),
-      r:rnd(100,260),
-      c:nc.c, hue:nc.hue,
-      spd:.015+Math.random()*.04,
-      drift: (Math.random()-.5)*.008,   // slight horizontal drift
-      alpha: .06+Math.random()*.07,
-      pulse: Math.random()*6.28, pulseSpd:rnd(.003,.012)
-    });
-  }
-
-  // ── Shooting stars pool ──
-  G.shootingStars=[];
-  G._nextShootingStar=rnd(2000,6000); // ms until next one
-
-  // ── Distant galaxy clusters (static, very faint) ──
-  G.galaxyClusters=[];
-  for(let i=0;i<4;i++) G.galaxyClusters.push({
-    x:rnd(W*.1,W*.9), y:rnd(H*.05,H*.6),
-    rx:rnd(40,100), ry:rnd(18,45),
-    angle:rnd(0,Math.PI),
-    alpha:rnd(.018,.04),
-    col: i%2===0?'rgba(180,200,255':'rgba(255,220,180'
-  });
-
-  // Static BG will be rendered after this function returns (called externally)
-}
-
-function _renderStaticBG(){
-  if(!_bgCanvas){
-    _bgCanvas=document.createElement('canvas');
-    _bgCtx=_bgCanvas.getContext('2d',{alpha:false});
-  }
-  _bgCanvas.width=CV.width; _bgCanvas.height=CV.height;
-  const cx=_bgCtx, W=CV.width, H=CV.height;
-
-  // Deep space base — subtle gradient, not flat black
-  const baseGrad=cx.createRadialGradient(W*.45,H*.35,0,W*.45,H*.35,Math.max(W,H)*.9);
-  baseGrad.addColorStop(0,'#00050f');
-  baseGrad.addColorStop(.45,'#000308');
-  baseGrad.addColorStop(1,'#000104');
-  cx.fillStyle=baseGrad; cx.fillRect(0,0,W,H);
-
-  // Galaxy clusters
-  if(G.galaxyClusters) for(const g of G.galaxyClusters){
-    cx.save();
-    cx.translate(g.x,g.y); cx.rotate(g.angle);
-    const gg=cx.createRadialGradient(0,0,2,0,0,g.rx);
-    gg.addColorStop(0,g.col+','+g.alpha*3+')');
-    gg.addColorStop(.4,g.col+','+g.alpha+')');
-    gg.addColorStop(1,'transparent');
-    cx.fillStyle=gg;
-    cx.scale(1,g.ry/g.rx);
-    cx.beginPath(); cx.arc(0,0,g.rx,0,Math.PI*2); cx.fill();
-    cx.restore();
-  }
-
-  // A few hundred very faint pixel-dust stars in the static layer
-  for(let i=0;i<200;i++){
-    cx.globalAlpha=.04+Math.random()*.1;
-    cx.fillStyle='#c8d8ff';
-    cx.fillRect(rnd(0,W),rnd(0,H),.8,.8);
-  }
-  cx.globalAlpha=1;
-  _bgDirty=false;
+  const nc=['rgba(0,35,110','rgba(55,0,120','rgba(0,75,85','rgba(95,20,0','rgba(0,55,100','rgba(45,0,95','rgba(0,90,55','rgba(70,25,0'];
+  for(let i=0;i<9;i++)G.nebulae.push({x:rnd(-80,CV.width+80),y:rnd(-80,CV.height+80),r:rnd(100,240),c:nc[i%nc.length],spd:.018+Math.random()*.035,drift:(Math.random()-.5)*.007,alpha:.06+Math.random()*.07,pulse:rnd(0,6.28),pulseSpd:rnd(.003,.01)});
+  // Shooting stars pool
+  G.shootingStars=[];G._ssTimer=rnd(3000,7000);
 }
 
 /* ═══ MAIN LOOP ═══ */
@@ -384,31 +142,16 @@ function update(){
 
   for(const s of G.stars1){s.y+=.12*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
   for(const s of G.stars2){s.y+=.32*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
-  for(const s of G.stars3){s.y+=.75*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
-  for(const n of G.nebulae){
-    n.y+=n.spd*f; n.x+=n.drift*f; n.pulse+=n.pulseSpd*f;
-    if(n.y>CV.height+300)n.y=-300;
-    if(n.x>CV.width+300)n.x=-300; else if(n.x<-300)n.x=CV.width+300;
-  }
+  for(const s of G.stars3){s.y+=.72*f;if(s.y>CV.height){s.y=0;s.x=rnd(0,CV.width);}}
+  for(const n of G.nebulae){n.y+=n.spd*f;n.x+=n.drift*f;n.pulse+=n.pulseSpd*f;if(n.y>CV.height+300)n.y=-300;if(n.x>CV.width+300)n.x=-300;else if(n.x<-300)n.x=CV.width+300;}
   // Shooting stars
   if(G.shootingStars){
-    G._nextShootingStar-=G.dt;
-    if(G._nextShootingStar<=0){
-      G._nextShootingStar=rnd(3000,9000);
-      const sx=rnd(0,CV.width*.7), sy=rnd(0,CV.height*.3);
-      G.shootingStars.push({x:sx,y:sy,vx:rnd(4,9),vy:rnd(2,5),life:500,ml:500,trail:[]});
-    }
-    for(let i=G.shootingStars.length-1;i>=0;i--){
-      const ss=G.shootingStars[i];
-      ss.trail.push({x:ss.x,y:ss.y});
-      if(ss.trail.length>14)ss.trail.shift();
-      ss.x+=ss.vx*f; ss.y+=ss.vy*f; ss.life-=G.dt;
-      if(ss.life<=0)G.shootingStars.splice(i,1);
-    }
+    G._ssTimer-=G.dt;
+    if(G._ssTimer<=0){G._ssTimer=rnd(3500,9000);G.shootingStars.push({x:rnd(0,CV.width*.7),y:rnd(0,CV.height*.25),vx:rnd(5,10),vy:rnd(2,5),life:600,ml:600,trail:[]});}
+    for(let i=G.shootingStars.length-1;i>=0;i--){const ss=G.shootingStars[i];ss.trail.push({x:ss.x,y:ss.y});if(ss.trail.length>16)ss.trail.shift();ss.x+=ss.vx*f;ss.y+=ss.vy*f;ss.life-=G.dt;if(ss.life<=0)G.shootingStars.splice(i,1);}
   }
 
   G.shakeAmt=Math.max(0,G.shakeAmt-G.shakeDecay*f);
-  ADE.tick(dt);
   const spd=G.pspd*(1+G.sk.speed*.15);
   // --- smooth velocity-based movement ---
   const sens=CFG.sensitivity/5;           // 0.2 – 2.0
@@ -477,8 +220,8 @@ function update(){
     if(e.x<e.w/2||e.x>CV.width-e.w/2)e.dx*=-1;
     if(e.y>CV.height+60)e.hp=0;
     e.shotT+=dt;
-    // Adaptive fire rate — ADE.fireMult() < 1 = faster shots when ADE is high
-    const sr=e.type==='sniper'?Math.round(3000*ADE.fireMult()):e.elite?Math.round(1100*ADE.fireMult()):e.type==='tank'?Math.round(2000*ADE.fireMult()):e.type==='fast'?Math.round(1800*ADE.fireMult()):Math.round(2400*ADE.fireMult());
+    // Sniper fires less often but from far away
+    const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'?2000:e.type==='fast'?1800:2400;
     if(e.shotT>sr){e.shotT=0;eFire(e);}
     if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':'#ff4400',life:220,ml:220});}
   }
@@ -522,18 +265,9 @@ function update(){
   if(!G.bossOn&&!G.bossKilled&&G.enemies.length===0&&G.wSpawned>=G.wMax){
     if(G.wave%3===0)spawnBoss();else advWave();
   }
-  if(!G.bossOn&&G.enemies.length<4&&G.wSpawned<G.wMax){
-    // Adaptive spawn pacing: at high difficulty enemies come faster
-    const spawnThreshold = Math.max(1, Math.round(4 * ADE.spawnMult()));
-    if(G.enemies.length < spawnThreshold || G.enemies.length === 0) spawnEnemy();
-  }
+  if(!G.bossOn&&G.enemies.length<4&&G.wSpawned<G.wMax)spawnEnemy();
   for(const k in G.activePU){G.activePU[k]-=dt;if(G.activePU[k]<=0)delete G.activePU[k];}
   if(G.frame%3===0){updateWeaponHUD();updatePUPanel();}
-  // Update wave tag with adaptive difficulty label every 90 frames (~1.5s)
-  if(G.frame%90===0){
-    const wt=$id('waveTag');
-    if(wt) wt.innerHTML='◈ WAVE &nbsp;<span id="waveN">'+G.wave+'</span> &nbsp;<span style="font-size:8px;letter-spacing:2px;opacity:0.7">'+ADE.label()+'</span>';
-  }
 }
 
 /* ── FIRE ── */
@@ -783,13 +517,12 @@ function bulletHit(){
 
 function killEnemy(e,j){
   G.enemies.splice(j,1);G.kills++;
-  ADE.onKill(G.wave);
   burst(e.x,e.y,e.elite?'#ff44aa':'#ff3355',e.type==='tank'?20:11);
   if(e.type==='tank'||e.elite) SFX.enemy_explode_big(); else SFX.enemy_explode();
   addScore(e.elite?100:e.type==='tank'?60:e.type==='fast'?35:25,e.x,e.y);
   addXP(e.elite?35:e.type==='tank'?22:16);
   addCombo();shake(e.type==='tank'?5:3,.6);
-  if(Math.random()<.85*ADE.dropRate())spawnDrop(e.x,e.y);
+  if(Math.random()<.85)spawnDrop(e.x,e.y);
 }
 
 function hitPlayer(dmg){
@@ -800,14 +533,12 @@ function hitPlayer(dmg){
     G.shRegenDelay=3500;updateShieldUI();
   }
   if(d>0){
-    ADE.onDamage(G.wave);
     G.lives--;hpEl.textContent=G.lives;bumpChip('hpV');
     SFX.player_hit();
     shake(12,1.0);burst(G.px,G.py,'#00e5ff',16);G.invT=2500;
     alertFlash.classList.add('on');setTimeout(()=>alertFlash.classList.remove('on'),180);
-    if(G.lives<=0){ADE.onDeath();gameOver();}
+    if(G.lives<=0)gameOver();
   } else {
-    ADE.onDamage(G.wave);
     shake(6,.6);burst(G.px,G.py,'#4488ff',8);
   }
 }
@@ -855,14 +586,11 @@ function spawnEnemy(){
     spawnFormation(); return;
   }
 
-  if(r<ADE.sniperChance(G.wave)&&G.wave>=3){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;}
-  else if(r<.20&&G.wave>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
+  if(r<.10&&w>=4){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;} // NEW: sniper
+  else if(r<.20&&w>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
   else if(r<.38){type='fast';hp=45+w*10;spd=2.5;ew=28;eh=28;sway=true;}
   else{type='normal';hp=65+w*20;spd=1.3;ew=34;eh=34;}
-  if(w>=3&&Math.random()<ADE.eliteChance(w)){elite=true;hp=Math.round(hp*2);}
-  // Apply ADE multipliers
-  hp  = Math.round(hp  * ADE.hpMult());
-  spd = spd * ADE.spdMult();
+  if(w>=3&&Math.random()<.22){elite=true;hp=Math.round(hp*2);}
   const bx=rnd(50,CV.width-50);
   G.enemies.push({x:bx,bx,y:-60,dx:(Math.random()-.5)*1.8,dy:spd,w:ew,h:eh,hp,maxHp:hp,type,sway,elite,shotT:rnd(400,2200),t:0});
   G.wSpawned++;
@@ -874,9 +602,8 @@ function spawnFormation(){
   const positions=[{ox:0,oy:0},{ox:-45,oy:30},{ox:45,oy:30}];
   const w=G.wave;
   for(const p of positions){
-    const hp=Math.round((40+w*8)*ADE.hpMult());
-    const spd=2.0*ADE.spdMult();
-    G.enemies.push({x:cx+p.ox,bx:cx+p.ox,y:-60+p.oy,dx:(Math.random()-.5)*1.2,dy:spd,w:28,h:28,hp,maxHp:hp,type:'fast',sway:false,elite:false,shotT:rnd(600,2000),t:0,formation:true});
+    const hp=40+w*8;
+    G.enemies.push({x:cx+p.ox,bx:cx+p.ox,y:-60+p.oy,dx:(Math.random()-.5)*1.2,dy:2.0,w:28,h:28,hp,maxHp:hp,type:'fast',sway:false,elite:false,shotT:rnd(600,2000),t:0,formation:true});
   }
   G.wSpawned+=3;
 }
@@ -884,7 +611,7 @@ function spawnFormation(){
 function spawnBoss(){
   const names=['DESTROYER','NEMESIS','VOIDLORD','ANNIHILATOR','OBLIVION','REAPER','APOCALYPSE'];
   G.bossName=names[Math.min(Math.floor(G.wave/3)-1,names.length-1)]||'DESTROYER';
-  G.bossHp=Math.round((1000+G.wave*300)*ADE.hpMult());G.bossMaxHp=G.bossHp;
+  G.bossHp=1000+G.wave*300;G.bossMaxHp=G.bossHp;
   G.bossX=CV.width/2;G.bossY=110;G.bossDir=1;G.bossT=0;G.bossPhase=1;
   G.bossOn=true;
   SFX.boss_spawn();
@@ -895,12 +622,9 @@ function spawnBoss(){
 }
 
 function advWave(){
-  ADE.onWaveClear(G.wave);
   G.wave++;G.wSpawned=0;G.wMax=10+G.wave*3;G.bossKilled=false;
   SFX.wave_start();
-  waveEl.textContent=G.wave;
-  const diffLabel=ADE.label();
-  toast_('◈ WAVE '+G.wave+' — COMMENCE!  '+diffLabel);
+  waveEl.textContent=G.wave;toast_('◈ WAVE '+G.wave+' — COMMENCE!');
 }
 
 /* ── DROPS ── */
@@ -995,60 +719,36 @@ function draw(){
   const sw=G.shakeAmt>0;
   if(sw){CX.save();CX.translate(rnd(-G.shakeAmt,G.shakeAmt),rnd(-G.shakeAmt*.5,G.shakeAmt*.5));}
   CX.clearRect(0,0,CV.width,CV.height);
+  // Deep space gradient base
+  const _bg=CX.createRadialGradient(CV.width*.45,CV.height*.35,0,CV.width*.45,CV.height*.35,Math.max(CV.width,CV.height)*.9);
+  _bg.addColorStop(0,'#00050f');_bg.addColorStop(.5,'#000308');_bg.addColorStop(1,'#000104');
+  CX.fillStyle=_bg;CX.fillRect(0,0,CV.width,CV.height);
 
-  // ── Static deep-space base (galaxy clusters + pixel dust) ──
-  if(_bgCanvas && _bgCanvas.width===CV.width && _bgCanvas.height===CV.height){
-    CX.drawImage(_bgCanvas,0,0);
-  } else {
-    CX.fillStyle='#00020a'; CX.fillRect(0,0,CV.width,CV.height);
-  }
+  // nebulae - pulsing color clouds
+  if(G.frame%2===0){for(const n of G.nebulae){
+    const pulse=.85+Math.sin(n.pulse)*.15;
+    const g=CX.createRadialGradient(n.x,n.y,8,n.x,n.y,n.r*pulse);
+    g.addColorStop(0,n.c+','+(n.alpha*1.8)+')');g.addColorStop(.5,n.c+','+n.alpha+')');g.addColorStop(1,'transparent');
+    CX.fillStyle=g;CX.beginPath();CX.arc(n.x,n.y,n.r*pulse,0,Math.PI*2);CX.fill();
+  }}
 
+  // Shooting stars
+  if(G.shootingStars){for(const ss of G.shootingStars){
+    const a=ss.life/ss.ml;
+    for(let i=1;i<ss.trail.length;i++){
+      CX.globalAlpha=(i/ss.trail.length)*a*.6;CX.strokeStyle='#ffffff';CX.lineWidth=1.2*(i/ss.trail.length);
+      CX.beginPath();CX.moveTo(ss.trail[i-1].x,ss.trail[i-1].y);CX.lineTo(ss.trail[i].x,ss.trail[i].y);CX.stroke();
+    }
+    CX.globalAlpha=a;CX.shadowBlur=8;CX.shadowColor='#aaddff';CX.fillStyle='#fff';
+    CX.beginPath();CX.arc(ss.x,ss.y,1.5,0,Math.PI*2);CX.fill();
+    CX.shadowBlur=0;CX.globalAlpha=1;
+  }}
+
+  // stars with twinkle
   const t=G._t||0;
-
-  // ── Dynamic nebulae — pulsing color clouds ──
-  if(G.frame%2===0 && G.nebulae){
-    for(const n of G.nebulae){
-      const pulse=0.8+Math.sin(n.pulse)*0.2;
-      const alpha=n.alpha*pulse;
-      const g=CX.createRadialGradient(n.x,n.y,8,n.x,n.y,n.r*pulse);
-      g.addColorStop(0,n.c+','+Math.min(.18,alpha*2)+')');
-      g.addColorStop(.5,n.c+','+alpha+')');
-      g.addColorStop(1,'transparent');
-      CX.fillStyle=g; CX.beginPath(); CX.arc(n.x,n.y,n.r*pulse,0,Math.PI*2); CX.fill();
-    }
-  }
-
-  // ── Shooting stars ──
-  if(G.shootingStars){
-    for(const ss of G.shootingStars){
-      const a=ss.life/ss.ml;
-      if(ss.trail.length>1){
-        for(let i=1;i<ss.trail.length;i++){
-          const ta=(i/ss.trail.length)*a*.7;
-          CX.globalAlpha=ta;
-          CX.strokeStyle='#ffffff';
-          CX.lineWidth=1.2*(i/ss.trail.length);
-          CX.beginPath();
-          CX.moveTo(ss.trail[i-1].x,ss.trail[i-1].y);
-          CX.lineTo(ss.trail[i].x,ss.trail[i].y);
-          CX.stroke();
-        }
-      }
-      // Head glow
-      CX.globalAlpha=a;
-      CX.fillStyle='#ffffff';
-      CX.shadowBlur=8; CX.shadowColor='#aaddff';
-      CX.beginPath(); CX.arc(ss.x,ss.y,1.5,0,Math.PI*2); CX.fill();
-      CX.shadowBlur=0; CX.globalAlpha=1;
-    }
-  }
-
-  // ── Layer 1: Distant micro-stars ──
-  if(G.stars1) _drawRichStars(G.stars1,.55,t,false);
-  // ── Layer 2: Mid stars ──
-  if(G.stars2) _drawRichStars(G.stars2,.8,t,false);
-  // ── Layer 3: Bright foreground stars with optional flare ──
-  if(G.stars3) _drawRichStars(G.stars3,1.0,t,true);
+  drawStars(G.stars1,.55,t);
+  drawStars(G.stars2,.8,t);
+  drawStars(G.stars3,1.0,t);
 
   for(const d of G.drops)drawDrop(d);
   // railgun beams
@@ -1116,19 +816,18 @@ function draw(){
   drawFloatTexts(G.dt/16);
 }
 
-function _drawRichStars(arr,maxA,t,allowFlare){
+function drawStars(arr,maxA,t){
   for(const s of arr){
-    const twinkle=.72+Math.sin(t*s.twinkleSpd+s.twinkleOff)*.28;
-    const alpha=s.a*maxA*twinkle;
-    CX.globalAlpha=alpha;
+    const twinkle=s.r>0.8?(.72+Math.sin(t*s.twinkleSpd+s.twinkleOff)*.28):.8;
+    CX.globalAlpha=s.a*maxA*twinkle;
     CX.fillStyle=s.col||'#ffffff';
     CX.fillRect(s.x-s.r,s.y-s.r,s.r*2,s.r*2);
-    // Cross lens flare on large bright stars
-    if(allowFlare && s.flare && s.r>1.2 && twinkle>.85){
-      const fl=s.r*3.5*twinkle;
-      CX.globalAlpha=alpha*.35;
-      CX.fillRect(s.x-fl,s.y-s.r*.4,fl*2,s.r*.8);  // horizontal
-      CX.fillRect(s.x-s.r*.4,s.y-fl,s.r*.8,fl*2);   // vertical
+    // lens flare on big bright stars
+    if(s.flare&&s.r>1&&twinkle>.9){
+      const fl=s.r*4*twinkle;
+      CX.globalAlpha=s.a*maxA*twinkle*.25;
+      CX.fillRect(s.x-fl,s.y-s.r*.3,fl*2,s.r*.6);
+      CX.fillRect(s.x-s.r*.3,s.y-fl,s.r*.6,fl*2);
     }
   }
   CX.globalAlpha=1;
@@ -1994,8 +1693,7 @@ function togglePause(){
 function restartGame(){
   pauseMenu.classList.remove('on');endScreen.classList.remove('on');lvlUp.classList.remove('on');
   bossHUD.classList.remove('on');$id('pauseBtn').textContent='⏸';
-  ADE.reset();
-  initG();initBG();_renderStaticBG();
+  initG();initBG();
   // Re-apply selected ship & mode bonuses after initG resets G
   applyShipBonuses(selectedShip);
   applyModeBonuses(selectedMode);
@@ -3202,7 +2900,7 @@ const API = (() => {
 /* ═══ BOOT ═══ */
 window.addEventListener('load',()=>{
   loadOwnedWeapons();
-  initBG();_renderStaticBG();updateSkillDots();updateWeaponHUD();
+  initBG();updateSkillDots();updateWeaponHUD();
   // ── Connect to server ──
   API.checkServer();
 
