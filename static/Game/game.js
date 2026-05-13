@@ -96,6 +96,141 @@ function initG(){
 }
 initG();
 
+/* ═══ ADAPTIVE DIFFICULTY ENGINE ═══
+   Tracks player performance in real-time and adjusts:
+   - Enemy speed, HP, fire rate, spawn rate
+   - Boss aggression and pattern complexity
+   - Drop rates and power-up frequency
+   - Enemy type weights (more elites/snipers if player is dominating)
+*/
+const ADE = {
+  // Rolling performance window (last 15 seconds)
+  killsInWindow: [],
+  damageInWindow: [],
+  windowMs: 15000,
+
+  // Current difficulty multiplier (0.5 = easy, 1.0 = normal, 2.0 = hard)
+  diffMult: 1.0,
+  targetDiff: 1.0,
+
+  // Smoothed player performance score (0-100)
+  perfScore: 50,
+
+  // Streak tracking
+  deathCount: 0,
+  consecutiveWavesNoDeath: 0,
+
+  // Dynamic drop rate boost when player is struggling
+  dropBoost: 0,
+
+  // Called each time a kill happens
+  onKill(wave) {
+    const now = performance.now();
+    this.killsInWindow.push(now);
+    this._prune(now);
+    this._recalc(wave);
+  },
+
+  // Called each time player takes damage
+  onDamage(wave) {
+    const now = performance.now();
+    this.damageInWindow.push(now);
+    this._prune(now);
+    this._recalc(wave);
+  },
+
+  onDeath() {
+    this.deathCount++;
+    this.consecutiveWavesNoDeath = 0;
+    // Ease off after death — give player breathing room
+    this.targetDiff = Math.max(0.55, this.targetDiff - 0.22);
+    this.dropBoost = Math.min(3, this.dropBoost + 1);
+  },
+
+  onWaveClear(wave) {
+    this.consecutiveWavesNoDeath++;
+    // Reward clean waves with escalation
+    if (this.consecutiveWavesNoDeath >= 2) {
+      this.targetDiff = Math.min(2.2, this.targetDiff + 0.1 * this.consecutiveWavesNoDeath);
+    }
+    this.dropBoost = Math.max(0, this.dropBoost - 0.5);
+  },
+
+  _prune(now) {
+    const cutoff = now - this.windowMs;
+    this.killsInWindow  = this.killsInWindow.filter(t => t > cutoff);
+    this.damageInWindow = this.damageInWindow.filter(t => t > cutoff);
+  },
+
+  _recalc(wave) {
+    // kills per second in window
+    const kps = this.killsInWindow.length / (this.windowMs / 1000);
+    // damage hits per second
+    const dps = this.damageInWindow.length / (this.windowMs / 1000);
+
+    // perf score: high kills + low damage = high score
+    const rawPerf = Math.min(100, (kps * 28) - (dps * 30) + 50);
+    // Smooth it
+    this.perfScore = this.perfScore * 0.88 + rawPerf * 0.12;
+
+    // Target difficulty from performance + wave base
+    const waveBase = 1.0 + (wave - 1) * 0.07; // gradual wave escalation
+    const perfDelta = (this.perfScore - 50) / 100; // -0.5 to +0.5
+    this.targetDiff = Math.max(0.5, Math.min(2.2, waveBase + perfDelta * 0.8));
+  },
+
+  // Smoothly move current diff toward target (called every frame)
+  tick(dtMs) {
+    const speed = 0.003 * (dtMs / 16);
+    if (this.diffMult < this.targetDiff) {
+      this.diffMult = Math.min(this.targetDiff, this.diffMult + speed);
+    } else {
+      this.diffMult = Math.max(this.targetDiff, this.diffMult - speed * 0.5);
+    }
+  },
+
+  // Enemy HP multiplier
+  hpMult()   { return 0.6 + this.diffMult * 0.5; },
+  // Enemy speed multiplier
+  spdMult()  { return 0.7 + this.diffMult * 0.4; },
+  // Enemy fire rate multiplier (lower = faster shots)
+  fireMult() { return Math.max(0.45, 1.3 - this.diffMult * 0.35); },
+  // Spawn rate multiplier (1 = normal, <1 = faster spawns)
+  spawnMult(){ return Math.max(0.5, 1.2 - this.diffMult * 0.2); },
+  // Elite chance (0.0 - 0.5)
+  eliteChance(baseWave) {
+    const base = baseWave >= 3 ? 0.22 : 0.08;
+    return Math.min(0.55, base + (this.diffMult - 1.0) * 0.18);
+  },
+  // Sniper chance
+  sniperChance(baseWave) {
+    if (baseWave < 3) return 0;
+    return Math.min(0.25, 0.08 + (this.diffMult - 1.0) * 0.12);
+  },
+  // Drop rate multiplier (higher when struggling)
+  dropRate() { return 0.7 + this.dropBoost * 0.1 + Math.max(0, (1.0 - this.diffMult) * 0.3); },
+
+  reset() {
+    this.killsInWindow = [];
+    this.damageInWindow = [];
+    this.diffMult = 1.0;
+    this.targetDiff = 1.0;
+    this.perfScore = 50;
+    this.deathCount = 0;
+    this.consecutiveWavesNoDeath = 0;
+    this.dropBoost = 0;
+  },
+
+  // Visual feedback: returns a string for HUD
+  label() {
+    if (this.diffMult < 0.7)  return '◌ EASING';
+    if (this.diffMult < 0.95) return '◈ NORMAL';
+    if (this.diffMult < 1.3)  return '◆ INTENSE';
+    if (this.diffMult < 1.7)  return '◈ BRUTAL';
+    return '☠ EXTREME';
+  },
+};
+
 /* ── BACKGROUND ── */
 function initBG(){
   G.stars1=[];G.stars2=[];G.stars3=[];
@@ -143,6 +278,7 @@ function update(){
   for(const n of G.nebulae){n.y+=n.spd*f;if(n.y>CV.height+300)n.y=-300;}
 
   G.shakeAmt=Math.max(0,G.shakeAmt-G.shakeDecay*f);
+  ADE.tick(dt);
   const spd=G.pspd*(1+G.sk.speed*.15);
   // --- smooth velocity-based movement ---
   const sens=CFG.sensitivity/5;           // 0.2 – 2.0
@@ -211,8 +347,8 @@ function update(){
     if(e.x<e.w/2||e.x>CV.width-e.w/2)e.dx*=-1;
     if(e.y>CV.height+60)e.hp=0;
     e.shotT+=dt;
-    // Sniper fires less often but from far away
-    const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'?2000:e.type==='fast'?1800:2400;
+    // Adaptive fire rate — ADE.fireMult() < 1 = faster shots when ADE is high
+    const sr=e.type==='sniper'?Math.round(3000*ADE.fireMult()):e.elite?Math.round(1100*ADE.fireMult()):e.type==='tank'?Math.round(2000*ADE.fireMult()):e.type==='fast'?Math.round(1800*ADE.fireMult()):Math.round(2400*ADE.fireMult());
     if(e.shotT>sr){e.shotT=0;eFire(e);}
     if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':'#ff4400',life:220,ml:220});}
   }
@@ -256,9 +392,18 @@ function update(){
   if(!G.bossOn&&!G.bossKilled&&G.enemies.length===0&&G.wSpawned>=G.wMax){
     if(G.wave%3===0)spawnBoss();else advWave();
   }
-  if(!G.bossOn&&G.enemies.length<4&&G.wSpawned<G.wMax)spawnEnemy();
+  if(!G.bossOn&&G.enemies.length<4&&G.wSpawned<G.wMax){
+    // Adaptive spawn pacing: at high difficulty enemies come faster
+    const spawnThreshold = Math.max(1, Math.round(4 * ADE.spawnMult()));
+    if(G.enemies.length < spawnThreshold || G.enemies.length === 0) spawnEnemy();
+  }
   for(const k in G.activePU){G.activePU[k]-=dt;if(G.activePU[k]<=0)delete G.activePU[k];}
   if(G.frame%3===0){updateWeaponHUD();updatePUPanel();}
+  // Update wave tag with adaptive difficulty label every 90 frames (~1.5s)
+  if(G.frame%90===0){
+    const wt=$id('waveTag');
+    if(wt) wt.innerHTML='◈ WAVE &nbsp;<span id="waveN">'+G.wave+'</span> &nbsp;<span style="font-size:8px;letter-spacing:2px;opacity:0.7">'+ADE.label()+'</span>';
+  }
 }
 
 /* ── FIRE ── */
@@ -508,12 +653,13 @@ function bulletHit(){
 
 function killEnemy(e,j){
   G.enemies.splice(j,1);G.kills++;
+  ADE.onKill(G.wave);
   burst(e.x,e.y,e.elite?'#ff44aa':'#ff3355',e.type==='tank'?20:11);
   if(e.type==='tank'||e.elite) SFX.enemy_explode_big(); else SFX.enemy_explode();
   addScore(e.elite?100:e.type==='tank'?60:e.type==='fast'?35:25,e.x,e.y);
   addXP(e.elite?35:e.type==='tank'?22:16);
   addCombo();shake(e.type==='tank'?5:3,.6);
-  if(Math.random()<.85)spawnDrop(e.x,e.y);
+  if(Math.random()<.85*ADE.dropRate())spawnDrop(e.x,e.y);
 }
 
 function hitPlayer(dmg){
@@ -524,12 +670,14 @@ function hitPlayer(dmg){
     G.shRegenDelay=3500;updateShieldUI();
   }
   if(d>0){
+    ADE.onDamage(G.wave);
     G.lives--;hpEl.textContent=G.lives;bumpChip('hpV');
     SFX.player_hit();
     shake(12,1.0);burst(G.px,G.py,'#00e5ff',16);G.invT=2500;
     alertFlash.classList.add('on');setTimeout(()=>alertFlash.classList.remove('on'),180);
-    if(G.lives<=0)gameOver();
+    if(G.lives<=0){ADE.onDeath();gameOver();}
   } else {
+    ADE.onDamage(G.wave);
     shake(6,.6);burst(G.px,G.py,'#4488ff',8);
   }
 }
@@ -577,11 +725,14 @@ function spawnEnemy(){
     spawnFormation(); return;
   }
 
-  if(r<.10&&w>=4){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;} // NEW: sniper
-  else if(r<.20&&w>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
+  if(r<ADE.sniperChance(G.wave)&&G.wave>=3){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;}
+  else if(r<.20&&G.wave>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
   else if(r<.38){type='fast';hp=45+w*10;spd=2.5;ew=28;eh=28;sway=true;}
   else{type='normal';hp=65+w*20;spd=1.3;ew=34;eh=34;}
-  if(w>=3&&Math.random()<.22){elite=true;hp=Math.round(hp*2);}
+  if(w>=3&&Math.random()<ADE.eliteChance(w)){elite=true;hp=Math.round(hp*2);}
+  // Apply ADE multipliers
+  hp  = Math.round(hp  * ADE.hpMult());
+  spd = spd * ADE.spdMult();
   const bx=rnd(50,CV.width-50);
   G.enemies.push({x:bx,bx,y:-60,dx:(Math.random()-.5)*1.8,dy:spd,w:ew,h:eh,hp,maxHp:hp,type,sway,elite,shotT:rnd(400,2200),t:0});
   G.wSpawned++;
@@ -593,8 +744,9 @@ function spawnFormation(){
   const positions=[{ox:0,oy:0},{ox:-45,oy:30},{ox:45,oy:30}];
   const w=G.wave;
   for(const p of positions){
-    const hp=40+w*8;
-    G.enemies.push({x:cx+p.ox,bx:cx+p.ox,y:-60+p.oy,dx:(Math.random()-.5)*1.2,dy:2.0,w:28,h:28,hp,maxHp:hp,type:'fast',sway:false,elite:false,shotT:rnd(600,2000),t:0,formation:true});
+    const hp=Math.round((40+w*8)*ADE.hpMult());
+    const spd=2.0*ADE.spdMult();
+    G.enemies.push({x:cx+p.ox,bx:cx+p.ox,y:-60+p.oy,dx:(Math.random()-.5)*1.2,dy:spd,w:28,h:28,hp,maxHp:hp,type:'fast',sway:false,elite:false,shotT:rnd(600,2000),t:0,formation:true});
   }
   G.wSpawned+=3;
 }
@@ -602,7 +754,7 @@ function spawnFormation(){
 function spawnBoss(){
   const names=['DESTROYER','NEMESIS','VOIDLORD','ANNIHILATOR','OBLIVION','REAPER','APOCALYPSE'];
   G.bossName=names[Math.min(Math.floor(G.wave/3)-1,names.length-1)]||'DESTROYER';
-  G.bossHp=1000+G.wave*300;G.bossMaxHp=G.bossHp;
+  G.bossHp=Math.round((1000+G.wave*300)*ADE.hpMult());G.bossMaxHp=G.bossHp;
   G.bossX=CV.width/2;G.bossY=110;G.bossDir=1;G.bossT=0;G.bossPhase=1;
   G.bossOn=true;
   SFX.boss_spawn();
@@ -613,9 +765,12 @@ function spawnBoss(){
 }
 
 function advWave(){
+  ADE.onWaveClear(G.wave);
   G.wave++;G.wSpawned=0;G.wMax=10+G.wave*3;G.bossKilled=false;
   SFX.wave_start();
-  waveEl.textContent=G.wave;toast_('◈ WAVE '+G.wave+' — COMMENCE!');
+  waveEl.textContent=G.wave;
+  const diffLabel=ADE.label();
+  toast_('◈ WAVE '+G.wave+' — COMMENCE!  '+diffLabel);
 }
 
 /* ── DROPS ── */
@@ -1661,6 +1816,7 @@ function togglePause(){
 function restartGame(){
   pauseMenu.classList.remove('on');endScreen.classList.remove('on');lvlUp.classList.remove('on');
   bossHUD.classList.remove('on');$id('pauseBtn').textContent='⏸';
+  ADE.reset();
   initG();initBG();
   // Re-apply selected ship & mode bonuses after initG resets G
   applyShipBonuses(selectedShip);
