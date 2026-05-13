@@ -476,6 +476,49 @@
     <div id="loadVer">v2.0 · BUILD 2026</div>
   </div>
 </div>
+<script>
+// ── FULLSCREEN HELPER ──
+// Tries every vendor-prefixed API so it works on Chrome, Samsung, Firefox, Opera Mini
+function requestFullscreen(el) {
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen ||
+             el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (fn) {
+    fn.call(el).catch(() => {});
+  }
+  // Android: also lock to portrait and hide nav bar via Screen API
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('portrait').catch(() => {});
+  }
+}
+
+// Enter fullscreen on first user interaction (required by browsers)
+let _fsRequested = false;
+function maybeGoFullscreen() {
+  if (_fsRequested) return;
+  _fsRequested = true;
+  requestFullscreen(document.documentElement);
+}
+
+// Trigger on tap / touch anywhere, and on LAUNCH MISSION button
+document.addEventListener('touchstart', maybeGoFullscreen, { once: true, passive: true });
+document.addEventListener('mousedown',  maybeGoFullscreen, { once: true });
+
+// Re-enter fullscreen if user accidentally exits (e.g. swiped nav bar)
+document.addEventListener('fullscreenchange',       onFsChange);
+document.addEventListener('webkitfullscreenchange', onFsChange);
+document.addEventListener('mozfullscreenchange',    onFsChange);
+function onFsChange() {
+  const fs = document.fullscreenElement || document.webkitFullscreenElement ||
+             document.mozFullScreenElement;
+  if (!fs) {
+    // Small delay so user can intentionally exit without infinite loop
+    setTimeout(() => {
+      const gc = document.getElementById('gc');
+      if (gc && gc.offsetHeight) requestFullscreen(document.documentElement);
+    }, 800);
+  }
+}
+</script>
 <script src="{{ url_for('static', filename='Game/game.js') }}"></script>
 </body>
 </html>
