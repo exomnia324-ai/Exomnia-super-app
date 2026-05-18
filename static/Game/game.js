@@ -1549,6 +1549,7 @@ function toast_(msg){
   toast.textContent=msg;toast.classList.add('show');
   clearTimeout(toastTmr);toastTmr=setTimeout(()=>toast.classList.remove('show'),2800);
 }
+function showToast(msg){toast_(msg);}
 
 /* ── UI UPDATES ── */
 function updateShieldUI(){
@@ -2834,6 +2835,289 @@ const API = (() => {
     }).join('');
   }
 
+  // ══════════════════════════════════════════════
+  // ── DAILY REWARD SYSTEM v2 ──
+  // Rewards: coins + weapons + titles + XP boosts + shield upgrades
+  // ══════════════════════════════════════════════
+
+  // 7-day reward table — each entry has multiple reward components
+  const DAILY_REWARD_TABLE = [
+    { // Day 1
+      label: 'STARTER PACK',
+      color: '#00e5ff',
+      icon: '🎁',
+      rewards: [
+        { type: 'coins',  amount: 50,  label: '◈ 50 COINS' },
+        { type: 'xpBoost', amount: 1, label: '⚡ XP BOOST ×1.5 (1 run)' },
+      ]
+    },
+    { // Day 2
+      label: 'SUPPLY DROP',
+      color: '#00ff88',
+      icon: '📦',
+      rewards: [
+        { type: 'coins',  amount: 80,  label: '◈ 80 COINS' },
+        { type: 'shield', amount: 20,  label: '🛡 +20 MAX SHIELD (temp)' },
+      ]
+    },
+    { // Day 3
+      label: 'WEAPON CACHE',
+      color: '#ff8800',
+      icon: '⚔️',
+      rewards: [
+        { type: 'coins',   amount: 100, label: '◈ 100 COINS' },
+        { type: 'weapon',  name: 'LASER', label: '💚 FREE WEAPON: LASER' },
+      ]
+    },
+    { // Day 4
+      label: 'COMMANDER KIT',
+      color: '#aa44ff',
+      icon: '🔮',
+      rewards: [
+        { type: 'coins',  amount: 125, label: '◈ 125 COINS' },
+        { type: 'title',  value: '◆ COMMANDER', label: '🏅 TITLE: COMMANDER' },
+        { type: 'xpBoost', amount: 2, label: '⚡ XP BOOST ×2 (1 run)' },
+      ]
+    },
+    { // Day 5
+      label: 'ARMS DEPOT',
+      color: '#ff3366',
+      icon: '🚀',
+      rewards: [
+        { type: 'coins',  amount: 175, label: '◈ 175 COINS' },
+        { type: 'weapon', name: 'MISSILE', label: '🚀 FREE WEAPON: MISSILE' },
+        { type: 'shield', amount: 30,  label: '🛡 +30 MAX SHIELD (temp)' },
+      ]
+    },
+    { // Day 6
+      label: 'ELITE BUNDLE',
+      color: '#ffdd00',
+      icon: '⭐',
+      rewards: [
+        { type: 'coins',  amount: 250, label: '◈ 250 COINS' },
+        { type: 'weapon', name: 'RAILGUN', label: '⚡ FREE WEAPON: RAILGUN' },
+        { type: 'title',  value: '★ ELITE PILOT', label: '🏅 TITLE: ELITE PILOT' },
+      ]
+    },
+    { // Day 7 — MEGA reward
+      label: '🔥 LEGENDARY REWARD',
+      color: '#ff2200',
+      icon: '👑',
+      rewards: [
+        { type: 'coins',   amount: 400, label: '◈ 400 COINS' },
+        { type: 'weapon',  name: 'EMP',  label: '☢️ FREE WEAPON: EMP' },
+        { type: 'title',   value: '👑 LEGEND', label: '🏅 TITLE: LEGEND' },
+        { type: 'xpBoost', amount: 3,   label: '⚡ XP BOOST ×3 (1 run)' },
+      ]
+    },
+  ];
+
+  function getDailyRewardInfo() {
+    try {
+      const lastClaim = parseInt(localStorage.getItem('exomniaDailyLast') || '0');
+      const streak    = parseInt(localStorage.getItem('exomniaDailyStreak') || '0');
+      const lastDate  = new Date(lastClaim);
+      const now       = new Date();
+      const claimed   = lastDate.toDateString() === now.toDateString();
+      const dayDiff   = lastClaim ? Math.floor((now - lastDate) / 86400000) : 99;
+      const activeStreak = claimed ? streak : (dayDiff <= 1 ? streak : 0);
+      const dayIdx    = Math.min(activeStreak % 7, 6);
+      return { claimed, streak: activeStreak, dayIdx, entry: DAILY_REWARD_TABLE[dayIdx] };
+    } catch(e) {
+      return { claimed: false, streak: 0, dayIdx: 0, entry: DAILY_REWARD_TABLE[0] };
+    }
+  }
+
+  function applyDailyRewards(entry) {
+    entry.rewards.forEach(r => {
+      if (r.type === 'coins') {
+        setLbyCoins(getLbyCoins() + r.amount);
+        const el = $id('lbyCoinDisplay');
+        if (el) el.textContent = getLbyCoins();
+      }
+      if (r.type === 'weapon') {
+        const w = WEAPONS.find(x => x.name === r.name);
+        if (w && !w.owned) { w.owned = true; saveOwnedWeapons(); }
+      }
+      if (r.type === 'title') {
+        try { localStorage.setItem('exomniaTitle', r.value); } catch(e) {}
+        const rankEl = $id('pilotRank');
+        if (rankEl) rankEl.textContent = r.value;
+      }
+      if (r.type === 'xpBoost') {
+        try { localStorage.setItem('exomniaXpBoost', r.amount.toString()); } catch(e) {}
+      }
+      if (r.type === 'shield') {
+        try { localStorage.setItem('exomniaBonusShield', r.amount.toString()); } catch(e) {}
+      }
+    });
+  }
+
+  function claimDailyReward() {
+    const info = getDailyRewardInfo();
+    if (info.claimed) { toast_('◈ ALREADY CLAIMED TODAY! COME BACK TOMORROW.'); return; }
+    const newStreak = info.streak + 1;
+    try {
+      localStorage.setItem('exomniaDailyLast', Date.now().toString());
+      localStorage.setItem('exomniaDailyStreak', newStreak.toString());
+    } catch(e) {}
+    applyDailyRewards(info.entry);
+    showDailyRewardModal(info.entry, newStreak);
+    // Update button state
+    const btn = $id('lbyDailyBtn');
+    if (btn) {
+      btn.style.opacity = '0.4';
+      btn.style.cursor = 'not-allowed';
+      btn.innerHTML = '✅';
+      btn.onclick = () => toast_('◈ ALREADY CLAIMED TODAY! COME BACK TOMORROW.');
+    }
+  }
+
+  function showDailyRewardModal(entry, streakDay) {
+    // Remove existing
+    const old = $id('dailyRewardModal');
+    if (old) old.remove();
+
+    const isLegendary = (streakDay % 7 === 0);
+    const streakStars = Array.from({length: 7}, (_, i) => {
+      const filled = i < (streakDay % 7 === 0 ? 7 : streakDay % 7);
+      return `<div style="
+        width:28px;height:28px;border-radius:50%;
+        border:1px solid ${filled ? entry.color : 'rgba(255,255,255,0.15)'};
+        background:${filled ? entry.color + '33' : 'rgba(0,0,0,0.3)'};
+        display:flex;align-items:center;justify-content:center;
+        font-size:12px;color:${filled ? entry.color : 'rgba(255,255,255,0.2)'};
+        box-shadow:${filled ? '0 0 10px ' + entry.color + '55' : 'none'};
+        transition:.3s;
+      ">${filled ? '◆' : '◇'}</div>`;
+    }).join('');
+
+    const rewardRows = entry.rewards.map(r => `
+      <div style="
+        display:flex;align-items:center;gap:10px;
+        background:rgba(0,0,0,0.3);
+        border:1px solid ${entry.color}33;
+        border-radius:6px;padding:10px 14px;
+        animation: rewardSlideIn 0.4s ease forwards;
+      ">
+        <div style="font-size:20px;">${r.label.split(' ')[0]}</div>
+        <div style="
+          font-family:'Courier New',monospace;font-size:11px;font-weight:900;
+          letter-spacing:2px;color:${entry.color};
+        ">${r.label.replace(/^[^\s]+\s/, '')}</div>
+      </div>
+    `).join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'dailyRewardModal';
+    modal.style.cssText = `
+      position:fixed;inset:0;z-index:500;
+      background:rgba(0,2,14,0.96);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      backdrop-filter:blur(10px);
+      animation:drModalIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    `;
+    modal.innerHTML = `
+      <style>
+        @keyframes drModalIn { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+        @keyframes rewardSlideIn { from{opacity:0;transform:translateX(-18px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes drShine { 0%,100%{opacity:0.6} 50%{opacity:1} }
+        @keyframes drFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+        #drBigIcon { animation: drFloat 2s ease-in-out infinite; display:inline-block; }
+      </style>
+      <div style="
+        background:linear-gradient(160deg,rgba(0,12,34,0.99),rgba(0,5,20,0.99));
+        border:1px solid ${entry.color}55;
+        border-radius:16px;
+        padding:28px 22px 22px;
+        width:min(340px,90vw);
+        display:flex;flex-direction:column;align-items:center;gap:16px;
+        box-shadow:0 0 40px ${entry.color}22, inset 0 1px 0 rgba(255,255,255,0.06);
+      ">
+        <!-- Header -->
+        <div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:5px;
+          color:${entry.color};opacity:0.6;">DAY ${streakDay} REWARD</div>
+        <div id="drBigIcon" style="font-size:52px;line-height:1;">${entry.icon}</div>
+        <div style="font-family:'Courier New',monospace;font-weight:900;
+          font-size:clamp(13px,4vw,18px);letter-spacing:4px;color:${entry.color};
+          text-shadow:0 0 20px ${entry.color};text-align:center;">
+          ${entry.label}
+        </div>
+
+        <!-- Streak bar -->
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;">
+          ${streakStars}
+        </div>
+        <div style="font-family:'Courier New',monospace;font-size:8px;letter-spacing:3px;
+          color:rgba(255,255,255,0.3);">
+          ${streakDay % 7 === 0 ? '🔥 STREAK COMPLETE — RESETS TOMORROW' : streakDay + ' DAY STREAK'}
+        </div>
+
+        <!-- Rewards -->
+        <div style="width:100%;display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+          ${rewardRows}
+        </div>
+
+        <!-- Claim button -->
+        <div onclick="document.getElementById('dailyRewardModal').remove()"
+          style="
+            margin-top:6px;width:100%;padding:14px 0;
+            border:1px solid ${entry.color}88;
+            border-radius:8px;
+            background:linear-gradient(135deg,${entry.color}18,${entry.color}08);
+            font-family:'Courier New',monospace;font-weight:900;
+            font-size:13px;letter-spacing:5px;color:${entry.color};
+            text-align:center;cursor:pointer;
+            box-shadow:0 0 20px ${entry.color}22;
+            transition:all 0.2s;
+          "
+          onmouseover="this.style.background='${entry.color}28'"
+          onmouseout="this.style.background='linear-gradient(135deg,${entry.color}18,${entry.color}08)'"
+        >✔ CLAIM REWARDS</div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    // Close on backdrop tap
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  }
+
+  function showDailyRewardPreview() {
+    const info = getDailyRewardInfo();
+    showDailyRewardModal(info.entry, info.streak + (info.claimed ? 0 : 1));
+  }
+
+  function injectDailyRewardButton() {
+    const tryInject = () => {
+      const btnRow = $id('lbyBtnRow');
+      if (!btnRow) { setTimeout(tryInject, 400); return; }
+      if ($id('lbyDailyBtn')) return;
+      const info = getDailyRewardInfo();
+      const btn = document.createElement('div');
+      btn.id = 'lbyDailyBtn';
+      btn.className = 'lby-action-btn';
+      btn.style.cssText = `
+        flex:none;width:52px;padding:10px 0;border-radius:7px;
+        font-size:20px;cursor:pointer;
+        border:1px solid rgba(255,200,0,0.45);
+        background:linear-gradient(145deg,rgba(255,200,0,0.10),rgba(255,200,0,0.03));
+        display:flex;align-items:center;justify-content:center;
+        touch-action:manipulation;
+        transition:opacity 0.3s;
+        ${info.claimed ? 'opacity:0.4;cursor:not-allowed;' : ''}
+      `;
+      btn.innerHTML = info.claimed ? '✅' : '🎁';
+      btn.title = info.claimed ? 'Come back tomorrow!' : 'DAILY REWARD — tap to claim!';
+      btn.onclick = info.claimed
+        ? () => toast_('◈ ALREADY CLAIMED TODAY! COME BACK TOMORROW.')
+        : () => claimDailyReward();
+      // Insert before leaderboard button or append
+      const lbBtn = $id('lbyLbBtn');
+      if (lbBtn) btnRow.insertBefore(btn, lbBtn);
+      else btnRow.appendChild(btn);
+    };
+    tryInject();
+  }
+
   // ── Inject leaderboard button into lobby ──
   function injectLobbyButton() {
     // Wait for lobby DOM
@@ -2863,6 +3147,8 @@ const API = (() => {
 
   // ── Ping server & show connection status ──
   async function checkServer() {
+    // Always inject daily reward button (works offline too)
+    injectDailyRewardButton();
     const data = await apiFetch('/api/ping');
     if (data && data.ok) {
       console.log('%c[DSC Server] Online ✓', 'color:#00e5ff;font-weight:bold');
@@ -2894,7 +3180,7 @@ const API = (() => {
   }
 
   // Public API
-  return { saveRun, saveScore, loadPlayer, loadLeaderboard, loadStats, showLeaderboard, checkServer, syncLobbyStats };
+  return { saveRun, saveScore, loadPlayer, loadLeaderboard, loadStats, showLeaderboard, checkServer, syncLobbyStats, claimDailyReward, getDailyRewardInfo, injectDailyRewardButton, showDailyRewardPreview };
 })();
 
 /* ═══ BOOT ═══ */
