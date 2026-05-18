@@ -470,6 +470,8 @@ function killBoss(){
   bigBurst(G.bossX,G.bossY);
   SFX.boss_die();
   G.bossOn=false;G.bossKilled=true;bossHUD.classList.remove('on');
+  // Track boss kills for achievements
+  try{const bk=parseInt(localStorage.getItem('exomniaBossKills')||'0');localStorage.setItem('exomniaBossKills',bk+1);}catch(e){}
   addScore(800*G.wave,G.bossX,G.bossY);addXP(100);
   spawnDrop(G.bossX,G.bossY,'health');
   for(let i=0;i<6;i++)spawnDrop(G.bossX+rnd(-50,50),G.bossY+rnd(-30,30),'coin');
@@ -622,6 +624,10 @@ function spawnBoss(){
 }
 
 function advWave(){
+  // Perfect wave = wave completed without losing any HP (shield still at max)
+  if(G.shield>=G.shMax&&G.lives>=3){
+    try{const pw=parseInt(localStorage.getItem('exomniaPerfectWaves')||'0');localStorage.setItem('exomniaPerfectWaves',pw+1);}catch(e){}
+  }
   G.wave++;G.wSpawned=0;G.wMax=10+G.wave*3;G.bossKilled=false;
   SFX.wave_start();
   waveEl.textContent=G.wave;toast_('◈ WAVE '+G.wave+' — COMMENCE!');
@@ -2187,8 +2193,10 @@ function _saveRunStats(){
     const bw=parseInt(localStorage.getItem('exomniaBestWave')||'0');
     const tk=parseInt(localStorage.getItem('exomniaTotalKills')||'0');
     const gm=parseInt(localStorage.getItem('exomniaGames')||'0');
+    const bc=parseInt(localStorage.getItem('exomniaBestCombo')||'0');
     if(G.score>bs)localStorage.setItem('exomniaBestScore',G.score);
     if(G.wave>bw)localStorage.setItem('exomniaBestWave',G.wave);
+    if((G.maxCombo||0)>bc)localStorage.setItem('exomniaBestCombo',G.maxCombo||0);
     localStorage.setItem('exomniaTotalKills',tk+(G.kills||0));
     localStorage.setItem('exomniaGames',gm+1);
     // Save coins earned in game
