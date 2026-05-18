@@ -2965,12 +2965,7 @@ const API = (() => {
     showDailyRewardModal(info.entry, newStreak);
     // Update button state
     const btn = $id('lbyDailyBtn');
-    if (btn) {
-      btn.style.opacity = '0.4';
-      btn.style.cursor = 'not-allowed';
-      btn.innerHTML = '✅';
-      btn.onclick = () => toast_('◈ ALREADY CLAIMED TODAY! COME BACK TOMORROW.');
-    }
+    if (btn) setDailyBtnClaimed(btn);
   }
 
   function showDailyRewardModal(entry, streakDay) {
@@ -3086,6 +3081,38 @@ const API = (() => {
     showDailyRewardModal(info.entry, info.streak + (info.claimed ? 0 : 1));
   }
 
+  function setDailyBtnClaimed(btn) {
+    btn.style.cssText += `
+      opacity:1;cursor:not-allowed;
+      border-color:rgba(0,229,255,0.25);
+      background:rgba(0,5,18,0.6);
+      overflow:hidden;position:relative;
+    `;
+    btn.innerHTML = `
+      <div style="
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:1px;width:100%;height:100%;
+        font-family:'Courier New',monospace;
+      ">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="10" stroke="rgba(0,229,255,0.35)" stroke-width="1.5"/>
+          <path d="M7 12.5l3.5 3.5 6.5-7" stroke="#00e5ff" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"
+            style="filter:drop-shadow(0 0 4px #00e5ff)"/>
+        </svg>
+        <span style="
+          font-size:6px;letter-spacing:1.5px;color:rgba(0,229,255,0.55);
+          font-weight:900;line-height:1;
+        ">DONE</span>
+        <span style="
+          font-size:5px;letter-spacing:0.8px;color:rgba(0,229,255,0.3);
+          line-height:1;
+        ">TOMORROW</span>
+      </div>
+    `;
+    btn.onclick = () => toast_('◈ COME BACK TOMORROW FOR YOUR NEXT REWARD!');
+  }
+
   function injectDailyRewardButton() {
     const tryInject = () => {
       const btnRow = $id('lbyBtnRow');
@@ -3105,7 +3132,8 @@ const API = (() => {
         transition:opacity 0.3s;
         ${info.claimed ? 'opacity:0.4;cursor:not-allowed;' : ''}
       `;
-      btn.innerHTML = info.claimed ? '✅' : '🎁';
+      btn.innerHTML = info.claimed ? '' : '🎁';
+      if (info.claimed) setDailyBtnClaimed(btn);
       btn.title = info.claimed ? 'Come back tomorrow!' : 'DAILY REWARD — tap to claim!';
       btn.onclick = info.claimed
         ? () => toast_('◈ ALREADY CLAIMED TODAY! COME BACK TOMORROW.')
