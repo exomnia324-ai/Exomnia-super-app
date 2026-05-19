@@ -469,9 +469,6 @@ function bossShoot(){
 function killBoss(){
   bigBurst(G.bossX,G.bossY);
   SFX.boss_die();
-  // Switch back to battle music after boss dies
-  SFX.stopMusic();
-  setTimeout(() => SFX.startMusic('battle'), 2200);
   G.bossOn=false;G.bossKilled=true;bossHUD.classList.remove('on');
   // Track boss kills for achievements
   try{const bk=parseInt(localStorage.getItem('exomniaBossKills')||'0');localStorage.setItem('exomniaBossKills',bk+1);}catch(e){}
@@ -578,8 +575,6 @@ function addCombo(){
   if(G.combo===5)toast_('🔥 COMBO x5!');
   if(G.combo===10)toast_('⚡ COMBO x10 — STREAK!');
   if(G.combo===20)toast_('💥 x20 GODLIKE!!');
-  // Boost music intensity with combo (caps at 0.95)
-  SFX.setMusicIntensity(Math.min(0.95, (G.wave-1)/12 + Math.min(G.combo,30)*0.01));
 }
 
 /* ── SPAWN ── */
@@ -622,8 +617,6 @@ function spawnBoss(){
   G.bossX=CV.width/2;G.bossY=110;G.bossDir=1;G.bossT=0;G.bossPhase=1;
   G.bossOn=true;
   SFX.boss_spawn();
-  SFX.stopMusic();
-  setTimeout(() => SFX.startMusic('boss'), 600);
   bossLbl.textContent='◆ '+G.bossName+' ◆';
   $id('bossPhaseLabel').textContent='PHASE I';
   bossHUD.classList.add('on');shake(20,1.5);
@@ -636,8 +629,6 @@ function advWave(){
     try{const pw=parseInt(localStorage.getItem('exomniaPerfectWaves')||'0');localStorage.setItem('exomniaPerfectWaves',pw+1);}catch(e){}
   }
   G.wave++;G.wSpawned=0;G.wMax=10+G.wave*3;G.bossKilled=false;
-  // Increase music intensity as waves progress
-  SFX.setMusicIntensity(Math.min(1, (G.wave - 1) / 12));
   SFX.wave_start();
   waveEl.textContent=G.wave;toast_('◈ WAVE '+G.wave+' — COMMENCE!');
 }
@@ -1727,8 +1718,6 @@ function toStart(){
   pauseMenu.classList.remove('on');endScreen.classList.remove('on');lvlUp.classList.remove('on');
   bossHUD.classList.remove('on');
   SFX.stopMusic();
-  // Small delay so stop is clean before lobby music starts
-  setTimeout(() => { SFX.init(); SFX.resume(); SFX.startMusic('lobby'); }, 300);
   initG();
   // Hide game UI elements
   $id('ui').style.visibility='hidden';
@@ -1840,7 +1829,6 @@ function updateLbyShipCard(idx){
 }
 
 function openLbyPanel(type){
-  SFX.ui_open();
   const panel=$id('lbyPanel');
   const title=$id('lbyPanelTitle');
   const body=$id('lbyPanelBody');
@@ -2098,7 +2086,7 @@ function launchFromLobby(){
   // Apply bonuses AFTER restartGame/initG so they are not wiped
   applyShipBonuses(selectedShip);
   applyModeBonuses(selectedMode);
-  SFX.startMusic('battle');
+  SFX.startMusic();
 }
 
 function applyShipBonuses(idx){
@@ -2383,10 +2371,307 @@ function shopAction(idx){
 // Apply on boot
 applySettings();
 
-/* ═══ SOUND SYSTEM ═══
-   Defined in sounds.js (loaded before this file).
-   SFX object is globally available — no redefinition needed.
-   ═══════════════════════════════════════════════════════ */
+/* ═══ SOUND SYSTEM (Web Audio API — no external files) ═══ */
+const SFX = (function(){
+  let ctx = null;
+  let masterGain = null;
+  let musicNodes = null;
+  let musicPlaying = false;
+  let muted = false;
+
+  function init(){
+    if(ctx) return;
+    try{
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.55;
+      masterGain.connect(ctx.destination);
+    }catch(e){ ctx=null; }
+  }
+
+  function resume(){
+    if(ctx && ctx.state==='suspended') ctx.resume();
+  }
+
+  // ── core tone helper ──
+  function tone(freq, type, vol, dur, opts={}){
+    if(!ctx||muted) return;
+    const g = ctx.createGain();
+    g.connect(masterGain);
+    const now = ctx.currentTime;
+    const attack = opts.attack||0.005;
+    const decay  = opts.decay ||0.05;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(vol, now+attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, now);
+    if(opts.sweep) o.frequency.exponentialRampToValueAtTime(opts.sweep, now+dur);
+    o.connect(g);
+    o.start(now);
+    o.stop(now+dur+0.05);
+  }
+
+  // ── noise burst helper ──
+  function noise(vol, dur, opts={}){
+    if(!ctx||muted) return;
+    const bufLen = Math.ceil(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++) data[i]=(Math.random()*2-1);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = opts.filter || 'bandpass';
+    filter.frequency.value = opts.freq || 800;
+    filter.Q.value = opts.Q || 1.5;
+
+    const g = ctx.createGain();
+    g.connect(masterGain);
+    const now = ctx.currentTime;
+    g.gain.setValueAtTime(vol, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+
+    src.connect(filter);
+    filter.connect(g);
+    src.start(now);
+    src.stop(now+dur+0.05);
+  }
+
+  // ═══ SOUND EFFECTS ═══
+  function shoot_pulse(){
+    tone(420,'square',.18,.08,{sweep:200,attack:.002,decay:.03});
+    tone(210,'sawtooth',.08,.06,{sweep:120});
+  }
+  function shoot_laser(){
+    tone(800,'sawtooth',.12,.07,{sweep:1400,attack:.001});
+    tone(1600,'sine',.06,.05,{sweep:2800});
+  }
+  function shoot_plasma(){
+    tone(300,'sawtooth',.15,.09,{sweep:150});
+    noise(.1,.06,{filter:'highpass',freq:1200});
+  }
+  function shoot_missile(){
+    noise(.22,.12,{filter:'lowpass',freq:600,Q:0.8});
+    tone(120,'sawtooth',.15,.15,{sweep:60,attack:.01});
+  }
+  function shoot_gatling(){
+    tone(380+Math.random()*80,'square',.12,.05,{sweep:200,attack:.001});
+  }
+  function shoot_shotgun(){
+    noise(.35,.18,{filter:'lowpass',freq:400,Q:0.5});
+    tone(80,'square',.2,.12,{sweep:40,attack:.003});
+  }
+  function shoot_emp(){
+    tone(60,'sawtooth',.3,.4,{sweep:20,attack:.01});
+    noise(.25,.35,{filter:'lowpass',freq:300,Q:0.3});
+    tone(200,'sine',.15,.5,{sweep:800});
+  }
+  function shoot_railgun(){
+    tone(50,'square',.35,.05,{sweep:2000,attack:.001});
+    noise(.3,.12,{filter:'highpass',freq:3000,Q:2});
+    tone(1200,'sine',.12,.18,{sweep:300});
+  }
+  function shoot_nuke(){
+    tone(40,'sawtooth',.4,.8,{sweep:15,attack:.02});
+    noise(.5,.9,{filter:'lowpass',freq:200,Q:0.2});
+    tone(100,'square',.25,.6,{sweep:30});
+    setTimeout(()=>{
+      noise(.6,.5,{filter:'lowpass',freq:500,Q:0.4});
+      tone(30,'sine',.3,1.2,{sweep:80,attack:.05});
+    },120);
+  }
+
+  function enemy_explode(){
+    noise(.28,.2,{filter:'lowpass',freq:500,Q:0.6});
+    tone(120,'square',.18,.15,{sweep:50,attack:.003});
+  }
+  function enemy_explode_big(){
+    noise(.45,.4,{filter:'lowpass',freq:300,Q:0.4});
+    tone(60,'sawtooth',.3,.35,{sweep:25,attack:.005});
+    tone(200,'square',.15,.25,{sweep:80});
+  }
+  function player_hit(){
+    noise(.4,.22,{filter:'bandpass',freq:700,Q:1.2});
+    tone(150,'square',.3,.2,{sweep:60,attack:.002});
+    tone(400,'sine',.15,.15,{sweep:100});
+  }
+  function pickup_coin(){
+    tone(880,'sine',.18,.07,{attack:.002});
+    tone(1320,'sine',.12,.05,{attack:.003});
+  }
+  function pickup_health(){
+    tone(660,'sine',.2,.1,{attack:.005});
+    tone(880,'sine',.18,.12,{attack:.01});
+    tone(1100,'sine',.12,.15,{attack:.015});
+  }
+  function pickup_powerup(){
+    tone(440,'sine',.15,.05,{attack:.002});
+    tone(660,'sine',.15,.07,{attack:.01});
+    tone(880,'sine',.12,.1,{attack:.02});
+  }
+  function level_up(){
+    const notes=[523,659,784,1047];
+    notes.forEach((f,i)=>{
+      setTimeout(()=>tone(f,'sine',.22,.18,{attack:.005}),i*80);
+    });
+  }
+  function wave_start(){
+    tone(220,'square',.2,.12,{attack:.01});
+    setTimeout(()=>tone(330,'square',.2,.12,{attack:.01}),130);
+    setTimeout(()=>tone(440,'square',.25,.2,{attack:.01}),260);
+  }
+  function boss_spawn(){
+    tone(55,'sawtooth',.35,.5,{sweep:35,attack:.02});
+    setTimeout(()=>noise(.4,.4,{filter:'lowpass',freq:250,Q:0.3}),100);
+    setTimeout(()=>{
+      tone(110,'square',.3,.4,{sweep:55,attack:.01});
+    },300);
+  }
+  function boss_phase2(){
+    tone(80,'square',.4,.3,{attack:.01});
+    noise(.35,.25,{filter:'lowpass',freq:350});
+    setTimeout(()=>tone(160,'square',.35,.3,{attack:.01}),150);
+  }
+  function boss_die(){
+    for(let i=0;i<6;i++){
+      setTimeout(()=>{
+        noise(.5,.35,{filter:'lowpass',freq:200+i*50,Q:0.3});
+        tone(60+i*15,'sawtooth',.3,.4,{sweep:20,attack:.003});
+      },i*120);
+    }
+  }
+  function special_nova(){
+    tone(50,'sawtooth',.4,.6,{sweep:15,attack:.02});
+    noise(.45,.8,{filter:'lowpass',freq:250,Q:0.2});
+    setTimeout(()=>{
+      for(let i=0;i<4;i++) setTimeout(()=>noise(.3,.25,{filter:'bandpass',freq:300+i*100}),i*80);
+    },200);
+  }
+  function game_over(){
+    const notes=[440,330,220,110];
+    notes.forEach((f,i)=>{
+      setTimeout(()=>tone(f,'sawtooth',.25,.4,{attack:.01,sweep:f*.4}),i*200);
+    });
+  }
+  function ui_click(){
+    tone(660,'sine',.1,.04,{attack:.001});
+  }
+  function combo_hit(combo){
+    const f=220+Math.min(combo,30)*18;
+    tone(f,'square',.12,.06,{attack:.001,sweep:f*1.3});
+  }
+
+  // ═══ BACKGROUND MUSIC ═══
+  function startMusic(){
+    if(!ctx||musicPlaying||muted) return;
+    musicPlaying=true;
+    _scheduleMusic(ctx.currentTime);
+  }
+  function stopMusic(){
+    musicPlaying=false;
+    if(musicNodes){
+      try{musicNodes.forEach(n=>n.stop&&n.stop());}catch(e){}
+      musicNodes=null;
+    }
+  }
+
+  // Simple arpeggiated ambient sci-fi loop
+  const SCALE=[55,65.4,73.4,82.4,98,110,130.8,146.8];
+  let _musicSeq=0;
+  let _musicTimer=null;
+  function _scheduleMusic(startAt){
+    if(!musicPlaying||!ctx||muted) return;
+    const now=ctx.currentTime;
+    const t=Math.max(startAt,now);
+
+    // Bass drone
+    _playMusicNote(SCALE[0],t,'sawtooth',.06,1.4);
+    _playMusicNote(SCALE[0]*2,t,'sine',.04,1.4);
+
+    // Arpeggiated melody notes
+    const pattern=[0,2,4,7,4,2,5,3];
+    const step=0.22;
+    pattern.forEach((deg,i)=>{
+      const freq=SCALE[deg%SCALE.length]*2;
+      _playMusicNote(freq,t+i*step,'sine',.03,.15);
+    });
+
+    // Hi-hat rhythm (noise clicks)
+    for(let i=0;i<8;i++){
+      if(i%2===0) _playMusicNoise(t+i*step*.5,.03,.04,{filter:'highpass',freq:6000});
+    }
+
+    // Kick (low thump every bar)
+    _playMusicNote(55,t,'sine',.1,.08,{sweep:30});
+    _playMusicNote(55,t+step*4,'sine',.08,.07,{sweep:30});
+
+    const loopLen=pattern.length*step+0.05;
+    _musicTimer=setTimeout(()=>_scheduleMusic(t+loopLen), loopLen*1000-80);
+  }
+  function _playMusicNote(freq,when,type,vol,dur,opts={}){
+    if(!ctx||muted) return;
+    const g=ctx.createGain();
+    g.connect(masterGain);
+    g.gain.setValueAtTime(0,when);
+    g.gain.linearRampToValueAtTime(vol,when+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+    const o=ctx.createOscillator();
+    o.type=type;o.frequency.setValueAtTime(freq,when);
+    if(opts.sweep) o.frequency.exponentialRampToValueAtTime(opts.sweep,when+dur);
+    o.connect(g);o.start(when);o.stop(when+dur+0.05);
+  }
+  function _playMusicNoise(when,vol,dur,opts={}){
+    if(!ctx||muted) return;
+    const bufLen=Math.ceil(ctx.sampleRate*dur);
+    const buf=ctx.createBuffer(1,bufLen,ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++) d[i]=Math.random()*2-1;
+    const src=ctx.createBufferSource();src.buffer=buf;
+    const f=ctx.createBiquadFilter();
+    f.type=opts.filter||'highpass';f.frequency.value=opts.freq||5000;
+    const g=ctx.createGain();g.connect(masterGain);
+    g.gain.setValueAtTime(vol,when);g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+    src.connect(f);f.connect(g);src.start(when);src.stop(when+dur+0.05);
+  }
+
+  function setMute(v){
+    muted=v;
+    if(masterGain) masterGain.gain.value=v?0:0.55;
+    if(v) stopMusic();
+    else if(ctx&&!musicPlaying) startMusic();
+  }
+  function toggleMute(){
+    init();resume();
+    setMute(!muted);
+    return muted;
+  }
+  function isMuted(){ return muted; }
+
+  // Weapon sound dispatcher
+  function weaponSound(wName){
+    init();resume();
+    const map={PULSE:shoot_pulse,LASER:shoot_laser,PLASMA:shoot_plasma,MISSILE:shoot_missile,GATLING:shoot_gatling,SHOTGUN:shoot_shotgun,EMP:shoot_emp,RAILGUN:shoot_railgun,NUKE:shoot_nuke,TWIN:shoot_pulse,VORTEX:shoot_emp,FLARE:shoot_shotgun,FREEZE:shoot_emp,CHAIN:shoot_railgun,BLACKHOLE:shoot_nuke};
+    (map[wName]||shoot_pulse)();
+  }
+
+  return {
+    init,resume,
+    weaponSound,
+    enemy_explode,enemy_explode_big,
+    player_hit,
+    pickup_coin,pickup_health,pickup_powerup,
+    level_up,wave_start,
+    boss_spawn,boss_phase2,boss_die,
+    special_nova,game_over,
+    ui_click,combo_hit,
+    startMusic,stopMusic,
+    toggleMute,isMuted,
+  };
+})();
 
 window.openSettings=openSettings;window.closeSettings=closeSettings;
 window.saveSettings=saveSettings;window.resetSettings=resetSettings;
@@ -2686,7 +2971,6 @@ const API = (() => {
     } catch(e) {}
     applyDailyRewards(info.entry);
     showDailyRewardModal(info.entry, newStreak);
-    if (typeof SFX !== 'undefined' && SFX.daily_claim) SFX.daily_claim();
     // Update button state
     const btn = $id('lbyDailyBtn');
     if (btn) setDailyBtnClaimed(btn);
@@ -2991,8 +3275,6 @@ window.addEventListener('load',()=>{
       const cover=$id('blackCover');
       if(cover) cover.style.display='none';
       refreshLobbyStats();
-      // Start lobby ambient music (requires user gesture — will auto-play if unlocked)
-      setTimeout(() => { SFX.init(); SFX.startMusic('lobby'); }, 400);
     },1000);
   },2800);
 
