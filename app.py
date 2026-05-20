@@ -1,4 +1,6 @@
-from flask import Flask, request, jsonify, render_template
+
+
+from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import psycopg
 from psycopg.rows import dict_row
@@ -55,6 +57,12 @@ def home():
 @app.route('/privacy')
 def privacy():
     return render_template('privacy.html')
+
+
+@app.route('/ads.txt')
+def ads():
+    return send_file('ads.txt')
+
 
 @app.route('/terms')
 def terms():
