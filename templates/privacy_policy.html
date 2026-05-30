@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Deep Space Combat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --bg: #020810; --surface: #060f1e; --accent: #00d4ff; --accent2: #ff4f00; --text: #c8dff0; --muted: #4a6a85; --border: #0a2a40; }
+    body { font-family: 'Rajdhani', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    body::before { content: ''; position: fixed; inset: 0; background-image: radial-gradient(1px 1px at 20% 30%, white, transparent), radial-gradient(1px 1px at 80% 10%, white, transparent), radial-gradient(1px 1px at 65% 90%, white, transparent); pointer-events: none; z-index: 0; }
+    header { position: relative; z-index: 10; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, #030d1a 0%, transparent 100%); padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 1.2rem; color: var(--accent); text-decoration: none; text-shadow: 0 0 20px rgba(0,212,255,0.5); }
+    .logo span { color: var(--accent2); }
+    nav { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    nav a { font-weight: 600; font-size: 0.9rem; text-transform: uppercase; color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    nav a:hover { color: var(--accent); }
+    main { flex: 1; position: relative; z-index: 5; max-width: 860px; width: 100%; margin: 0 auto; padding: 3rem 1.5rem; }
+    h1 { font-family: 'Orbitron', monospace; font-size: clamp(1.5rem, 4vw, 2.5rem); font-weight: 700; color: var(--accent); margin-bottom: 0.4rem; }
+    .subtitle { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h2 { font-family: 'Orbitron', monospace; font-size: 1.1rem; color: var(--accent2); margin: 2rem 0 0.8rem; text-transform: uppercase; }
+    p, li { font-size: 1.05rem; line-height: 1.75; color: var(--text); margin-bottom: 0.8rem; }
+    ul { padding-left: 1.5rem; margin-bottom: 1rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.5rem; margin-bottom: 1.2rem; position: relative; overflow: hidden; }
+    .card::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: linear-gradient(180deg, var(--accent), transparent); }
+    footer { position: relative; z-index: 10; border-top: 1px solid var(--border); padding: 1.5rem 2rem; text-align: center; font-size: 0.82rem; color: var(--muted); }
+    footer a { color: var(--muted); margin: 0 0.6rem; }
+    footer a:hover { color: var(--accent); text-decoration: none; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  </style>
+</head>
+<body>
+<header>
+  <a href="/" class="logo">DEEP <span>SPACE</span> COMBAT</a>
+  <nav>
+    <a href="/how-to-play">How to Play</a>
+    <a href="/about">About</a>
+    <a href="/contact">Contact</a>
+    <a href="/privacy-policy">Privacy</a>
+    <a href="/terms">Terms</a>
+  </nav>
+</header>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="subtitle">Last Updated: May 30, 2026</p>
+  <div class="card"><p>Deep Space Combat is committed to protecting your privacy. This policy explains how we handle information when you use our game.</p></div>
+  <h2>1. Information We Collect</h2>
+  <p>We do not directly collect personal information. Third-party services may collect data automatically including IP address, device info, and cookies.</p>
+  <h2>2. Google AdSense & Advertising</h2>
+  <p>We use Google AdSense to display ads. Google may use cookies to serve ads based on your visits.</p>
+  <ul>
+    <li>Opt out: <a href="https://www.google.com/settings/ads" target="_blank">Google Ads Settings</a></li>
+    <li>More info: <a href="https://policies.google.com/technologies/ads" target="_blank">policies.google.com/technologies/ads</a></li>
+  </ul>
+  <h2>3. Cookies</h2>
+  <p>Cookies are used only through Google AdSense. You can control cookies through your browser settings.</p>
+  <h2>4. Children's Privacy</h2>
+  <p>Our game is not directed at children under 13. We do not knowingly collect information from children under 13.</p>
+  <h2>5. Contact</h2>
+  <p>Questions? Email us: <a href="mailto:exomniaexomnia@gmail.com">exomniaexomnia@gmail.com</a></p>
+
+</main>
+<footer>
+  <div style="margin-bottom:0.6rem;">
+    <a href="/privacy-policy">Privacy Policy</a>
+    <a href="/terms">Terms of Service</a>
+    <a href="/contact">Contact</a>
+    <a href="/how-to-play">How to Play</a>
+    <a href="/about">About</a>
+  </div>
+  &copy; 2026 Deep Space Combat &mdash; <a href="mailto:exomniaexomnia@gmail.com">exomniaexomnia@gmail.com</a>
+</footer>
+</body>
+</html>
