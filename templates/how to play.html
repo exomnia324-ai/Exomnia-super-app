@@ -1,59 +1,111 @@
-{% extends "base.html" %}
-{% block title %}How to Play — Deep Space Combat{% endblock %}
-{% block content %}
-
-<h1>How to Play</h1>
-<p class="subtitle">Master the galaxy — Commander's Briefing</p>
-
-<div class="card">
-  <p>Deep Space Combat is a fast-paced space shooter. Your mission: survive the waves, destroy enemies, and dominate the leaderboard. Here's everything you need to know.</p>
-</div>
-
-<h2>🕹️ Controls</h2>
-<div class="card">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>How to Play — Deep Space Combat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #020810; --surface: #060f1e; --accent: #00d4ff;
+      --accent2: #ff4f00; --text: #c8dff0; --muted: #4a6a85; --border: #0a2a40;
+    }
+    body { font-family: 'Rajdhani', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: radial-gradient(1px 1px at 20% 30%, white, transparent), radial-gradient(1px 1px at 80% 10%, white, transparent), radial-gradient(1.5px 1.5px at 50% 70%, #aaddff, transparent), radial-gradient(1px 1px at 10% 80%, white, transparent), radial-gradient(1px 1px at 90% 60%, white, transparent), radial-gradient(1px 1px at 65% 90%, white, transparent);
+      pointer-events: none; z-index: 0;
+    }
+    header { position: relative; z-index: 10; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, #030d1a 0%, transparent 100%); padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 1.2rem; letter-spacing: 0.1em; color: var(--accent); text-decoration: none; text-shadow: 0 0 20px rgba(0,212,255,0.5); }
+    .logo span { color: var(--accent2); }
+    nav { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    nav a { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 0.9rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    nav a:hover { color: var(--accent); }
+    main { flex: 1; position: relative; z-index: 5; max-width: 860px; width: 100%; margin: 0 auto; padding: 3rem 1.5rem; }
+    h1 { font-family: 'Orbitron', monospace; font-size: clamp(1.5rem, 4vw, 2.5rem); font-weight: 700; color: var(--accent); text-shadow: 0 0 30px rgba(0,212,255,0.4); margin-bottom: 0.4rem; letter-spacing: 0.05em; }
+    .subtitle { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h2 { font-family: 'Orbitron', monospace; font-size: 1.1rem; color: var(--accent2); letter-spacing: 0.08em; margin: 2rem 0 0.8rem; text-transform: uppercase; }
+    p, li { font-size: 1.05rem; line-height: 1.75; color: var(--text); margin-bottom: 0.8rem; }
+    ul { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.5rem; margin-bottom: 1.2rem; position: relative; overflow: hidden; }
+    .card::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: linear-gradient(180deg, var(--accent), transparent); }
+    footer { position: relative; z-index: 10; border-top: 1px solid var(--border); padding: 1.5rem 2rem; text-align: center; font-size: 0.82rem; color: var(--muted); }
+    footer a { color: var(--muted); margin: 0 0.6rem; transition: color 0.2s; }
+    footer a:hover { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+<header>
+  <a href="/" class="logo">DEEP <span>SPACE</span> COMBAT</a>
+  <nav>
+    <a href="/how-to-play">How to Play</a>
+    <a href="/about">About</a>
+    <a href="/contact">Contact</a>
+    <a href="/privacy-policy">Privacy</a>
+    <a href="/terms">Terms</a>
+  </nav>
+</header>
+<main>
+  <h1>How to Play</h1>
+  <p class="subtitle">Master the galaxy — Commander's Briefing</p>
+  <div class="card">
+    <p>Deep Space Combat is a fast-paced space shooter. Your mission: survive the waves, destroy enemies, and dominate the leaderboard.</p>
+  </div>
+  <h2>🕹️ Controls</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Arrow Keys / WASD</strong> — Move your ship</li>
+      <li><strong>Spacebar</strong> — Fire weapon</li>
+      <li><strong>P</strong> — Pause / Resume game</li>
+      <li><strong>R</strong> — Restart after game over</li>
+    </ul>
+    <p style="margin-top:0.5rem; color: var(--muted); font-size:0.9rem;">📱 On mobile: use the on-screen touch controls.</p>
+  </div>
+  <h2>🎯 Objective</h2>
+  <p>Destroy incoming enemy ships and asteroids before they reach you. Each enemy defeated gives you points. Survive as long as possible to climb the leaderboard.</p>
+  <h2>⚡ Power-Ups</h2>
+  <div class="card">
+    <ul>
+      <li><strong>🔵 Shield</strong> — Temporary invincibility</li>
+      <li><strong>🔴 Rapid Fire</strong> — Increased fire rate</li>
+      <li><strong>🟡 Score Boost</strong> — 2x points for a limited time</li>
+      <li><strong>💚 Health</strong> — Restore one life</li>
+    </ul>
+  </div>
+  <h2>❤️ Lives & Game Over</h2>
+  <p>You start with 3 lives. You lose a life when an enemy or asteroid hits your ship. When all lives are lost, the game ends and your final score is recorded.</p>
+  <h2>🏆 Scoring</h2>
   <ul>
-    <li><strong>Arrow Keys / WASD</strong> — Move your ship</li>
-    <li><strong>Spacebar</strong> — Fire weapon</li>
-    <li><strong>P</strong> — Pause / Resume game</li>
-    <li><strong>R</strong> — Restart after game over</li>
+    <li>Small enemy: <strong>100 pts</strong></li>
+    <li>Medium enemy: <strong>250 pts</strong></li>
+    <li>Boss enemy: <strong>1000 pts</strong></li>
+    <li>Asteroid: <strong>50 pts</strong></li>
   </ul>
-  <p style="margin-top:0.5rem; color: var(--muted); font-size:0.9rem;">📱 On mobile: use the on-screen touch controls.</p>
-</div>
-
-<h2>🎯 Objective</h2>
-<p>Destroy incoming enemy ships and asteroids before they reach you. Each enemy defeated gives you points. Survive as long as possible to climb the leaderboard.</p>
-
-<h2>⚡ Power-Ups</h2>
-<div class="card">
-  <ul>
-    <li><strong>🔵 Shield</strong> — Temporary invincibility</li>
-    <li><strong>🔴 Rapid Fire</strong> — Increased fire rate</li>
-    <li><strong>🟡 Score Boost</strong> — 2x points for a limited time</li>
-    <li><strong>💚 Health</strong> — Restore one life</li>
-  </ul>
-</div>
-
-<h2>❤️ Lives & Game Over</h2>
-<p>You start with 3 lives. You lose a life when an enemy or asteroid hits your ship. When all lives are lost, the game ends and your final score is recorded.</p>
-
-<h2>🏆 Scoring</h2>
-<ul>
-  <li>Small enemy: <strong>100 pts</strong></li>
-  <li>Medium enemy: <strong>250 pts</strong></li>
-  <li>Boss enemy: <strong>1000 pts</strong></li>
-  <li>Asteroid: <strong>50 pts</strong></li>
-</ul>
-
-<h2>💡 Tips</h2>
-<div class="card">
-  <ul>
-    <li>Stay near the center to dodge from any direction</li>
-    <li>Prioritize power-up pickups — they can save your run</li>
-    <li>Boss enemies appear every 5 waves — save your shield for them</li>
-    <li>Watch the edges — enemies can spawn from any side</li>
-  </ul>
-</div>
-
-<p style="margin-top:2rem;">Good luck, Commander. The galaxy is counting on you. 🚀</p>
-
-{% endblock %}
+  <h2>💡 Tips</h2>
+  <div class="card">
+    <ul>
+      <li>Stay near the center to dodge from any direction</li>
+      <li>Prioritize power-up pickups — they can save your run</li>
+      <li>Boss enemies appear every 5 waves — save your shield for them</li>
+      <li>Watch the edges — enemies can spawn from any side</li>
+    </ul>
+  </div>
+  <p style="margin-top:2rem;">Good luck, Commander. The galaxy is counting on you. 🚀</p>
+</main>
+<footer>
+  <div style="margin-bottom:0.6rem;">
+    <a href="/privacy-policy">Privacy Policy</a>
+    <a href="/terms">Terms of Service</a>
+    <a href="/contact">Contact</a>
+    <a href="/how-to-play">How to Play</a>
+    <a href="/about">About</a>
+  </div>
+  &copy; 2026 Deep Space Combat — <a href="mailto:exomniaexomnia@gmail.com">exomniaexomnia@gmail.com</a>
+</footer>
+</body>
+</html>
