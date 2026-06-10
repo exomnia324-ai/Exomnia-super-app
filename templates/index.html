@@ -102,6 +102,23 @@
 
   </div>
 
+  <!-- SEO CONTENT - visible to Google crawler -->
+  <div id="seoContent" style="display:none; padding:20px; color:#c8dff0; font-family:sans-serif; max-width:800px; margin:0 auto;">
+    <h1 style="color:#00d4ff; font-size:1.5rem; margin-bottom:10px;">Deep Space Combat — Free Browser Space Shooter Game</h1>
+    <p>Deep Space Combat is a free-to-play browser-based space shooter game. Battle through waves of enemy spacecraft, upgrade your pilot and ship, and dominate the leaderboard. No download required — play instantly in your browser.</p>
+    <h2 style="color:#ff4f00; font-size:1.1rem; margin:15px 0 8px;">Game Features</h2>
+    <ul style="padding-left:20px; line-height:1.8;">
+      <li>3 exciting game modes: Normal, Survival, and Blitz</li>
+      <li>Multiple spacecraft to unlock and upgrade</li>
+      <li>Pilot ranking system from Cadet to Legend</li>
+      <li>Power-ups, combo system, and boss battles</li>
+      <li>Mobile and desktop friendly controls</li>
+    </ul>
+    <h2 style="color:#ff4f00; font-size:1.1rem; margin:15px 0 8px;">How to Play</h2>
+    <p>Choose your spacecraft, select a game mode, and launch your mission. Destroy enemy ships to earn points and coins. Use coins to upgrade your ship in the Hangar. Survive as many waves as possible to climb the leaderboard.</p>
+    <p style="margin-top:10px;">Deep Space Combat is free to play and supported by advertising. Play now at <strong>exomnia-super-app.onrender.com</strong></p>
+  </div>
+
   <!-- HANGAR / SHOP PANEL (fullscreen overlay) -->
   <div id="lbyPanel">
     <div id="lbyPanelHeader">
@@ -533,12 +550,15 @@ function onFsChange() {
 <script>
 (function() {
   var footer = document.getElementById('siteFooter');
+  var seo = document.getElementById('seoContent');
   var lobby = document.getElementById('lobbyScreen');
   function checkLobby() {
     if (lobby && !lobby.classList.contains('gone') && lobby.style.display !== 'none') {
       footer.style.display = 'block';
+      if (seo) seo.style.display = 'block';
     } else {
       footer.style.display = 'none';
+      if (seo) seo.style.display = 'none';
     }
   }
   var observer = new MutationObserver(checkLobby);
