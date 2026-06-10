@@ -553,7 +553,7 @@ function onFsChange() {
   var seo = document.getElementById('seoContent');
   var lobby = document.getElementById('lobbyScreen');
   function checkLobby() {
-    if (lobby && !lobby.classList.contains('gone') && lobby.style.display !== 'none') {
+    if (lobby && !lobby.classList.contains('gone')) {
       footer.style.display = 'block';
       if (seo) seo.style.display = 'block';
     } else {
