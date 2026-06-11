@@ -103,20 +103,48 @@
   </div>
 
   <!-- SEO CONTENT - visible to Google crawler -->
-  <div id="seoContent" style="display:none; padding:20px; color:#c8dff0; font-family:sans-serif; max-width:800px; margin:0 auto;">
-    <h1 style="color:#00d4ff; font-size:1.5rem; margin-bottom:10px;">Deep Space Combat — Free Browser Space Shooter Game</h1>
-    <p>Deep Space Combat is a free-to-play browser-based space shooter game. Battle through waves of enemy spacecraft, upgrade your pilot and ship, and dominate the leaderboard. No download required — play instantly in your browser.</p>
-    <h2 style="color:#ff4f00; font-size:1.1rem; margin:15px 0 8px;">Game Features</h2>
-    <ul style="padding-left:20px; line-height:1.8;">
+  <div id="seoContent" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none;">
+    <h1>Deep Space Combat — Free Browser Space Shooter Game</h1>
+    <p>Deep Space Combat is a free-to-play browser-based space shooter game. Battle through waves of enemy spacecraft, upgrade your pilot and ship, and dominate the global leaderboard. No download required — play instantly in your browser on mobile or desktop.</p>
+
+    <h2>Game Features</h2>
+    <ul>
       <li>3 exciting game modes: Normal, Survival, and Blitz</li>
-      <li>Multiple spacecraft to unlock and upgrade</li>
-      <li>Pilot ranking system from Cadet to Legend</li>
-      <li>Power-ups, combo system, and boss battles</li>
-      <li>Mobile and desktop friendly controls</li>
+      <li>Multiple spacecraft to unlock and upgrade in the Hangar</li>
+      <li>Pilot ranking system from Recruit to Legend</li>
+      <li>Power-ups, combo multiplier system, and epic boss battles</li>
+      <li>Mobile and desktop friendly touch and keyboard controls</li>
+      <li>Global leaderboard — compete with players worldwide</li>
+      <li>Coin economy — earn coins in battle and spend them on upgrades</li>
+      <li>Shield system, XP levels, and weapon loadouts</li>
     </ul>
-    <h2 style="color:#ff4f00; font-size:1.1rem; margin:15px 0 8px;">How to Play</h2>
-    <p>Choose your spacecraft, select a game mode, and launch your mission. Destroy enemy ships to earn points and coins. Use coins to upgrade your ship in the Hangar. Survive as many waves as possible to climb the leaderboard.</p>
-    <p style="margin-top:10px;">Deep Space Combat is free to play and supported by advertising. Play now at <strong>exomnia-super-app.onrender.com</strong></p>
+
+    <h2>How to Play Deep Space Combat</h2>
+    <p>Choose your callsign and select your spacecraft before launching your mission. Use the joystick or keyboard arrow keys to move your ship across the battlefield. Tap the FIRE button or press spacebar to shoot enemy ships. Collect power-ups that drop from destroyed enemies to boost your shields, damage, and fire rate.</p>
+    <p>Destroy as many enemy ships as possible to build your combo multiplier and earn bonus points. Watch out for boss enemies that appear at the end of certain waves — they have multiple health phases and powerful attack patterns.</p>
+    <p>Earn coins from every kill and use them in the Hangar to unlock new spacecraft or in the Shop to buy advanced weapons. Each ship has different stats for Attack, Speed, and Defense, so choose the one that fits your play style.</p>
+
+    <h2>Game Modes</h2>
+    <h3>Normal Mode</h3>
+    <p>The standard experience. Fight through 10 waves of increasingly difficult enemy formations. A great starting point for new pilots. Clear all 10 waves to complete the mission and earn a score bonus.</p>
+    <h3>Survival Mode</h3>
+    <p>Endless waves of enemies with no finish line. The difficulty increases with every wave. How long can you last? Survival Mode is for experienced pilots looking for the ultimate challenge.</p>
+    <h3>Blitz Mode</h3>
+    <p>Everything is faster in Blitz Mode — enemy speed, bullet velocity, and spawn rates are all increased. In return, you earn 2× score multiplier on every kill. Perfect for high-score hunters.</p>
+
+    <h2>Spacecraft and Upgrades</h2>
+    <p>Deep Space Combat features several unique spacecraft, each with their own strengths and weaknesses. Start with the balanced Viper and unlock faster or more powerful ships as you earn coins. Visit the Hangar from the lobby to view and equip your available ships.</p>
+    <p>Upgrade your pilot stats during gameplay whenever you level up. Choose from damage upgrades, fire rate boosts, speed increases, critical strike chance, or shield capacity expansions. Building the right combination of upgrades is key to surviving the later waves.</p>
+
+    <h2>Leaderboard and Ranking</h2>
+    <p>All scores are submitted to the global leaderboard. Your pilot rank is determined by your best score across all game modes. Ranks range from Recruit at the bottom to the elite Legend rank at the top. Check the leaderboard after each mission to see how you compare to other pilots around the world.</p>
+
+    <h2>Controls</h2>
+    <p>On mobile: Use the on-screen joystick on the left to move your ship, and tap the FIRE button on the right to shoot. The special ability button triggers your equipped weapon's special attack. On desktop: Use arrow keys or WASD to move, spacebar to fire, and E for special ability.</p>
+
+    <h2>About Deep Space Combat</h2>
+    <p>Deep Space Combat is a free browser game built for mobile and desktop. It is supported by advertising and free to play with no downloads or sign-ups required. The game features an auto-save system that remembers your callsign, best scores, coins, and unlocked ships between sessions.</p>
+    <p>Play now at exomnia-super-app.onrender.com — no account needed, just enter a callsign and launch your first mission.</p>
   </div>
 
   <!-- HANGAR / SHOP PANEL (fullscreen overlay) -->
@@ -550,15 +578,12 @@ function onFsChange() {
 <script>
 (function() {
   var footer = document.getElementById('siteFooter');
-  var seo = document.getElementById('seoContent');
   var lobby = document.getElementById('lobbyScreen');
   function checkLobby() {
     if (lobby && !lobby.classList.contains('gone')) {
       footer.style.display = 'block';
-      if (seo) seo.style.display = 'block';
     } else {
       footer.style.display = 'none';
-      if (seo) seo.style.display = 'none';
     }
   }
   var observer = new MutationObserver(checkLobby);
