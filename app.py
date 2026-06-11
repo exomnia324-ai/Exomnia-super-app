@@ -78,7 +78,7 @@ def about():
 
 @app.route('/ads.txt')
 def ads():
-    return send_file('ads.txt')
+    return "google.com, pub-5744401524883457, DIRECT, f08c47fec0942fa0", 200, {'Content-Type': 'text/plain'}
 
 @app.route('/api/ping')
 def ping():
