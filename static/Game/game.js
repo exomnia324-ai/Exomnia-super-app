@@ -89,6 +89,7 @@ function initG(){
     bullets:[],eBullets:[],enemies:[],particles:[],drops:[],railBeams:[],empBlasts:[],
     stars1:[],stars2:[],stars3:[],nebulae:[],
     activePU:{},
+    _shipAtkMult:0,
     joyOn:false,joyX:0,joyY:0,
     firing:false,
     dt:0,lastT:0,frame:0,
@@ -279,7 +280,7 @@ function doFire(){
   if(now-G.lastFire<rate)return;
   G.lastFire=now;
   const crit=Math.random()<(.1+G.sk.critical*.1);
-  const dmg=(w.dmg*(1+G.sk.damage*.25))*(crit?2.5:1)*(G.activePU.powerfull?2:1);
+  const dmg=(w.dmg*(1+G.sk.damage*.25)*(1+(G._shipAtkMult||0)))*(crit?2.5:1)*(G.activePU.powerfull?2:1);
 
   SFX.weaponSound(w.name);
   if(w.type==='missile'){
@@ -1785,6 +1786,58 @@ function getOwnedShips(){
     return o;
   }catch(e){return [0,1,2];}
 }
+
+/* ═══ SHIP UPGRADES (coin-based stat leveling) ═══ */
+const SHIP_UPGRADE_MAX=5;      // max upgrade level per ship
+const SHIP_UPGRADE_STAT_STEP=6; // stat points gained per level (capped at 99)
+function getShipUpgrades(){
+  try{
+    const o=JSON.parse(localStorage.getItem('exomniaShipUpgrades')||'{}');
+    return (o&&typeof o==='object')?o:{};
+  }catch(e){return {};}
+}
+function getShipUpgradeLevel(idx){
+  const u=getShipUpgrades();
+  return u[idx]||0;
+}
+function setShipUpgradeLevel(idx,lvl){
+  const u=getShipUpgrades();
+  u[idx]=lvl;
+  try{localStorage.setItem('exomniaShipUpgrades',JSON.stringify(u));}catch(e){}
+}
+function getShipUpgradeCost(idx){
+  const s=PILOT_SHIPS[idx];
+  if(!s)return Infinity;
+  const lvl=getShipUpgradeLevel(idx);
+  if(lvl>=SHIP_UPGRADE_MAX)return null; // maxed out
+  return Math.round((120+s.price*0.25)*(lvl+1));
+}
+// Returns {atk,spd,def} for a ship including upgrade bonuses, capped at 99
+function getEffectiveShipStats(idx){
+  const s=PILOT_SHIPS[idx]||PILOT_SHIPS[0];
+  const lvl=getShipUpgradeLevel(idx);
+  const bump=lvl*SHIP_UPGRADE_STAT_STEP;
+  return {
+    atk:Math.min(99,s.atk+bump),
+    spd:Math.min(99,s.spd+bump),
+    def:Math.min(99,s.def+bump),
+    lvl
+  };
+}
+function upgradeShip(idx){
+  const owned=getOwnedShips();
+  if(!owned.includes(idx)){showToast('BUY THIS SHIP FIRST!');return;}
+  const cost=getShipUpgradeCost(idx);
+  if(cost===null){showToast('SHIP ALREADY AT MAX LEVEL!');return;}
+  const coins=getLbyCoins();
+  if(coins<cost){showToast('◈ NOT ENOUGH COINS!');return;}
+  setLbyCoins(coins-cost);
+  setShipUpgradeLevel(idx,getShipUpgradeLevel(idx)+1);
+  showToast('SHIP UPGRADED: '+PILOT_SHIPS[idx].name+' → LV.'+getShipUpgradeLevel(idx));
+  updateLbyShipCard(selectedShip);
+  if(idx===selectedShip)applyShipBonuses(selectedShip);
+  openLbyPanel('shop'); // refresh shop view
+}
 function buyShip(idx){
   const ship=PILOT_SHIPS[idx];
   const coins=getLbyCoins();
@@ -1820,11 +1873,12 @@ function selectShip(idx){
 
 function updateLbyShipCard(idx){
   const s=PILOT_SHIPS[idx];
-  $id('lbyShipName').textContent=s.name;
+  const eff=getEffectiveShipStats(idx);
+  $id('lbyShipName').textContent=s.name+(eff.lvl>0?' ◈LV'+eff.lvl:'');
   $id('lbyShipType').textContent=s.badge;
-  $id('shipBarAtk').style.width=s.atk+'%';
-  $id('shipBarSpd').style.width=s.spd+'%';
-  $id('shipBarDef').style.width=s.def+'%';
+  $id('shipBarAtk').style.width=eff.atk+'%';
+  $id('shipBarSpd').style.width=eff.spd+'%';
+  $id('shipBarDef').style.width=eff.def+'%';
   drawSingleShip($id('lbyShipCanvas'),s,60,70);
 }
 
@@ -1854,7 +1908,8 @@ function openLbyPanel(type){
       cv.className='hgr-canvas';cv.width=54;cv.height=64;
       card.appendChild(cv);
       const nm=document.createElement('div');
-      nm.className='hgr-name';nm.textContent=s.name;
+      const upLvl=getShipUpgradeLevel(idx);
+      nm.className='hgr-name';nm.textContent=s.name+(upLvl>0?' ◈'+upLvl:'');
       card.appendChild(nm);
       const tp=document.createElement('div');
       tp.className='hgr-type';tp.textContent=s.badge;
@@ -1904,22 +1959,32 @@ function openLbyPanel(type){
       const coins=getLbyCoins();
       PILOT_SHIPS.forEach((s,idx)=>{
         const isOwned=owned.includes(idx);
+        const eff=getEffectiveShipStats(idx);
         const item=document.createElement('div');
         item.className='shop-item'+(isOwned?' owned':'');
         const cv=document.createElement('canvas');
         cv.className='shop-item-canvas';cv.width=50;cv.height=60;
         const canAfford=coins>=s.price;
-        const btnHTML=isOwned
-          ?`<div class="shop-buy-btn owned-badge"><span class="shop-price">✔</span><span class="shop-price-lbl">OWNED</span></div>`
-          :`<div class="shop-buy-btn buy" onclick="buyShip(${idx})" style="${canAfford?'':'opacity:.4;cursor:default'}"><span class="shop-price">◈${s.price}</span><span class="shop-price-lbl">BUY</span></div>`;
+        let btnHTML;
+        if(!isOwned){
+          btnHTML=`<div class="shop-buy-btn buy" onclick="buyShip(${idx})" style="${canAfford?'':'opacity:.4;cursor:default'}"><span class="shop-price">◈${s.price}</span><span class="shop-price-lbl">BUY</span></div>`;
+        } else {
+          const upCost=getShipUpgradeCost(idx);
+          if(upCost===null){
+            btnHTML=`<div class="shop-buy-btn owned-badge"><span class="shop-price">★ LV${eff.lvl}</span><span class="shop-price-lbl">MAX</span></div>`;
+          } else {
+            const canUp=coins>=upCost;
+            btnHTML=`<div class="shop-buy-btn upgrade" onclick="upgradeShip(${idx})" style="${canUp?'':'opacity:.4;cursor:default'}"><span class="shop-price">◈${upCost}</span><span class="shop-price-lbl">UPGRADE LV${eff.lvl}→${eff.lvl+1}</span></div>`;
+          }
+        }
         item.innerHTML=`
           <div class="shop-item-info">
-            <div class="shop-item-name">${s.name}</div>
+            <div class="shop-item-name">${s.name}${eff.lvl>0?' <span style="color:#00ff8c;font-size:9px;">◈LV'+eff.lvl+'</span>':''}</div>
             <div class="shop-item-type">${s.badge}</div>
             <div class="shop-item-bars">
-              <div class="shop-bar-r"><span class="shop-bar-l">ATK</span><div class="shop-bar-t"><div class="shop-bar-f atk" style="width:${s.atk}%"></div></div></div>
-              <div class="shop-bar-r"><span class="shop-bar-l">SPD</span><div class="shop-bar-t"><div class="shop-bar-f spd" style="width:${s.spd}%"></div></div></div>
-              <div class="shop-bar-r"><span class="shop-bar-l">DEF</span><div class="shop-bar-t"><div class="shop-bar-f def" style="width:${s.def}%"></div></div></div>
+              <div class="shop-bar-r"><span class="shop-bar-l">ATK</span><div class="shop-bar-t"><div class="shop-bar-f atk" style="width:${eff.atk}%"></div></div></div>
+              <div class="shop-bar-r"><span class="shop-bar-l">SPD</span><div class="shop-bar-t"><div class="shop-bar-f spd" style="width:${eff.spd}%"></div></div></div>
+              <div class="shop-bar-r"><span class="shop-bar-l">DEF</span><div class="shop-bar-t"><div class="shop-bar-f def" style="width:${eff.def}%"></div></div></div>
             </div>
           </div>${btnHTML}`;
         item.insertBefore(cv,item.firstChild);
@@ -2096,10 +2161,13 @@ function applyShipBonuses(idx){
   const s=PILOT_SHIPS[idx]||PILOT_SHIPS[0];
   G.pw=s.w;
   G.ph=s.h;
+  // Use effective stats (base + coin-bought upgrade levels)
+  const eff=getEffectiveShipStats(idx);
   // Apply stat bonuses
-  G.pspd=5*(1+(s.spd-60)/200);   // speed scaled around base 60
-  G.shMax=100+(s.def-60)*0.5;    // defense adds shield capacity
+  G.pspd=5*(1+(eff.spd-60)/200);   // speed scaled around base 60
+  G.shMax=100+(eff.def-60)*0.5;    // defense adds shield capacity
   G.shield=Math.min(G.shield||100,G.shMax);
+  G._shipAtkMult=(eff.atk-60)/200; // attack scaled around base 60, applied to weapon damage
 }
 function applyModeBonuses(mode){
   G._selectedMode=mode;
