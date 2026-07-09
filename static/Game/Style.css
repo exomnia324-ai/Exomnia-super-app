@@ -1354,6 +1354,13 @@ body{
   color:var(--c1);border:1px solid rgba(0,229,255,0.25);
   background:rgba(0,229,255,0.04);cursor:default;
 }
+.shop-buy-btn.upgrade{
+  color:#00ff8c;border:1px solid rgba(0,255,140,0.4);
+  background:linear-gradient(145deg,rgba(0,255,140,0.12),rgba(0,255,140,0.02));
+  white-space:nowrap;
+}
+.shop-buy-btn.upgrade:active{background:rgba(0,255,140,0.22);}
+.shop-buy-btn.upgrade .shop-price-lbl{font-size:5.5px;}
 .shop-price{font-size:10px;font-weight:900;letter-spacing:1px;}
 .shop-price-lbl{font-size:6px;letter-spacing:1px;opacity:.6;}
 
