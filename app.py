@@ -76,6 +76,14 @@ def how_to_play():
 def about():
     return render_template('about.html')
 
+@app.route('/sw.js')
+def service_worker():
+    resp = send_file(os.path.join(app.static_folder, 'sw.js'))
+    resp.headers['Content-Type'] = 'application/javascript'
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
 @app.route('/ads.txt')
 def ads():
     return "google.com, pub-5744401524883457, DIRECT, f08c47fec0942fa0", 200, {'Content-Type': 'text/plain'}
