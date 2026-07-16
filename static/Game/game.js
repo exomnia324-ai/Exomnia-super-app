@@ -80,7 +80,7 @@ function initG(){
     sk:{damage:0,fireRate:0,speed:0,critical:0,shield:0},
     wave:1,wSpawned:0,wMax:10,
     bossOn:false,bossKilled:false,
-    bossHp:0,bossMaxHp:0,bossX:0,bossY:110,bossDir:1,bossT:0,bossPhase:1,
+    bossHp:0,bossMaxHp:0,bossX:0,bossY:110,bossDir:1,bossT:0,bossPhase:1,bossKit:0,
     bossName:'DESTROYER',
     combo:0,comboT:0,
     spReady:true,spCD:0,spMax:9000,
@@ -211,20 +211,34 @@ function update(){
   if(G.railBeams){for(let i=G.railBeams.length-1;i>=0;i--){G.railBeams[i].life-=dt;if(G.railBeams[i].life<=0)G.railBeams.splice(i,1);}}
   // emp/nuke blasts
   if(G.empBlasts){for(let i=G.empBlasts.length-1;i>=0;i--){const eb=G.empBlasts[i];eb.r=Math.min(eb.maxR,eb.r+eb.maxR/(eb.life/16)*f);eb.life-=dt;if(eb.life<=0)G.empBlasts.splice(i,1);}}
-  for(let i=G.eBullets.length-1;i>=0;i--){const b=G.eBullets[i];b.y+=b.dy*f;b.x+=b.dx*f;if(b.y>ch+30||b.x<-20||b.x>cw+20||b.y<-20)G.eBullets.splice(i,1);}
+  for(let i=G.eBullets.length-1;i>=0;i--){
+    const b=G.eBullets[i];
+    if(b.homing){
+      const ddx=G.px-b.x,ddy=G.py-b.y,dd=Math.hypot(ddx,ddy)||1;
+      b.dx+=(ddx/dd*6.5-b.dx)*.035;b.dy+=(ddy/dd*6.5-b.dy)*.035;
+    }
+    b.y+=b.dy*f;b.x+=b.dx*f;if(b.y>ch+30||b.x<-20||b.x>cw+20||b.y<-20)G.eBullets.splice(i,1);
+  }
 
   for(const e of G.enemies){
     e.t+=dt;
     const slowFactor=G.activePU.timeslow?0.3:1; // TIME SLOW power-up
+    if(e.type==='kamikaze'){
+      // home in on player, accelerating dive
+      const ddx=G.px-e.x,ddy=G.py-e.y,dd=Math.hypot(ddx,ddy)||1;
+      e.dx+=(ddx/dd*3.4-e.dx)*.05;e.dy+=(ddy/dd*3.4-e.dy)*.05;
+    }
     e.y+=e.dy*f*slowFactor;e.x+=e.dx*f*slowFactor;
     if(e.sway)e.x=e.bx+Math.sin(e.t*.002)*65;
     if(e.x<e.w/2||e.x>CV.width-e.w/2)e.dx*=-1;
     if(e.y>CV.height+60)e.hp=0;
-    e.shotT+=dt;
-    // Sniper fires less often but from far away
-    const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'?2000:e.type==='fast'?1800:2400;
-    if(e.shotT>sr){e.shotT=0;eFire(e);}
-    if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':'#ff4400',life:220,ml:220});}
+    if(e.type!=='kamikaze'){
+      e.shotT+=dt;
+      // Sniper fires less often but from far away
+      const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'||e.type==='shielded'?2000:e.type==='fast'?1800:2400;
+      if(e.shotT>sr){e.shotT=0;eFire(e);}
+    }
+    if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':e.type==='kamikaze'?'#ff8800':'#ff4400',life:220,ml:220});}
   }
   for(let i=G.enemies.length-1;i>=0;i--){if(G.enemies[i].hp<=0)G.enemies.splice(i,1);}
   if(G.bossOn)updateBoss();
@@ -253,7 +267,8 @@ function update(){
   if(G.invT<=0){
     for(const e of G.enemies){
       if(rectOverlap(G.px,G.py,G.pw*.7,G.ph*.7,e.x,e.y,e.w*.65,e.h*.65)){
-        e.hp=0;burst(e.x,e.y,'#ff3355',12);hitPlayer(30);addScore(15,e.x,e.y);break;
+        const dmg=e.type==='kamikaze'?45:30;
+        e.hp=0;burst(e.x,e.y,'#ff3355',e.type==='kamikaze'?18:12);hitPlayer(dmg);addScore(15,e.x,e.y);break;
       }
     }
   }
@@ -453,12 +468,32 @@ function bossShoot(){
   const dx=G.px-G.bossX,dy=G.py-G.bossY;
   const d=Math.sqrt(dx*dx+dy*dy)||1;
   const sp=G.bossPhase===3?7:5.5;
-  const count=G.bossPhase===3?7:G.bossPhase===2?5:3;
-  for(let i=0;i<count;i++){
-    const a=((i-(count-1)/2)*18)*Math.PI/180;
-    G.eBullets.push({x:G.bossX,y:G.bossY+60,dx:(dx/d*Math.cos(a)-dy/d*Math.sin(a))*sp,dy:(dx/d*Math.sin(a)+dy/d*Math.cos(a))*sp,dmg:G.bossPhase===3?30:20});
+  const kit=G.bossKit||0;
+
+  if(kit===1){
+    // SWEEPING BEAM — a rotating fan of bullets sweeps left-right across the arena
+    const sweepA=_sin(G.bossT*.0022)*55*Math.PI/180;
+    const count=G.bossPhase===3?5:G.bossPhase===2?4:3;
+    for(let i=0;i<count;i++){
+      const a=sweepA+(i-(count-1)/2)*10*Math.PI/180;
+      G.eBullets.push({x:G.bossX,y:G.bossY+60,dx:_sin(a)*sp,dy:_cos(a)*sp,dmg:G.bossPhase===3?26:18});
+    }
+  } else if(kit===2){
+    // HOMING SALVO — fewer bullets, but they track the player
+    const count=G.bossPhase===3?4:G.bossPhase===2?3:2;
+    for(let i=0;i<count;i++){
+      const a=((i-(count-1)/2)*26)*Math.PI/180;
+      G.eBullets.push({x:G.bossX,y:G.bossY+60,dx:(dx/d*Math.cos(a)-dy/d*Math.sin(a))*sp*.7,dy:(dx/d*Math.sin(a)+dy/d*Math.cos(a))*sp*.7,dmg:G.bossPhase===3?24:16,homing:true});
+    }
+  } else {
+    // SPREAD BARRAGE — original wide fan aimed at the player
+    const count=G.bossPhase===3?7:G.bossPhase===2?5:3;
+    for(let i=0;i<count;i++){
+      const a=((i-(count-1)/2)*18)*Math.PI/180;
+      G.eBullets.push({x:G.bossX,y:G.bossY+60,dx:(dx/d*Math.cos(a)-dy/d*Math.sin(a))*sp,dy:(dx/d*Math.sin(a)+dy/d*Math.cos(a))*sp,dmg:G.bossPhase===3?30:20});
+    }
   }
-  // Phase 3 adds a spiral ring shot every other fire
+  // Phase 3 adds a spiral ring shot every other fire, regardless of kit
   if(G.bossPhase===3&&G.bossT%500<30){
     for(let i=0;i<8;i++){
       const a=(i/8)*Math.PI*2;
@@ -520,11 +555,11 @@ function bulletHit(){
 
 function killEnemy(e,j){
   G.enemies.splice(j,1);G.kills++;
-  burst(e.x,e.y,e.elite?'#ff44aa':'#ff3355',e.type==='tank'?20:11);
-  if(e.type==='tank'||e.elite) SFX.enemy_explode_big(); else SFX.enemy_explode();
-  addScore(e.elite?100:e.type==='tank'?60:e.type==='fast'?35:25,e.x,e.y);
-  addXP(e.elite?35:e.type==='tank'?22:16);
-  addCombo();shake(e.type==='tank'?5:3,.6);
+  burst(e.x,e.y,e.elite?'#ff44aa':e.type==='shielded'?'#44aaff':'#ff3355',e.type==='tank'||e.type==='shielded'?20:11);
+  if(e.type==='tank'||e.type==='shielded'||e.elite) SFX.enemy_explode_big(); else SFX.enemy_explode();
+  addScore(e.elite?100:e.type==='shielded'?70:e.type==='tank'?60:e.type==='kamikaze'?40:e.type==='fast'?35:25,e.x,e.y);
+  addXP(e.elite?35:e.type==='shielded'?26:e.type==='tank'?22:e.type==='kamikaze'?18:16);
+  addCombo();shake(e.type==='tank'||e.type==='shielded'?5:3,.6);
   if(Math.random()<.85)spawnDrop(e.x,e.y);
 }
 
@@ -589,9 +624,11 @@ function spawnEnemy(){
     spawnFormation(); return;
   }
 
-  if(r<.10&&w>=4){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;} // NEW: sniper
-  else if(r<.20&&w>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
-  else if(r<.38){type='fast';hp=45+w*10;spd=2.5;ew=28;eh=28;sway=true;}
+  if(r<.08&&w>=3){type='kamikaze';hp=35+w*8;spd=1.8;ew=26;eh=30;}          // NEW: homes in, explodes on contact
+  else if(r<.16&&w>=5){type='shielded';hp=160+w*30;spd=.6;ew=42;eh=42;}    // NEW: tanky, blue shield visual
+  else if(r<.24&&w>=4){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;}
+  else if(r<.34&&w>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
+  else if(r<.52){type='fast';hp=45+w*10;spd=2.5;ew=28;eh=28;sway=true;}
   else{type='normal';hp=65+w*20;spd=1.3;ew=34;eh=34;}
   if(w>=3&&Math.random()<.22){elite=true;hp=Math.round(hp*2);}
   const bx=rnd(50,CV.width-50);
@@ -613,7 +650,9 @@ function spawnFormation(){
 
 function spawnBoss(){
   const names=['DESTROYER','NEMESIS','VOIDLORD','ANNIHILATOR','OBLIVION','REAPER','APOCALYPSE'];
+  const kitNames=['SPREAD BARRAGE','SWEEPING BEAM','HOMING SALVO'];
   G.bossName=names[Math.min(Math.floor(G.wave/3)-1,names.length-1)]||'DESTROYER';
+  G.bossKit=Math.max(0,Math.floor(G.wave/3)-1)%3;
   G.bossHp=1000+G.wave*300;G.bossMaxHp=G.bossHp;
   G.bossX=CV.width/2;G.bossY=110;G.bossDir=1;G.bossT=0;G.bossPhase=1;
   G.bossOn=true;
@@ -621,7 +660,7 @@ function spawnBoss(){
   bossLbl.textContent='◆ '+G.bossName+' ◆';
   $id('bossPhaseLabel').textContent='PHASE I';
   bossHUD.classList.add('on');shake(20,1.5);
-  toast_('☠ WARNING: '+G.bossName+' INCOMING!');
+  toast_('☠ WARNING: '+G.bossName+' INCOMING — '+kitNames[G.bossKit]+'!');
 }
 
 function advWave(){
@@ -1024,9 +1063,9 @@ function drawEnemy(e){
   const t=G._t||0;
   CX.globalAlpha=.5+hp*.5;
 
-  if(e.type==='tank'){
+  if(e.type==='tank'||e.type==='shielded'){
     drawEnemyTank(x,y,e,hp,t);
-  } else if(e.type==='fast'){
+  } else if(e.type==='fast'||e.type==='kamikaze'){
     drawEnemyFast(x,y,e,hp,t);
   } else {
     drawEnemyNormal(x,y,e,hp,t);
@@ -1043,11 +1082,25 @@ function drawEnemy(e){
 /* ── TANK ENEMY: Heavy armored cruiser ── */
 function drawEnemyTank(x,y,e,hp,t){
   const w=e.w,h=e.h;
-  const col=e.elite?'#ff44aa':'#ff6600';
-  const dark=e.elite?'#1a0010':'#1a0800';
-  const mid=e.elite?'#3a0022':'#2e1200';
+  const shd=e.type==='shielded';
+  const col=e.elite?'#ff44aa':shd?'#3aa0ff':'#ff6600';
+  const dark=e.elite?'#1a0010':shd?'#001428':'#1a0800';
+  const mid=e.elite?'#3a0022':shd?'#002850':'#2e1200';
 
   glow(col,e.elite?18:12);
+
+  // === ROTATING SHIELD RING (shielded type only) ===
+  if(shd){
+    CX.save();CX.translate(x,y);CX.rotate(t*.8);
+    CX.strokeStyle='rgba(58,160,255,0.55)';CX.lineWidth=1.4;
+    CX.beginPath();
+    for(let i=0;i<6;i++){
+      const a=(i/6)*Math.PI*2,r=w*.75;
+      CX[i===0?'moveTo':'lineTo'](_cos(a)*r,_sin(a)*r);
+    }
+    CX.closePath();CX.stroke();
+    CX.restore();
+  }
 
   // === ENGINE GLOW (top — engines face up/back) ===
   const eg=CX.createRadialGradient(x,y-h*.55,1,x,y-h*.55,w*.5);
@@ -1103,8 +1156,8 @@ function drawEnemyTank(x,y,e,hp,t){
 
   // === COCKPIT (near nose, bottom) ===
   const cg=CX.createRadialGradient(x,y+h*.3,1,x,y+h*.3,w*.14);
-  cg.addColorStop(0,e.elite?'rgba(255,100,200,0.95)':'rgba(255,140,60,0.95)');
-  cg.addColorStop(.5,e.elite?'rgba(180,30,100,0.5)':'rgba(180,80,0,0.5)');
+  cg.addColorStop(0,e.elite?'rgba(255,100,200,0.95)':shd?'rgba(120,190,255,0.95)':'rgba(255,140,60,0.95)');
+  cg.addColorStop(.5,e.elite?'rgba(180,30,100,0.5)':shd?'rgba(20,90,180,0.5)':'rgba(180,80,0,0.5)');
   cg.addColorStop(1,'rgba(0,0,0,0)');
   CX.fillStyle=cg;
   CX.beginPath();CX.ellipse(x,y+h*.3,w*.12,h*.14,0,0,Math.PI*2);CX.fill();
@@ -1131,9 +1184,17 @@ function drawEnemyTank(x,y,e,hp,t){
 /* ── FAST ENEMY: Sleek interceptor fighter ── */
 function drawEnemyFast(x,y,e,hp,t){
   const w=e.w,h=e.h;
-  const col=e.elite?'#ff44aa':'#00ffcc';
-  const dark=e.elite?'#0d0018':'#001a16';
-  const mid=e.elite?'#2a0035':'#003a30';
+  const kmz=e.type==='kamikaze';
+  const col=e.elite?'#ff44aa':kmz?'#ff5500':'#00ffcc';
+  const dark=e.elite?'#0d0018':kmz?'#220800':'#001a16';
+  const mid=e.elite?'#2a0035':kmz?'#4a1400':'#003a30';
+
+  // === WARNING PULSE RING (kamikaze only — telegraphs the dive) ===
+  if(kmz){
+    const pr=w*(.9+_sin(t*4)*.25);
+    CX.strokeStyle='rgba(255,80,0,'+(0.35+_sin(t*4)*.15)+')';CX.lineWidth=1.6;
+    CX.beginPath();CX.arc(x,y,pr,0,Math.PI*2);CX.stroke();
+  }
 
   glow(col,e.elite?16:10);
 
@@ -1478,7 +1539,7 @@ function drawMinimap(){
   }
   // enemies
   for(const e of G.enemies){
-    MX.fillStyle=e.elite?'#ff44aa':e.type==='tank'?'#ff6600':'#ff3355';
+    MX.fillStyle=e.elite?'#ff44aa':e.type==='shielded'?'#3aa0ff':e.type==='tank'?'#ff6600':e.type==='kamikaze'?'#ff5500':'#ff3355';
     MX.fillRect(e.x*sx-2,e.y*sy-2,4,4);
   }
   if(G.bossOn){
