@@ -65,6 +65,53 @@ const WEAPONS=[
 // Per-weapon fire rate overrides (ms)
 const WEAPON_RATES={PULSE:150,PLASMA:280,LASER:90,MISSILE:600,RAILGUN:900,GATLING:60,SHOTGUN:700,EMP:1200,NUKE:3000,TWIN:130,VORTEX:800,FLARE:500,FREEZE:900,CHAIN:600,BLACKHOLE:4000};
 
+/* ═══ WEAPON UPGRADES (coin-based, permanent — mirrors ship upgrade system) ═══ */
+const WPN_UPGRADE_MAX=5;
+function getWpnUpgrades(){
+  try{
+    const o=JSON.parse(localStorage.getItem('exomniaWpnUpgrades')||'{}');
+    return (o&&typeof o==='object')?o:{};
+  }catch(e){return {};}
+}
+function getWpnUpgradeLevel(name){
+  const u=getWpnUpgrades();
+  return u[name]||0;
+}
+function setWpnUpgradeLevel(name,lvl){
+  const u=getWpnUpgrades();
+  u[name]=lvl;
+  try{localStorage.setItem('exomniaWpnUpgrades',JSON.stringify(u));}catch(e){}
+}
+function getWpnUpgradeCost(name){
+  const w=WEAPONS.find(x=>x.name===name);
+  if(!w)return Infinity;
+  const lvl=getWpnUpgradeLevel(name);
+  if(lvl>=WPN_UPGRADE_MAX)return null;
+  return Math.round((100+w.cost*0.6)*(lvl+1));
+}
+// +8% damage and +4% fire-rate speed per level, capped at max level
+function getEffectiveWeaponDmg(name,baseDmg){
+  const lvl=getWpnUpgradeLevel(name);
+  return baseDmg*(1+lvl*0.08);
+}
+function getEffectiveWeaponRateMult(name){
+  const lvl=getWpnUpgradeLevel(name);
+  return 1-lvl*0.04; // multiplies fire-delay, so lower = faster
+}
+function upgradeWeapon(name){
+  const w=WEAPONS.find(x=>x.name===name);
+  if(!w||!w.owned){showToast('BUY THIS WEAPON FIRST!');return;}
+  const cost=getWpnUpgradeCost(name);
+  if(cost===null){showToast('WEAPON ALREADY AT MAX LEVEL!');return;}
+  const coins=getLbyCoins();
+  if(coins<cost){showToast('◈ NOT ENOUGH COINS!');return;}
+  setLbyCoins(coins-cost);
+  setWpnUpgradeLevel(name,getWpnUpgradeLevel(name)+1);
+  const topCoin=document.getElementById('lbyCoinDisplay');
+  if(topCoin) topCoin.textContent=getLbyCoins();
+  showToast('WEAPON UPGRADED: '+name+' → LV.'+getWpnUpgradeLevel(name));
+}
+
 /* ═══ GAME STATE ═══ */
 let G={};
 function initG(){
@@ -291,11 +338,11 @@ function doFire(){
   const now=performance.now();
   const w=WEAPONS[G.wIdx];
   const baseRate=WEAPON_RATES[w.name]||150;
-  const rate=baseRate*(1-G.sk.fireRate*.12)*(G.activePU.rapid?.5:1);
+  const rate=baseRate*getEffectiveWeaponRateMult(w.name)*(1-G.sk.fireRate*.12)*(G.activePU.rapid?.5:1);
   if(now-G.lastFire<rate)return;
   G.lastFire=now;
   const crit=Math.random()<(.1+G.sk.critical*.1);
-  const dmg=(w.dmg*(1+G.sk.damage*.25)*(1+(G._shipAtkMult||0)))*(crit?2.5:1)*(G.activePU.powerfull?2:1);
+  const dmg=(getEffectiveWeaponDmg(w.name,w.dmg)*(1+G.sk.damage*.25)*(1+(G._shipAtkMult||0)))*(crit?2.5:1)*(G.activePU.powerfull?2:1);
 
   SFX.weaponSound(w.name);
   if(w.type==='missile'){
@@ -624,11 +671,11 @@ function spawnEnemy(){
     spawnFormation(); return;
   }
 
-  if(r<.08&&w>=3){type='kamikaze';hp=35+w*8;spd=1.8;ew=26;eh=30;}          // NEW: homes in, explodes on contact
-  else if(r<.16&&w>=5){type='shielded';hp=160+w*30;spd=.6;ew=42;eh=42;}    // NEW: tanky, blue shield visual
-  else if(r<.24&&w>=4){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;}
-  else if(r<.34&&w>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
-  else if(r<.52){type='fast';hp=45+w*10;spd=2.5;ew=28;eh=28;sway=true;}
+  if(r<.12&&w>=2){type='kamikaze';hp=35+w*8;spd=1.8;ew=26;eh=30;}          // NEW: homes in, explodes on contact
+  else if(r<.24&&w>=3){type='shielded';hp=160+w*30;spd=.6;ew=42;eh=42;}    // NEW: tanky, blue shield visual
+  else if(r<.34&&w>=4){type='sniper';hp=60+w*12;spd=.5;ew=26;eh=36;}
+  else if(r<.46&&w>=2){type='tank';hp=130+w*35;spd=.7;ew=46;eh=46;}
+  else if(r<.66){type='fast';hp=45+w*10;spd=2.5;ew=28;eh=28;sway=true;}
   else{type='normal';hp=65+w*20;spd=1.3;ew=34;eh=34;}
   if(w>=3&&Math.random()<.22){elite=true;hp=Math.round(hp*2);}
   const bx=rnd(50,CV.width-50);
@@ -1091,15 +1138,25 @@ function drawEnemyTank(x,y,e,hp,t){
 
   // === ROTATING SHIELD RING (shielded type only) ===
   if(shd){
-    CX.save();CX.translate(x,y);CX.rotate(t*.8);
-    CX.strokeStyle='rgba(58,160,255,0.55)';CX.lineWidth=1.4;
-    CX.beginPath();
-    for(let i=0;i<6;i++){
-      const a=(i/6)*Math.PI*2,r=w*.75;
-      CX[i===0?'moveTo':'lineTo'](_cos(a)*r,_sin(a)*r);
+    for(const dir of [1,-1]){
+      CX.save();CX.translate(x,y);CX.rotate(t*.9*dir);
+      CX.strokeStyle=dir>0?'rgba(80,180,255,0.9)':'rgba(140,220,255,0.5)';
+      CX.lineWidth=dir>0?2.2:1.3;
+      CX.beginPath();
+      for(let i=0;i<6;i++){
+        const a=(i/6)*Math.PI*2,r=w*(dir>0?.82:.95);
+        CX[i===0?'moveTo':'lineTo'](_cos(a)*r,_sin(a)*r);
+      }
+      CX.closePath();CX.stroke();
+      if(dir>0){
+        CX.fillStyle='rgba(120,200,255,0.9)';
+        for(let i=0;i<6;i++){
+          const a=(i/6)*Math.PI*2,r=w*.82;
+          CX.beginPath();CX.arc(_cos(a)*r,_sin(a)*r,2.4,0,Math.PI*2);CX.fill();
+        }
+      }
+      CX.restore();
     }
-    CX.closePath();CX.stroke();
-    CX.restore();
   }
 
   // === ENGINE GLOW (top — engines face up/back) ===
@@ -1191,9 +1248,13 @@ function drawEnemyFast(x,y,e,hp,t){
 
   // === WARNING PULSE RING (kamikaze only — telegraphs the dive) ===
   if(kmz){
-    const pr=w*(.9+_sin(t*4)*.25);
-    CX.strokeStyle='rgba(255,80,0,'+(0.35+_sin(t*4)*.15)+')';CX.lineWidth=1.6;
+    const pr=w*(1.3+_sin(t*5)*.4);
+    const flash=_sin(t*8)>0.3;
+    CX.strokeStyle=flash?'rgba(255,220,80,0.9)':'rgba(255,80,0,0.55)';
+    CX.lineWidth=2.2;
     CX.beginPath();CX.arc(x,y,pr,0,Math.PI*2);CX.stroke();
+    CX.strokeStyle='rgba(255,60,0,0.35)';CX.lineWidth=1.2;
+    CX.beginPath();CX.arc(x,y,pr*1.4,0,Math.PI*2);CX.stroke();
   }
 
   glow(col,e.elite?16:10);
@@ -2086,17 +2147,25 @@ function openLbyPanel(type){
           if(isOwned) cls+=' owned';
           if(!isOwned&&!canAfford) cls+=' cant-afford';
           card.className=cls;
+          const wLvl=getWpnUpgradeLevel(w.name);
+          const effDmg=Math.round(getEffectiveWeaponDmg(w.name,w.dmg));
           let badge;
           if(isOwned){
-            badge=`<div class="shopPrice owned-lbl">✔ OWNED</div><div class="shopEquip" style="color:rgba(0,229,255,0.4)">AVAILABLE IN GAME</div>`;
+            const upCost=getWpnUpgradeCost(w.name);
+            if(upCost===null){
+              badge=`<div class="shopPrice owned-lbl">★ MAX LV${wLvl}</div>`;
+            } else {
+              const canUp=lbyCoins>=upCost;
+              badge=`<div class="shopPrice wpn-upgrade-btn" data-wpn="${w.name}" style="cursor:pointer;color:#00ff8c;border:1px solid rgba(0,255,140,0.4);${canUp?'':'opacity:.45;'}">◈${upCost} UPGRADE LV${wLvl}→${wLvl+1}</div>`;
+            }
           } else {
             badge=`<div class="shopPrice">◈ ${w.cost} COINS</div>`;
           }
           card.innerHTML=`<div class="shopIcon">${w.icon}</div>
-            <div class="shopName">${w.name}</div>
+            <div class="shopName">${w.name}${wLvl>0?' <span style="color:#00ff8c;font-size:9px;">◈LV'+wLvl+'</span>':''}</div>
             <div class="shopDesc">${w.desc}</div>
             <div class="shopStats">
-              <div class="shopStat dmg">DMG ${w.dmg}</div>
+              <div class="shopStat dmg">DMG ${effDmg}</div>
               <div class="shopStat spd">SPD ${w.spd}</div>
             </div>${badge}`;
           if(!isOwned){
@@ -2112,7 +2181,12 @@ function openLbyPanel(type){
               renderLbyWpnGrid();
             };
           } else {
-            card.onclick=()=>showToast('✔ '+w.name+' ALREADY OWNED');
+            const upBtn=card.querySelector('.wpn-upgrade-btn');
+            if(upBtn){
+              upBtn.onclick=(ev)=>{ev.stopPropagation();upgradeWeapon(w.name);renderLbyWpnGrid();};
+            } else {
+              card.onclick=()=>showToast('★ '+w.name+' AT MAX LEVEL');
+            }
           }
           wGrid.appendChild(card);
         });
@@ -2458,12 +2532,14 @@ function renderShop(){
 
     // damage/speed/rate labels
     const rateLabel=w.name==='GATLING'?'FAST':w.name==='NUKE'?'SLOW':w.name==='EMP'||w.name==='RAILGUN'?'MED':'NORM';
+    const effDmg=Math.round(getEffectiveWeaponDmg(w.name,w.dmg));
+    const wLvl=getWpnUpgradeLevel(w.name);
     card.innerHTML=`
       <div class="shopIcon">${w.icon}</div>
-      <div class="shopName">${w.name}</div>
+      <div class="shopName">${w.name}${wLvl>0?' <span style="color:#00ff8c;font-size:9px;">◈LV'+wLvl+'</span>':''}</div>
       <div class="shopDesc">${w.desc}</div>
       <div class="shopStats">
-        <div class="shopStat dmg">DMG ${w.dmg}</div>
+        <div class="shopStat dmg">DMG ${effDmg}</div>
         <div class="shopStat spd">SPD ${w.spd}</div>
         <div class="shopStat rte">RTE ${rateLabel}</div>
       </div>
