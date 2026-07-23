@@ -112,6 +112,24 @@ function upgradeWeapon(name){
   showToast('WEAPON UPGRADED: '+name+' → LV.'+getWpnUpgradeLevel(name));
 }
 
+/* ═══ WINGMAN DRONE (coin-purchased, fully passive ally) ═══ */
+const WINGMAN_COST=500;
+const WINGMAN_FIRE_MS=650;
+const WINGMAN_DMG_MULT=0.4; // fires at 40% of the player's equipped weapon damage
+function getWingmanOwned(){
+  try{return localStorage.getItem('exomniaWingmanOwned')==='1';}catch(e){return false;}
+}
+function buyWingman(){
+  if(getWingmanOwned()){showToast('WINGMAN DRONE ALREADY OWNED');return;}
+  const coins=getLbyCoins();
+  if(coins<WINGMAN_COST){showToast('◈ NOT ENOUGH COINS!');return;}
+  setLbyCoins(coins-WINGMAN_COST);
+  try{localStorage.setItem('exomniaWingmanOwned','1');}catch(e){}
+  const topCoin=document.getElementById('lbyCoinDisplay');
+  if(topCoin) topCoin.textContent=getLbyCoins();
+  showToast('✔ WINGMAN DRONE ACQUIRED!');
+}
+
 /* ═══ GAME STATE ═══ */
 let G={};
 function initG(){
@@ -128,6 +146,7 @@ function initG(){
     wave:1,wSpawned:0,wMax:10,
     bossOn:false,bossKilled:false,
     bossHp:0,bossMaxHp:0,bossX:0,bossY:110,bossDir:1,bossT:0,bossPhase:1,bossKit:0,
+    wingmanOn:getWingmanOwned(),wingmanX:CV.width/2-52,wingmanY:CV.height-185+14,wingmanLastFire:0,
     bossName:'DESTROYER',
     combo:0,comboT:0,
     spReady:true,spCD:0,spMax:9000,
@@ -231,6 +250,20 @@ function update(){
   if(G.invT>0)G.invT-=dt;
   G.thrusterT+=dt;
   if(G.firing)doFire();
+  if(G.wingmanOn){
+    // Trails slightly behind/left of the player with soft-follow easing
+    const tx=G.px-52,ty=G.py+14;
+    G.wingmanX+=(tx-G.wingmanX)*.12*f;
+    G.wingmanY+=(ty-G.wingmanY)*.12*f;
+    const now=performance.now();
+    if(now-G.wingmanLastFire>WINGMAN_FIRE_MS && G.enemies.length+((G.bossOn)?1:0)>0){
+      G.wingmanLastFire=now;
+      const w=WEAPONS[G.wIdx];
+      const dmg=getEffectiveWeaponDmg(w.name,w.dmg)*WINGMAN_DMG_MULT*(1+G.sk.damage*.25);
+      G.bullets.push({x:G.wingmanX,y:G.wingmanY-10,dx:0,dy:-16,dmg,crit:false,w:4,h:14,color:'#00ff8c',sc:'rgba(0,255,140,',wIdx:G.wIdx,type:'bullet',wingman:true});
+      SFX.weaponSound&&SFX.weaponSound('PULSE');
+    }
+  }
 
   // update bullets in-place (avoid GC pressure from filter)
   const cw=CV.width,ch=CV.height;
@@ -889,6 +922,7 @@ function draw(){
   for(const b of G.bullets)drawBullet(b);
   for(const b of G.eBullets)drawEBullet(b);
   drawPlayer();
+  if(G.wingmanOn)drawWingman();
 
   // draw particles - batched by color
   if(G.particles.length){
@@ -924,6 +958,29 @@ function drawStars(arr,maxA,t){
     }
   }
   CX.globalAlpha=1;
+}
+
+function drawWingman(){
+  const x=G.wingmanX,y=G.wingmanY,t=G._t||0;
+  const col='#00ff8c';
+  glow(col,10);
+  // small diamond-body drone with a single thruster
+  CX.fillStyle='#0a1a14';
+  CX.beginPath();
+  CX.moveTo(x,y-11);CX.lineTo(x+8,y);CX.lineTo(x,y+9);CX.lineTo(x-8,y);CX.closePath();
+  CX.fill();
+  CX.strokeStyle=col;CX.lineWidth=1.2;CX.stroke();
+  // cockpit glow
+  const cg=CX.createRadialGradient(x,y-2,1,x,y-2,5);
+  cg.addColorStop(0,'rgba(150,255,220,0.95)');cg.addColorStop(1,'rgba(0,255,140,0)');
+  CX.fillStyle=cg;CX.beginPath();CX.arc(x,y-2,5,0,Math.PI*2);CX.fill();
+  // thruster flicker
+  const tl=6+Math.sin(t*20)*2;
+  const tg=CX.createLinearGradient(x,y+9,x,y+9+tl);
+  tg.addColorStop(0,'rgba(0,255,140,0.9)');tg.addColorStop(1,'rgba(0,255,140,0)');
+  CX.fillStyle=tg;
+  CX.beginPath();CX.moveTo(x-3,y+9);CX.lineTo(x,y+9+tl);CX.lineTo(x+3,y+9);CX.closePath();CX.fill();
+  noGlow();
 }
 
 function drawPlayer(){
@@ -2113,6 +2170,31 @@ function openLbyPanel(type){
         grid.appendChild(item);
         setTimeout(()=>drawSingleShip(cv,s,50,60),0);
       });
+
+      // ── Wingman Drone card (passive ally, one-time purchase) ──
+      const wmOwned=getWingmanOwned();
+      const wmItem=document.createElement('div');
+      wmItem.className='shop-item'+(wmOwned?' owned':'');
+      const wmCanvas=document.createElement('canvas');
+      wmCanvas.className='shop-item-canvas';wmCanvas.width=50;wmCanvas.height=60;
+      const wmBtn=wmOwned
+        ?`<div class="shop-buy-btn owned-badge"><span class="shop-price">✔</span><span class="shop-price-lbl">OWNED</span></div>`
+        :`<div class="shop-buy-btn buy" onclick="buyWingman();openLbyPanel('shop')" style="${coins>=WINGMAN_COST?'':'opacity:.4;cursor:default'}"><span class="shop-price">◈${WINGMAN_COST}</span><span class="shop-price-lbl">BUY</span></div>`;
+      wmItem.innerHTML=`
+        <div class="shop-item-info">
+          <div class="shop-item-name">WINGMAN DRONE</div>
+          <div class="shop-item-type">PASSIVE ALLY</div>
+          <div class="shop-item-bars">
+            <div style="font-size:8px;letter-spacing:1px;color:rgba(0,229,255,0.55);line-height:1.5;padding:4px 0;">Auto-fires alongside your ship in every mission. One-time purchase.</div>
+          </div>
+        </div>${wmBtn}`;
+      const wmCx=wmCanvas.getContext('2d');
+      wmCx.fillStyle='#0a1a14';wmCx.beginPath();
+      wmCx.moveTo(25,10);wmCx.lineTo(40,30);wmCx.lineTo(25,50);wmCx.lineTo(10,30);wmCx.closePath();wmCx.fill();
+      wmCx.strokeStyle='#00ff8c';wmCx.lineWidth=1.5;wmCx.stroke();
+      wmItem.insertBefore(wmCanvas,wmItem.firstChild);
+      grid.appendChild(wmItem);
+
       content.appendChild(grid);
     }
 
