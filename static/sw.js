@@ -1,10 +1,10 @@
-
 const CACHE_NAME = 'dsc-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/static/Game/Style.css',
   '/static/Game/game.js',
   '/static/Game/Achievements.js',
+  '/static/Game/Challenges.js',
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
