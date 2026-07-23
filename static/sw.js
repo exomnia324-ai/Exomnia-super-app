@@ -5,6 +5,7 @@ const ASSETS_TO_CACHE = [
   '/static/Game/game.js',
   '/static/Game/Achievements.js',
   '/static/Game/Challenges.js',
+  '/static/Game/Prestige.js',
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
