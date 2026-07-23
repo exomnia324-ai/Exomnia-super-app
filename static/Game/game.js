@@ -6,6 +6,21 @@ const CX=CV.getContext('2d',{alpha:false,desynchronized:true});
 const MM=document.getElementById('mmcv');
 const MX=MM.getContext('2d',{alpha:false});
 const $id=id=>document.getElementById(id);
+
+// Generates and persists a unique default callsign per browser/user (e.g. "PILOT 4821")
+// so that players who never rename don't collide under one shared "PILOT" identity on the server.
+function getOrCreateDefaultCallsign(){
+  try{
+    const existing=localStorage.getItem('exomniaCallsign');
+    if(existing && existing.trim()) return existing.trim();
+    const rand=Math.floor(1000+Math.random()*9000);
+    const def='PILOT '+rand;
+    localStorage.setItem('exomniaCallsign',def);
+    return def;
+  }catch(e){
+    return 'PILOT '+Math.floor(1000+Math.random()*9000);
+  }
+}
 const hpEl=$id('hpV'),shEl=$id('shV'),scEl=$id('scV'),coEl=$id('coV');
 const waveEl=$id('waveN'),comboBig=$id('comboBig');
 const comboDiv=$id('combo'),shFill=$id('shieldFill'),xpFill=$id('xpFill');
@@ -636,7 +651,7 @@ function bulletHit(){
 function killEnemy(e,j){
   G.enemies.splice(j,1);G.kills++;
   burst(e.x,e.y,e.elite?'#ff44aa':e.type==='shielded'?'#44aaff':'#ff3355',e.type==='tank'||e.type==='shielded'?20:11);
-  if(e.type==='tank'||e.type==='shielded'||e.elite) SFX.enemy_explode_big(); else SFX.enemy_explode();
+  if(e.type==='tank'||e.type==='shielded'||e.elite){SFX.enemy_explode_big();} else {SFX.enemy_explode();}
   addScore(e.elite?100:e.type==='shielded'?70:e.type==='tank'?60:e.type==='kamikaze'?40:e.type==='fast'?35:25,e.x,e.y);
   addXP(e.elite?35:e.type==='shielded'?26:e.type==='tank'?22:e.type==='kamikaze'?18:16);
   addCombo();shake(e.type==='tank'||e.type==='shielded'?5:3,.6);
@@ -2343,7 +2358,7 @@ function selectMode(m){
 }
 
 function launchFromLobby(){
-  const cs=($id('callsignInput').value||'').trim()||'PILOT';
+  const cs=($id('callsignInput').value||'').trim()||getOrCreateDefaultCallsign();
   try{localStorage.setItem('exomniaCallsign',cs);}catch(e){}
   $id('lobbyScreen').classList.remove('visible');
   $id('lobbyScreen').classList.add('gone');
@@ -2392,8 +2407,8 @@ function applyModeBonuses(mode){
 
 function refreshLobbyStats(){
   try{
-    const cs=localStorage.getItem('exomniaCallsign')||'';
-    if(cs)$id('callsignInput').value=cs;
+    const cs=getOrCreateDefaultCallsign();
+    $id('callsignInput').value=cs;
     const ei=parseInt(localStorage.getItem('exomniaEmoji')||'0');
     _emojiIdx=ei;
     $id('pilotEmoji').textContent=PILOT_EMOJIS[ei]||'🧑‍🚀';
@@ -2977,7 +2992,7 @@ const API = (() => {
 
   // ── Callsign helper ──
   function getCallsign() {
-    return (($id('callsignInput') && $id('callsignInput').value) || '').trim().toUpperCase() || 'PILOT';
+    return (($id('callsignInput') && $id('callsignInput').value) || '').trim().toUpperCase() || getOrCreateDefaultCallsign();
   }
   function getShipName() {
     const s = PILOT_SHIPS[typeof selectedShip !== 'undefined' ? selectedShip : 0];
@@ -3484,7 +3499,7 @@ const API = (() => {
   // ── Refresh lobby stats from server ──
   async function syncLobbyStats() {
     const cs = getCallsign();
-    if (!cs || cs === 'PILOT') return;
+    if (!cs) return;
     const data = await loadPlayer(cs);
     if (!data || !data.player) return;
     const p = data.player;
