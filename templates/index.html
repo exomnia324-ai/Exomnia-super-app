@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Deep Space">
+<meta name="theme-color" content="#00d4ff">
+<title>DEEP SPACE COMBAT</title>
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<link rel="icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+<link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/favicon-16.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='Game/Style.css') }}">
+     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5744401524883457"
+     crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="gc">
+  <canvas id="cv"></canvas>
+  <div id="noise"></div>
+  <div id="alertFlash"></div>
+
+  <!-- LOBBY -->
+  <div id="lobbyScreen" class="gone">
+
+    <!-- TOP BAR -->
+    <div id="lbyTopBar">
+      <div>
+        <div class="lby-logo-text">DEEP SPACE</div>
+        <div class="lby-logo-sub">◈ COMBAT DIVISION</div>
+      </div>
+      <div id="lbyCoinDisplay">0</div>
+    </div>
+
+    <!-- MAIN ROW: Pilot + Ship -->
+    <div id="lbyMainRow">
+
+      <!-- PILOT CARD -->
+      <div id="lbyPilotCard">
+        <div class="lby-card-title">PILOT</div>
+        <div class="lby-avatar" id="pilotAvatar" onclick="openEmojiPicker()">
+          <span id="pilotEmoji">🧑‍🚀</span>
+          <span class="lby-avatar-hint">✎</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;width:100%;">
+          <input class="lby-callsign" id="callsignInput" maxlength="14" placeholder="CALLSIGN" spellcheck="false" autocomplete="off" readonly style="flex:1;cursor:default;"/>
+          <div id="nameEditBtn" onclick="openNameEdit()" style="background:rgba(255,204,0,0.1);border:1px solid rgba(255,204,0,0.35);border-radius:4px;padding:4px 6px;cursor:pointer;font-size:10px;letter-spacing:2px;font-family:'Courier New',monospace;">✏</div>
+        </div>
+        <div class="lby-rank-badge" id="pilotRank">◆ RECRUIT</div>
+        <div class="lby-pilot-stats">
+          <div class="lby-pstat"><span class="lby-pstat-lbl">BEST SCORE</span><span class="lby-pstat-val" id="pBestScore">0</span></div>
+          <div class="lby-pstat"><span class="lby-pstat-lbl">TOP WAVE</span><span class="lby-pstat-val" id="pBestWave">0</span></div>
+          <div class="lby-pstat"><span class="lby-pstat-lbl">KILLS</span><span class="lby-pstat-val" id="pTotalKills">0</span></div>
+        </div>
+        <div class="lby-games" id="pilotGames">0 MISSIONS</div>
+      </div>
+
+      <!-- SHIP PROFILE CARD -->
+      <div id="lbyShipCard">
+        <div class="lby-card-title">SPACECRAFT</div>
+        <canvas id="lbyShipCanvas" width="60" height="70"></canvas>
+        <div id="lbyShipName">VIPER</div>
+        <div id="lbyShipType">BALANCED</div>
+        <div class="lby-ship-bars">
+          <div class="lby-sbar-row"><span class="lby-sbar-lbl">ATK</span><div class="lby-sbar-track"><div class="lby-sbar-fill atk" id="shipBarAtk" style="width:60%"></div></div></div>
+          <div class="lby-sbar-row"><span class="lby-sbar-lbl">SPD</span><div class="lby-sbar-track"><div class="lby-sbar-fill spd" id="shipBarSpd" style="width:60%"></div></div></div>
+          <div class="lby-sbar-row"><span class="lby-sbar-lbl">DEF</span><div class="lby-sbar-track"><div class="lby-sbar-fill def" id="shipBarDef" style="width:60%"></div></div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- HANGAR + SHOP BUTTONS -->
+    <div id="lbyBtnRow">
+      <div class="lby-action-btn" id="hangarBtn" onclick="openLbyPanel('hangar')">🚀 HANGAR</div>
+      <div class="lby-action-btn" id="shopBtn" onclick="openLbyPanel('shop')">◈ SHOP</div>
+    </div>
+
+    <!-- MISSION MODE -->
+    <div id="lbyModeRow">
+      <div class="mode-btn selected" data-mode="normal" onclick="selectMode('normal')">
+        <div class="mode-icon">🎯</div>
+        <div class="mode-name">NORMAL</div>
+        <div class="mode-diff easy">STANDARD</div>
+        <div class="mode-desc">10 Waves</div>
+      </div>
+      <div class="mode-btn" data-mode="survival" onclick="selectMode('survival')">
+        <div class="mode-icon">🌊</div>
+        <div class="mode-name">SURVIVAL</div>
+        <div class="mode-diff hard">HARD</div>
+        <div class="mode-desc">Endless</div>
+      </div>
+      <div class="mode-btn" data-mode="blitz" onclick="selectMode('blitz')">
+        <div class="mode-icon">⚡</div>
+        <div class="mode-name">BLITZ</div>
+        <div class="mode-diff medium">2× SCORE</div>
+        <div class="mode-desc">Speed Run</div>
+      </div>
+    </div>
+
+    <!-- LAUNCH -->
+    <div id="lbyLaunchWrap">
+      <button id="lobbyLaunchBtn" onclick="launchFromLobby()">▶ &nbsp;LAUNCH MISSION</button>
+    </div>
+
+  </div>
+
+  <!-- SEO CONTENT - visible to Google crawler -->
+  <div id="seoContent" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none;">
+    <h1>Deep Space Combat — Free Browser Space Shooter Game</h1>
+    <p>Deep Space Combat is a free-to-play browser-based space shooter game. Battle through waves of enemy spacecraft, upgrade your pilot and ship, and dominate the global leaderboard. No download required — play instantly in your browser on mobile or desktop.</p>
+
+    <h2>Game Features</h2>
+    <ul>
+      <li>3 exciting game modes: Normal, Survival, and Blitz</li>
+      <li>Multiple spacecraft to unlock and upgrade in the Hangar</li>
+      <li>Pilot ranking system from Recruit to Legend</li>
+      <li>Power-ups, combo multiplier system, and epic boss battles</li>
+      <li>Mobile and desktop friendly touch and keyboard controls</li>
+      <li>Global leaderboard — compete with players worldwide</li>
+      <li>Coin economy — earn coins in battle and spend them on upgrades</li>
+      <li>Shield system, XP levels, and weapon loadouts</li>
+    </ul>
+
+    <h2>How to Play Deep Space Combat</h2>
+    <p>Choose your callsign and select your spacecraft before launching your mission. Use the joystick or keyboard arrow keys to move your ship across the battlefield. Tap the FIRE button or press spacebar to shoot enemy ships. Collect power-ups that drop from destroyed enemies to boost your shields, damage, and fire rate.</p>
+    <p>Destroy as many enemy ships as possible to build your combo multiplier and earn bonus points. Watch out for boss enemies that appear at the end of certain waves — they have multiple health phases and powerful attack patterns.</p>
+    <p>Earn coins from every kill and use them in the Hangar to unlock new spacecraft or in the Shop to buy advanced weapons. Each ship has different stats for Attack, Speed, and Defense, so choose the one that fits your play style.</p>
+
+    <h2>Game Modes</h2>
+    <h3>Normal Mode</h3>
+    <p>The standard experience. Fight through 10 waves of increasingly difficult enemy formations. A great starting point for new pilots. Clear all 10 waves to complete the mission and earn a score bonus.</p>
+    <h3>Survival Mode</h3>
+    <p>Endless waves of enemies with no finish line. The difficulty increases with every wave. How long can you last? Survival Mode is for experienced pilots looking for the ultimate challenge.</p>
+    <h3>Blitz Mode</h3>
+    <p>Everything is faster in Blitz Mode — enemy speed, bullet velocity, and spawn rates are all increased. In return, you earn 2× score multiplier on every kill. Perfect for high-score hunters.</p>
+
+    <h2>Spacecraft and Upgrades</h2>
+    <p>Deep Space Combat features several unique spacecraft, each with their own strengths and weaknesses. Start with the balanced Viper and unlock faster or more powerful ships as you earn coins. Visit the Hangar from the lobby to view and equip your available ships.</p>
+    <p>Upgrade your pilot stats during gameplay whenever you level up. Choose from damage upgrades, fire rate boosts, speed increases, critical strike chance, or shield capacity expansions. Building the right combination of upgrades is key to surviving the later waves.</p>
+
+    <h2>Leaderboard and Ranking</h2>
+    <p>All scores are submitted to the global leaderboard. Your pilot rank is determined by your best score across all game modes. Ranks range from Recruit at the bottom to the elite Legend rank at the top. Check the leaderboard after each mission to see how you compare to other pilots around the world.</p>
+
+    <h2>Controls</h2>
+    <p>On mobile: Use the on-screen joystick on the left to move your ship, and tap the FIRE button on the right to shoot. The special ability button triggers your equipped weapon's special attack. On desktop: Use arrow keys or WASD to move, spacebar to fire, and E for special ability.</p>
+
+    <h2>About Deep Space Combat</h2>
+    <p>Deep Space Combat is a free browser game built for mobile and desktop. It is supported by advertising and free to play with no downloads or sign-ups required. The game features an auto-save system that remembers your callsign, best scores, coins, and unlocked ships between sessions.</p>
+    <p>Play now at exomnia-super-app.onrender.com — no account needed, just enter a callsign and launch your first mission.</p>
+  </div>
+
+  <!-- HANGAR / SHOP PANEL (fullscreen overlay) -->
+  <div id="lbyPanel">
+    <div id="lbyPanelHeader">
+      <div id="lbyPanelTitle">HANGAR</div>
+      <div id="lbyPanelClose" onclick="closeLbyPanel()">✕</div>
+    </div>
+    <div id="lbyPanelBody">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- START (hidden, kept for JS references) -->
+  <div id="startScreen" style="display:none;"></div>
+
+  <!-- UI OVERLAY -->
+  <div id="ui" style="visibility:hidden;">
+    <div id="topHUD">
+      <div class="corner-l"></div>
+      <div class="corner-r"></div>
+      <div class="hud-right">
+        <div class="chip hp"><span class="lbl">HP</span><span id="hpV">3</span></div>
+        <div class="chip sh"><span class="lbl">SH</span><span id="shV">100</span></div>
+        <div class="chip sc"><span class="lbl">SCORE</span><span id="scV">0</span></div>
+        <div class="chip co"><span class="lbl">COIN</span><span id="coV">0</span></div>
+      </div>
+    </div>
+    <div id="pauseBtn" onclick="togglePause()">⏸</div>
+
+    <div id="shieldWrap">
+      <div class="bar-lbl">SHIELD INTEGRITY</div>
+      <div class="bar-track"><div id="shieldFill" style="width:100%"></div></div>
+      <div class="bar-ticks">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+    <div id="waveTag">◈ WAVE &nbsp;<span id="waveN">1</span></div>
+    <div id="combo">
+      <div id="comboBig">x0</div>
+      <div id="comboSub">COMBO</div>
+      <div id="comboMult"></div>
+    </div>
+    <div id="skillPanel">
+      <div class="srow"><span>DMG</span><div class="sdots" id="dDots"></div></div>
+      <div class="srow"><span>SPD</span><div class="sdots" id="sDots"></div></div>
+      <div class="srow"><span>RTE</span><div class="sdots" id="rDots"></div></div>
+      <div class="srow"><span>CRT</span><div class="sdots" id="cDots"></div></div>
+      <div class="srow"><span>SHD</span><div class="sdots" id="shDots"></div></div>
+    </div>
+    <div id="weaponHUD">
+      <div class="wslot active" id="w0"><span class="wnum">1</span>🔵<div class="wbar"></div></div>
+      <div class="wslot" id="w1"><span class="wnum">2</span>🔴<div class="wbar"></div></div>
+      <div class="wslot" id="w2"><span class="wnum">3</span>💚<div class="wbar"></div></div>
+    </div>
+    <div id="bossHUD">
+      <div id="bossLbl">DESTROYER</div>
+      <div id="bossTrack">
+        <div id="bossFill" style="width:100%"></div>
+        <div id="bossSegments"></div>
+      </div>
+      <div id="bossPhaseLabel">PHASE I</div>
+    </div>
+    <div id="xpWrap">
+      <div id="lvlBadge">LVL 1</div>
+      <div class="bar-track"><div id="xpFill" style="width:0%"></div></div>
+    </div>
+    <div id="puPanel"></div>
+  </div>
+
+  <!-- MINIMAP -->
+  <div id="minimap" style="visibility:hidden;">
+    <canvas id="mmcv" width="75" height="75"></canvas>
+    <div id="radarSweep"></div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div id="ctrl" style="visibility:hidden;">
+    <div id="joyWrap">
+      <div id="joyBase">
+        <div id="joyCross"></div>
+        <div id="stick">
+          <div id="stkRing1"></div>
+          <div id="stkRing2"></div>
+        </div>
+      </div>
+      <svg id="gearSvg" viewBox="0 0 136 136" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gG" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#1e3a50"/>
+            <stop offset="40%" stop-color="#0e2030"/>
+            <stop offset="100%" stop-color="#060e18"/>
+          </linearGradient>
+          <filter id="gGlow">
+            <feGaussianBlur stdDeviation="1.2" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- outer gear ring -->
+        <path d="M120.00,68.00L131.73,73.86L131.08,78.84L118.23,81.46L118.23,81.46L128.04,90.15L126.12,94.79L113.03,94.00L113.03,94.00L120.27,104.94L117.21,108.92L104.77,104.77L104.77,104.77L108.99,118.27L104.61,121.20L92.85,114.03L92.85,114.03L93.50,128.41L88.55,130.50L79.48,118.14L79.48,118.14L68.00,131.73L62.14,120.00L62.14,120.00L54.63,131.08L49.21,126.12L56.00,113.03L56.00,113.03L40.91,120.27L36.08,117.21L40.23,104.77L40.23,104.77L25.73,108.99L22.80,104.61L30.97,92.85L30.97,92.85L16.59,93.50L14.50,88.55L26.86,79.48L26.86,79.48L13.27,68.00L24.00,62.14L24.00,62.14L12.92,54.63L17.88,49.21L31.00,56.00L31.00,56.00L23.73,40.91L26.79,36.08L39.23,40.23L39.23,40.23L35.01,25.73L39.39,22.80L51.15,30.97L51.15,30.97L50.50,16.59L55.45,14.50L64.52,26.86L64.52,26.86L76.00,13.27L81.86,24.00L81.86,24.00L89.37,12.92L94.79,17.88L88.00,31.00L88.00,31.00L103.09,23.73L107.92,26.79L103.77,39.23L103.77,39.23L119.27,35.01L122.20,39.39L114.03,51.15L114.03,51.15L128.41,50.50L130.50,55.45L118.14,64.52L118.14,64.52Z" fill="url(#gG)" filter="url(#gGlow)"/>
+        <!-- inner accent ring -->
+        <circle cx="68" cy="68" r="49" fill="none" stroke="rgba(0,180,255,0.12)" stroke-width="1"/>
+        <!-- tick marks at teeth valleys -->
+        <circle cx="68" cy="68" r="44" fill="none" stroke="rgba(0,200,255,0.06)" stroke-width="4" stroke-dasharray="3 11.6"/>
+      </svg>
+      <div id="joyLabel">THRUST</div>
+    </div>
+    <div id="btnGroup">
+      <div id="specialBtn" onclick="doSpecial()">✨<div id="spCD"></div></div>
+    </div>
+    <div id="fireBtn">FIRE<div id="firePulse"></div></div>
+  </div>
+
+  <!-- LEVEL UP -->
+  <div id="lvlUp">
+    <div id="lvlTitle">LEVEL UP</div>
+    <div id="lvlSub">SELECT UPGRADE MODULE</div>
+    <div class="cards">
+      <div class="card" onclick="upgrade('damage')">
+        <div class="clvl" id="dmgLvl">LVL 0</div>
+        <div class="ci">⚡</div><div class="cn">DAMAGE</div><div class="cd">+25% bullet<br>damage output</div>
+      </div>
+      <div class="card" onclick="upgrade('fireRate')">
+        <div class="clvl" id="rateLvl">LVL 0</div>
+        <div class="ci">🔫</div><div class="cn">FIRE RATE</div><div class="cd">+20% attack<br>speed boost</div>
+      </div>
+      <div class="card" onclick="upgrade('speed')">
+        <div class="clvl" id="spdLvl">LVL 0</div>
+        <div class="ci">💨</div><div class="cn">SPEED</div><div class="cd">+15% ship<br>maneuverability</div>
+      </div>
+      <div class="card" onclick="upgrade('critical')">
+        <div class="clvl" id="critLvl">LVL 0</div>
+        <div class="ci">💥</div><div class="cn">CRITICAL</div><div class="cd">+10% critical<br>strike chance</div>
+      </div>
+      <div class="card" onclick="upgrade('shield')">
+        <div class="clvl" id="shdLvl">LVL 0</div>
+        <div class="ci">🛡️</div><div class="cn">SHIELD</div><div class="cd">+20 max shield<br>capacity</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAUSE -->
+  <div id="pauseMenu">
+    <div id="pauseTitle">PAUSED</div>
+    <div class="mSep"></div>
+    <div class="mBtn" onclick="togglePause()">▶ &nbsp;RESUME</div>
+    <div class="mBtn" onclick="openSettings()">⚙ &nbsp;SETTINGS</div>
+    <div class="mBtn" onclick="restartGame()">↺ &nbsp;RESTART</div>
+    <div class="mSep"></div>
+    <div class="mBtn red" onclick="toStart()">⏹ &nbsp;QUIT MISSION</div>
+  </div>
+
+  <!-- END SCREEN -->
+  <div id="endScreen">
+    <div id="endTitle" class="lose">GAME OVER</div>
+    <div id="statsTable">
+      <div class="eStat">WAVE REACHED <span id="eWave">1</span></div>
+      <div class="eStat">FINAL SCORE &nbsp;&nbsp;<span id="eScore">0</span></div>
+      <div class="eStat">KILLS &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="eKills">0</span></div>
+      <div class="eStat">MAX COMBO &nbsp;&nbsp;&nbsp;<span id="eCombo">0</span></div>
+    </div>
+    <div id="eNearMissMsg" style="display:none;margin:10px auto 4px;max-width:280px;text-align:center;font-size:11px;letter-spacing:1px;line-height:1.6;padding:10px 14px;border-radius:8px;"></div>
+    <div class="mBtn" onclick="restartGame()" style="pointer-events:auto">↺ &nbsp;RETRY MISSION</div>
+    <div class="mBtn" onclick="showEndLeaderboard()" style="pointer-events:auto;border-color:rgba(255,204,0,0.5);color:#ffcc00;">🏆 &nbsp;LEADERBOARD</div>
+    <div class="mBtn red" onclick="toStart()" style="pointer-events:auto">⏹ &nbsp;MAIN MENU</div>
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div id="settingsPanel">
+    <div id="settingsInner">
+      <div class="setTitle">⚙ SYSTEM CONFIG</div>
+      <div class="setSub">COMBAT PARAMETERS</div>
+
+      <div class="setSection">MOVEMENT</div>
+
+      <div class="setRow">
+        <div class="setLbl">SHIP SPEED<span class="setVal" id="spdVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="spdFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="spdSlider" min="2" max="10" step="0.5" value="5">
+        </div>
+        <div class="setHint">Ship base movement speed</div>
+      </div>
+
+      <div class="setRow">
+        <div class="setLbl">SENSITIVITY<span class="setVal" id="sensVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="sensFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="sensSlider" min="1" max="10" step="0.5" value="5">
+        </div>
+        <div class="setHint">Joystick / keyboard response</div>
+      </div>
+
+      <div class="setRow">
+        <div class="setLbl">INERTIA<span class="setVal" id="inertiaVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="inertiaFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="inertiaSlider" min="1" max="10" step="0.5" value="5">
+        </div>
+        <div class="setHint">Higher = more floaty/sliding</div>
+      </div>
+
+      <div class="setRow">
+        <div class="setLbl">DEAD ZONE<span class="setVal" id="deadVal">6</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="deadFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="deadSlider" min="2" max="20" step="1" value="6">
+        </div>
+        <div class="setHint">Joystick center dead zone (px)</div>
+      </div>
+
+      <div class="setSection">COMBAT</div>
+
+      <div class="setRow">
+        <div class="setLbl">FIRE RATE<span class="setVal" id="fireRateVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="fireRateFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="fireRateSlider" min="1" max="10" step="0.5" value="5">
+        </div>
+        <div class="setHint">Manual fire rate override</div>
+      </div>
+
+      <div class="setSection">DISPLAY</div>
+
+      <div class="setRow">
+        <div class="setLbl">SCREEN SHAKE<span class="setVal" id="shakeVal">5</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="shakeFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="shakeSlider" min="0" max="10" step="1" value="5">
+        </div>
+        <div class="setHint">Impact screen shake intensity</div>
+      </div>
+
+      <div class="setRow toggleRow">
+        <div class="setLbl">PARTICLES</div>
+        <div class="toggleBtn" id="particleToggle" onclick="toggleSetting('particles')">
+          <div class="toggleKnob"></div>
+          <span>ON</span>
+        </div>
+      </div>
+
+      <div class="setRow toggleRow">
+        <div class="setLbl">SCREEN GLOW</div>
+        <div class="toggleBtn" id="glowToggle" onclick="toggleSetting('glow')">
+          <div class="toggleKnob"></div>
+          <span>ON</span>
+        </div>
+      </div>
+
+      <div class="setBtnRow">
+        <div class="setBtn reset" onclick="resetSettings()">↺ RESET</div>
+        <div class="setBtn save" onclick="saveSettings()">✔ APPLY</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEAPON SHOP -->
+  <div id="shopPanel">
+    <div class="shopTitle">⚔ WEAPON SHOP</div>
+    <div class="shopSub">PURCHASE ADVANCED ARMAMENTS</div>
+    <div class="shopCoins">◈ COINS: <span id="shopCoinDisplay">0</span></div>
+    <div class="shopGrid" id="shopGrid"></div>
+    <div class="shopCloseBtn" onclick="closeShop()">← BACK TO MISSION</div>
+  </div>
+
+  <!-- EMOJI PICKER MODAL -->
+  <div id="emojiPickerModal" style="display:none;position:fixed;inset:0;background:rgba(0,2,10,0.92);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(8px);">
+    <div style="background:linear-gradient(145deg,rgba(0,12,34,0.98),rgba(0,5,18,0.99));border:1px solid rgba(0,229,255,0.25);border-radius:12px;padding:20px;width:min(320px,88vw);display:flex;flex-direction:column;gap:15px;align-items:center;">
+      <div style="font-family:'Courier New',monospace;font-weight:900;font-size:14px;letter-spacing:5px;color:#00e5ff;text-shadow:0 0 15px #00e5ff;">CHOOSE AVATAR</div>
+      <div style="font-size:8px;letter-spacing:3px;color:rgba(0,229,255,0.35);font-family:'Courier New',monospace;">SELECT YOUR PILOT ICON</div>
+      <div id="emojiGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;"></div>
+      <div onclick="closeEmojiPicker()" style="padding:10px 30px;border:1px solid rgba(0,229,255,0.25);border-radius:6px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:4px;color:#00e5ff;cursor:pointer;transition:all 0.2s;">CANCEL</div>
+    </div>
+  </div>
+
+  <!-- NAME EDIT MODAL -->
+  <div id="nameEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,2,10,0.92);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(8px);">
+    <div style="background:linear-gradient(145deg,rgba(0,12,34,0.98),rgba(0,5,18,0.99));border:1px solid rgba(255,204,0,0.3);border-radius:12px;padding:24px 20px;width:min(320px,88vw);display:flex;flex-direction:column;gap:15px;align-items:center;">
+      <div style="font-family:'Courier New',monospace;font-weight:900;font-size:14px;letter-spacing:5px;color:#ffcc00;text-shadow:0 0 15px #ffcc00;">CHANGE CALLSIGN</div>
+      <div style="font-size:8px;letter-spacing:2px;color:rgba(255,204,0,0.5);font-family:'Courier New',monospace;">COSTS 100 ◈ COINS</div>
+      <input id="nameEditInput" maxlength="14" placeholder="ENTER CALLSIGN" spellcheck="false" autocomplete="off"
+        style="width:100%;background:rgba(0,0,0,0.5);border:1px solid rgba(255,204,0,0.35);border-radius:6px;padding:10px 12px;font-family:'Courier New',monospace;font-size:14px;font-weight:900;letter-spacing:3px;color:#ffcc00;text-transform:uppercase;"/>
+      <div id="nameEditCoinsLeft" style="font-size:9px;letter-spacing:2px;color:rgba(255,204,0,0.4);font-family:'Courier New',monospace;"></div>
+      <div style="display:flex;gap:10px;width:100%;">
+        <div onclick="closeNameEdit()" style="flex:1;padding:11px 0;border:1px solid rgba(0,229,255,0.2);border-radius:6px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;color:#00e5ff;cursor:pointer;transition:all 0.2s;text-align:center;">CANCEL</div>
+        <div onclick="confirmNameEdit()" style="flex:1;padding:11px 0;border:1px solid rgba(255,204,0,0.4);border-radius:6px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;color:#ffcc00;cursor:pointer;transition:all 0.2s;text-align:center;">CONFIRM</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- BLACK COVER: hides game canvas until lobby is ready -->
+  <div id="blackCover" style="position:fixed;inset:0;background:#000;z-index:199;pointer-events:none;"></div>
+
+  <!-- LOADING / LOGO SCREEN -->
+  <div id="loading">
+    <!-- corner brackets -->
+    <div class="load-bracket tl"></div>
+    <div class="load-bracket tr"></div>
+    <div class="load-bracket bl"></div>
+    <div class="load-bracket br"></div>
+    <!-- scanline -->
+    <div id="loadScanline"></div>
+
+    <!-- LOGO -->
+    <div id="logoWrap">
+      <div id="studioTag">DEEP SPACE COMMAND</div>
+
+      <!-- Animated ship icon -->
+      <svg id="logoShip" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="hullG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0a3060"/>
+            <stop offset="100%" stop-color="#020f28"/>
+          </linearGradient>
+          <linearGradient id="glowG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(0,229,255,0.0)"/>
+            <stop offset="100%" stop-color="rgba(0,229,255,0.9)"/>
+          </linearGradient>
+          <filter id="sf">
+            <feGaussianBlur stdDeviation="2.5" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- engine glow -->
+        <ellipse cx="40" cy="88" rx="10" ry="12" fill="rgba(0,100,255,0.6)" filter="url(#sf)"/>
+        <ellipse cx="40" cy="88" rx="5" ry="7" fill="rgba(120,220,255,0.9)"/>
+        <!-- hull -->
+        <path d="M40,4 C55,22 57,42 50,72 L30,72 C23,42 25,22 40,4 Z" fill="url(#hullG)" stroke="rgba(0,229,255,0.7)" stroke-width="0.8"/>
+        <!-- cockpit glow -->
+        <ellipse cx="40" cy="26" rx="6" ry="7" fill="rgba(0,229,255,0.85)" filter="url(#sf)"/>
+        <ellipse cx="40" cy="25" rx="3.5" ry="4.5" fill="rgba(200,240,255,0.95)"/>
+        <!-- left wing -->
+        <path d="M30,40 L8,70 L22,68 L32,52 Z" fill="#071830" stroke="rgba(0,229,255,0.4)" stroke-width="0.6"/>
+        <!-- right wing -->
+        <path d="M50,40 L72,70 L58,68 L48,52 Z" fill="#071830" stroke="rgba(0,229,255,0.4)" stroke-width="0.6"/>
+        <!-- wing accents -->
+        <line x1="30" y1="40" x2="10" y2="68" stroke="rgba(0,229,255,0.3)" stroke-width="0.5"/>
+        <line x1="50" y1="40" x2="70" y2="68" stroke="rgba(0,229,255,0.3)" stroke-width="0.5"/>
+        <!-- spine -->
+        <line x1="40" y1="6" x2="40" y2="70" stroke="rgba(0,229,255,0.4)" stroke-width="0.7"/>
+      </svg>
+
+      <!-- Hex ring decoration -->
+      <div id="logoHex">
+        <div class="logo-hex-ring"></div>
+        <div class="logo-hex-ring"></div>
+        <div class="logo-hex-ring"></div>
+      </div>
+
+      <div id="logoBadge">DEEP SPACE DEFENSE SYSTEM</div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div id="loadBottom">
+      <div id="loadStatusRow">
+        <div id="lsub">INITIALIZING...</div>
+        <div id="loadPct">0%</div>
+      </div>
+      <div id="lbar"><div id="lfill"></div></div>
+    </div>
+
+    <div id="loadVer">v2.0 · BUILD 2026</div>
+  </div>
+</div>
+<script>
+// ── FULLSCREEN HELPER ──
+// Tries every vendor-prefixed API so it works on Chrome, Samsung, Firefox, Opera Mini
+function requestFullscreen(el) {
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen ||
+             el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (fn) {
+    fn.call(el).catch(() => {});
+  }
+  // Android: also lock to portrait and hide nav bar via Screen API
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('portrait').catch(() => {});
+  }
+}
+
+// Enter fullscreen on first user interaction (required by browsers)
+let _fsRequested = false;
+function maybeGoFullscreen() {
+  if (_fsRequested) return;
+  _fsRequested = true;
+  requestFullscreen(document.documentElement);
+}
+
+// Trigger on tap / touch anywhere, and on LAUNCH MISSION button
+document.addEventListener('touchstart', maybeGoFullscreen, { once: true, passive: true });
+document.addEventListener('mousedown',  maybeGoFullscreen, { once: true });
+
+// Re-enter fullscreen if user accidentally exits (e.g. swiped nav bar)
+document.addEventListener('fullscreenchange',       onFsChange);
+document.addEventListener('webkitfullscreenchange', onFsChange);
+document.addEventListener('mozfullscreenchange',    onFsChange);
+function onFsChange() {
+  const fs = document.fullscreenElement || document.webkitFullscreenElement ||
+             document.mozFullScreenElement;
+  if (!fs) {
+    // Small delay so user can intentionally exit without infinite loop
+    setTimeout(() => {
+      const gc = document.getElementById('gc');
+      if (gc && gc.offsetHeight) requestFullscreen(document.documentElement);
+    }, 800);
+  }
+}
+</script>
+<script src="{{ url_for('static', filename='Game/game.js') }}"></script>
+<script src="{{ url_for('static', filename='Game/Achievements.js') }}"></script>
+<script src="{{ url_for('static', filename='Game/Challenges.js') }}"></script>
+<script src="{{ url_for('static', filename='Game/Prestige.js') }}"></script>
+<script src="{{ url_for('static', filename='Game/Comeback.js') }}"></script>
+<div id="siteFooter" style="position:fixed; bottom:0; left:0; right:0; background:rgba(0,0,0,0.8); text-align:center; padding:6px; font-size:11px; z-index:99999; display:none;">
+  <a href="/privacy-policy" style="color:#4a6a85; margin:0 8px; text-decoration:none;">Privacy Policy</a>
+  <a href="/terms" style="color:#4a6a85; margin:0 8px; text-decoration:none;">Terms</a>
+  <a href="/contact" style="color:#4a6a85; margin:0 8px; text-decoration:none;">Contact</a>
+  <a href="/how-to-play" style="color:#4a6a85; margin:0 8px; text-decoration:none;">How to Play</a>
+  <a href="/about" style="color:#4a6a85; margin:0 8px; text-decoration:none;">About</a>
+</div>
+<script>
+(function() {
+  var footer = document.getElementById('siteFooter');
+  var lobby = document.getElementById('lobbyScreen');
+  function checkLobby() {
+    if (lobby && !lobby.classList.contains('gone')) {
+      footer.style.display = 'block';
+    } else {
+      footer.style.display = 'none';
+    }
+  }
+  var observer = new MutationObserver(checkLobby);
+  observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class', 'style'] });
+  checkLobby();
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
