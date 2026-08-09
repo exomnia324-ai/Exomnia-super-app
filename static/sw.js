@@ -7,6 +7,7 @@ const ASSETS_TO_CACHE = [
   '/static/Game/Challenges.js',
   '/static/Game/Prestige.js',
   '/static/Game/Comeback.js',
+  '/static/Game/Multiplayer.js',
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
