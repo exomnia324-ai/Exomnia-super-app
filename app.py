@@ -1,14 +1,56 @@
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit, join_room as sio_join_room, leave_room as sio_leave_room
 import psycopg
 from psycopg.rows import dict_row
 import os
+import time
+import random
+import string
 import logging
 import traceback
 
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise Exception("DATABASE_URL not set")
+
+# ── In-memory co-op room state (fine for small-scale, single-instance hosting) ──
+# rooms[code] = {
+#   "host_sid": str,
+#   "players": { sid: {"name": str, "ship": int, "x": float, "y": float, "hp": int, "alive": bool} },
+#   "created_at": float,
+# }
+ROOMS = {}
+MAX_PLAYERS_PER_ROOM = 4
+ROOM_CODE_CHARS = string.ascii_uppercase + string.digits
+ROOM_TTL_SECONDS = 3 * 3600  # rooms older than this with no host get swept
+
+
+def gen_room_code():
+    for _ in range(20):
+        code = "".join(random.choices(ROOM_CODE_CHARS, k=5))
+        if code not in ROOMS:
+            return code
+    return "".join(random.choices(ROOM_CODE_CHARS, k=6))
+
+
+def sweep_stale_rooms():
+    now = time.time()
+    dead = [c for c, r in ROOMS.items() if now - r["created_at"] > ROOM_TTL_SECONDS]
+    for c in dead:
+        ROOMS.pop(c, None)
+
+
+def find_room_for_sid(sid):
+    for code, room in ROOMS.items():
+        if sid in room["players"]:
+            return code, room
+    return None, None
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
@@ -214,6 +256,122 @@ def stats():
         logging.error(e)
         return jsonify({}), 500
 
+
+# ═══════════════════════════════════════════════════════════════
+#  CO-OP MULTIPLAYER — SocketIO room system (2–4 players)
+# ═══════════════════════════════════════════════════════════════
+
+@socketio.on('connect')
+def on_connect():
+    logging.info(f"[MP] connect {request.sid}")
+
+@socketio.on('disconnect')
+def on_disconnect():
+    sid = request.sid
+    code, room = find_room_for_sid(sid)
+    if not room:
+        return
+    was_host = (room["host_sid"] == sid)
+    room["players"].pop(sid, None)
+    sio_leave_room(code)
+    if not room["players"]:
+        ROOMS.pop(code, None)
+        logging.info(f"[MP] room {code} closed (empty)")
+        return
+    if was_host:
+        # promote the next player to host
+        new_host_sid = next(iter(room["players"]))
+        room["host_sid"] = new_host_sid
+        emit('host_changed', {"hostSid": new_host_sid}, to=code)
+    emit('player_left', {"sid": sid}, to=code)
+
+@socketio.on('create_room')
+def on_create_room(data):
+    sweep_stale_rooms()
+    sid = request.sid
+    name = str((data or {}).get("name", "PILOT"))[:20]
+    ship = int((data or {}).get("ship", 0))
+    code = gen_room_code()
+    ROOMS[code] = {
+        "host_sid": sid,
+        "players": {
+            sid: {"name": name, "ship": ship, "x": 0, "y": 0, "hp": 100, "alive": True}
+        },
+        "created_at": time.time(),
+    }
+    sio_join_room(code)
+    emit('room_created', {"code": code, "hostSid": sid, "you": sid})
+    logging.info(f"[MP] room {code} created by {sid}")
+
+@socketio.on('join_room_req')
+def on_join_room(data):
+    sid = request.sid
+    code = str((data or {}).get("code", "")).strip().upper()
+    name = str((data or {}).get("name", "PILOT"))[:20]
+    ship = int((data or {}).get("ship", 0))
+    room = ROOMS.get(code)
+    if not room:
+        emit('join_error', {"reason": "ROOM NOT FOUND"})
+        return
+    if len(room["players"]) >= MAX_PLAYERS_PER_ROOM:
+        emit('join_error', {"reason": "ROOM FULL"})
+        return
+    room["players"][sid] = {"name": name, "ship": ship, "x": 0, "y": 0, "hp": 100, "alive": True}
+    sio_join_room(code)
+    # tell the newcomer about everyone already in the room
+    emit('room_joined', {
+        "code": code,
+        "hostSid": room["host_sid"],
+        "you": sid,
+        "players": {s: p for s, p in room["players"].items()},
+    })
+    # tell everyone else about the newcomer
+    emit('player_joined', {"sid": sid, "name": name, "ship": ship}, to=code, include_self=False)
+    logging.info(f"[MP] {sid} joined room {code} ({len(room['players'])}/{MAX_PLAYERS_PER_ROOM})")
+
+@socketio.on('leave_room_req')
+def on_leave_room_req():
+    on_disconnect()
+
+@socketio.on('player_state')
+def on_player_state(data):
+    sid = request.sid
+    code, room = find_room_for_sid(sid)
+    if not room:
+        return
+    p = room["players"].get(sid)
+    if not p:
+        return
+    p["x"] = (data or {}).get("x", p["x"])
+    p["y"] = (data or {}).get("y", p["y"])
+    p["hp"] = (data or {}).get("hp", p["hp"])
+    p["alive"] = (data or {}).get("alive", p["alive"])
+    emit('player_update', {
+        "sid": sid, "x": p["x"], "y": p["y"], "hp": p["hp"], "alive": p["alive"],
+    }, to=code, include_self=False)
+
+# Host-authoritative gameplay events: only the host's browser spawns enemies
+# and decides wave progression; it broadcasts those decisions to everyone else.
+@socketio.on('host_event')
+def on_host_event(data):
+    sid = request.sid
+    code, room = find_room_for_sid(sid)
+    if not room or room["host_sid"] != sid:
+        return  # only the host may broadcast authoritative game events
+    emit('game_event', data or {}, to=code, include_self=False)
+
+# Any player can report a kill/hit they landed; broadcast so all clients stay in sync.
+@socketio.on('combat_event')
+def on_combat_event(data):
+    sid = request.sid
+    code, room = find_room_for_sid(sid)
+    if not room:
+        return
+    payload = dict(data or {})
+    payload["fromSid"] = sid
+    emit('combat_update', payload, to=code, include_self=False)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    socketio.run(app, host="0.0.0.0", port=port)
