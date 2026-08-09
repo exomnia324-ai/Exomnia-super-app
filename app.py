@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room as sio_join_room, leave_room as sio_leave_room
@@ -13,7 +16,7 @@ import traceback
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
