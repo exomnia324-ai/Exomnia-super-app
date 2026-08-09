@@ -574,11 +574,13 @@ function onFsChange() {
   }
 }
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='Game/game.js') }}"></script>
 <script src="{{ url_for('static', filename='Game/Achievements.js') }}"></script>
 <script src="{{ url_for('static', filename='Game/Challenges.js') }}"></script>
 <script src="{{ url_for('static', filename='Game/Prestige.js') }}"></script>
 <script src="{{ url_for('static', filename='Game/Comeback.js') }}"></script>
+<script src="{{ url_for('static', filename='Game/Multiplayer.js') }}"></script>
 <div id="siteFooter" style="position:fixed; bottom:0; left:0; right:0; background:rgba(0,0,0,0.8); text-align:center; padding:6px; font-size:11px; z-index:99999; display:none;">
   <a href="/privacy-policy" style="color:#4a6a85; margin:0 8px; text-decoration:none;">Privacy Policy</a>
   <a href="/terms" style="color:#4a6a85; margin:0 8px; text-decoration:none;">Terms</a>
