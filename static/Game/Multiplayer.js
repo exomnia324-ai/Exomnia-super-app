@@ -21,6 +21,19 @@ const MP = (function () {
 
   let socket = null;
   let myState = { code:null, hostSid:null, mySid:null, players:{}, isHost:false };
+  let remotePlayers = {};       // sid -> {name, ship, fx, fy, hp, alive, lastSeen}
+  let snapshotInterval = null;  // host: broadcasts authoritative enemy/wave/boss state
+  let posInterval = null;       // all clients: broadcast own ship position
+  let inMission = false;
+
+  // Coordinates cross the network as 0–1 fractions of each device's own canvas,
+  // since phones/tablets/desktops render at different pixel sizes.
+  function cvW(){ try{ return CV.width||390; }catch(e){ return 390; } }
+  function cvH(){ try{ return CV.height||700; }catch(e){ return 700; } }
+  function toFracX(x){ return x/cvW(); }
+  function toFracY(y){ return y/cvH(); }
+  function fromFracX(fx){ return fx*cvW(); }
+  function fromFracY(fy){ return fy*cvH(); }
 
   function connect(){
     if(socket) return socket;
@@ -65,6 +78,38 @@ const MP = (function () {
       renderWaitingRoom();
     });
 
+    // ── PHASE B: in-mission sync ──
+    socket.on('game_event', (d)=>{
+      if(!d) return;
+      if(d.type==='mission_start'){
+        beginLocalMission(false); // we are not the host
+      } else if(d.type==='state'){
+        applyHostState(d);
+      }
+    });
+
+    socket.on('combat_update', (d)=>{
+      // only meaningful for the host — it owns enemy/boss truth
+      if(!myState.isHost || !d) return;
+      if(d.kind==='enemy' && typeof MP_applyRemoteEnemyHit==='function'){
+        MP_applyRemoteEnemyHit(d.enemyId, d.dmg, !!d.crit);
+      } else if(d.kind==='boss' && typeof MP_applyRemoteBossHit==='function'){
+        MP_applyRemoteBossHit(d.dmg, !!d.crit);
+      }
+    });
+
+    socket.on('player_update', (d)=>{
+      if(!d || !d.sid) return;
+      const p = myState.players[d.sid];
+      if(p){
+        p.x=d.x; p.y=d.y; p.hp=d.hp; p.alive=d.alive;
+      }
+      remotePlayers[d.sid] = remotePlayers[d.sid] || { name:(p&&p.name)||'PILOT', ship:(p&&p.ship)||0 };
+      remotePlayers[d.sid].fx = d.x; remotePlayers[d.sid].fy = d.y;
+      remotePlayers[d.sid].hp = d.hp; remotePlayers[d.sid].alive = d.alive;
+      remotePlayers[d.sid].lastSeen = Date.now();
+    });
+
     return socket;
   }
 
@@ -93,15 +138,121 @@ const MP = (function () {
   function leaveRoom(){
     if(socket) socket.emit('leave_room_req');
     myState = { code:null, hostSid:null, mySid:null, players:{}, isHost:false };
+    endMission();
     closeWaitingRoom();
   }
 
   function startMission(){
-    // Phase A: just launches the normal single-player game for everyone in the room.
-    // Phase B will wire real enemy/combat sync into this same hook.
+    // Host tells everyone else to launch too, then launches itself.
+    if(socket) socket.emit('host_event', { type:'mission_start' });
+    closeWaitingRoom();
+    beginLocalMission(true);
+  }
+
+  function beginLocalMission(isHost){
+    inMission = true;
+    remotePlayers = {};
     closeWaitingRoom();
     if(typeof launchFromLobby==='function') launchFromLobby();
     else if(typeof startGame==='function') startGame();
+
+    // Stamp coop flags onto the freshly-created G object (launchFromLobby just rebuilt it).
+    try{
+      G.coopMode = true;
+      G.coopIsHost = !!isHost;
+    }catch(e){}
+
+    stopIntervals();
+    // All clients: broadcast their own ship position a few times a second.
+    posInterval = setInterval(()=>{
+      if(!socket || !inMission) return;
+      try{
+        socket.emit('player_state', {
+          x: toFracX(G.px), y: toFracY(G.py),
+          hp: G.lives!==undefined ? G.lives : 100,
+          alive: !(G.over),
+        });
+      }catch(e){}
+    }, 120);
+
+    if(isHost){
+      // Host: periodically broadcast the authoritative enemy/wave/boss snapshot.
+      snapshotInterval = setInterval(()=>{
+        if(!socket || !inMission) return;
+        try{
+          const enemies = (G.enemies||[]).map(e=>({
+            id:e.id, x:toFracX(e.x), y:toFracY(e.y), w:e.w, h:e.h,
+            hp:e.hp, maxHp:e.maxHp, type:e.type, elite:!!e.elite,
+          }));
+          socket.emit('host_event', {
+            type:'state',
+            wave:G.wave, wMax:G.wMax, wSpawned:G.wSpawned,
+            bossOn:G.bossOn, bossName:G.bossName, bossHp:G.bossHp, bossMaxHp:G.bossMaxHp,
+            bossPhase:G.bossPhase, bossX:toFracX(G.bossX), bossY:toFracY(G.bossY),
+            enemies,
+          });
+        }catch(e){}
+      }, 150);
+    }
+  }
+
+  function applyHostState(d){
+    if(!inMission) return;
+    try{
+      if(typeof MP_syncEnemies==='function' && d.enemies){
+        MP_syncEnemies(d.enemies.map(e=>({...e, x:fromFracX(e.x), y:fromFracY(e.y)})));
+      }
+      if(typeof MP_syncWaveBossState==='function'){
+        MP_syncWaveBossState({
+          wave:d.wave, wMax:d.wMax, wSpawned:d.wSpawned,
+          bossOn:d.bossOn, bossName:d.bossName, bossHp:d.bossHp, bossMaxHp:d.bossMaxHp,
+          bossPhase:d.bossPhase, bossX:fromFracX(d.bossX), bossY:fromFracY(d.bossY),
+        });
+      }
+    }catch(e){}
+  }
+
+  function reportEnemyHit(enemyId, dmg, crit){
+    if(!socket) return;
+    socket.emit('combat_event', { kind:'enemy', enemyId, dmg, crit });
+  }
+  function reportBossHit(dmg, crit){
+    if(!socket) return;
+    socket.emit('combat_event', { kind:'boss', dmg, crit });
+  }
+
+  function drawRemotePlayers(ctx){
+    const now = Date.now();
+    for(const sid in remotePlayers){
+      const p = remotePlayers[sid];
+      if(!p || p.alive===false) continue;
+      if(now - (p.lastSeen||0) > 4000) continue; // stale — they probably disconnected
+      const x = fromFracX(p.fx!==undefined?p.fx:0.5);
+      const y = fromFracY(p.fy!==undefined?p.fy:0.5);
+      ctx.save();
+      ctx.shadowColor = '#00ff8c'; ctx.shadowBlur = 10;
+      ctx.fillStyle = '#0a1a14';
+      ctx.beginPath();
+      ctx.moveTo(x, y-16); ctx.lineTo(x+11, y+12); ctx.lineTo(x, y+6); ctx.lineTo(x-11, y+12);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#00ff8c'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(0,255,140,0.9)';
+      ctx.font = "8px 'Courier New', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText(p.name||'PILOT', x, y-22);
+      ctx.restore();
+    }
+  }
+
+  function stopIntervals(){
+    if(snapshotInterval){ clearInterval(snapshotInterval); snapshotInterval=null; }
+    if(posInterval){ clearInterval(posInterval); posInterval=null; }
+  }
+
+  function endMission(){
+    inMission = false;
+    stopIntervals();
   }
 
   /* ══ UI: entry modal (create / join) ══ */
@@ -234,6 +385,14 @@ const MP = (function () {
 
   function init(){
     injectLobbyBtn();
+    const _origGameOver = window.gameOver;
+    if(typeof _origGameOver === 'function'){
+      window.gameOver = async function(){
+        const r = await _origGameOver.apply(this, arguments);
+        if(inMission) endMission();
+        return r;
+      };
+    }
   }
 
   if(document.readyState==='loading'){
@@ -242,6 +401,6 @@ const MP = (function () {
     window.addEventListener('load', ()=>setTimeout(init,150));
   }
 
-  return { openEntryModal, createRoom, joinRoom, leaveRoom };
+  return { openEntryModal, createRoom, joinRoom, leaveRoom, reportEnemyHit, reportBossHit, drawRemotePlayers };
 
 })();
