@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dsc-cache-v1';
+const CACHE_NAME = 'dsc-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/static/Game/Style.css',
@@ -29,23 +29,21 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Stale-while-revalidate: serve from cache instantly, refresh cache in background.
+// Network-first: always try to get the freshest file first (important while the game
+// is under active development), falling back to cache only when offline.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (!event.request.url.startsWith(self.location.origin)) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResp) => {
-          if (networkResp && networkResp.status === 200) {
-            const respClone = networkResp.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, respClone));
-          }
-          return networkResp;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    })
+    fetch(event.request)
+      .then((networkResp) => {
+        if (networkResp && networkResp.status === 200) {
+          const respClone = networkResp.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, respClone));
+        }
+        return networkResp;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
