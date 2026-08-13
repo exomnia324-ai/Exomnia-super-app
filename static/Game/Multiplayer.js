@@ -43,7 +43,21 @@ const MP = (function () {
     }
     socket = io({ transports:['websocket','polling'] });
 
-    socket.on('connect', ()=>{ myState.mySid = socket.id; });
+    socket.on('connect', ()=>{
+      const wasReconnect = !!myState.mySid && myState.mySid !== socket.id;
+      myState.mySid = socket.id;
+      if(wasReconnect && myState.code){
+        // We dropped and reconnected mid-session — rejoin the same room under the new sid.
+        console.log('[MP] reconnected, rejoining room', myState.code);
+        showToast && showToast('🔄 RECONNECTING TO ROOM...');
+        socket.emit('join_room_req', { code:myState.code, name:currentPlayerName(), ship:currentShipIdx() });
+      }
+    });
+
+    socket.on('disconnect', ()=>{
+      console.warn('[MP] socket disconnected');
+      if(myState.code) showToast && showToast('⚠ CONNECTION LOST — RECONNECTING...');
+    });
 
     socket.on('room_created', (d)=>{
       myState = { code:d.code, hostSid:d.hostSid, mySid:d.you, players:{}, isHost:true };
@@ -81,7 +95,9 @@ const MP = (function () {
     // ── PHASE B: in-mission sync ──
     socket.on('game_event', (d)=>{
       if(!d) return;
+      console.log('[MP] game_event received:', d.type);
       if(d.type==='mission_start'){
+        showToast && showToast('🚀 MISSION STARTING...');
         beginLocalMission(false); // we are not the host
       } else if(d.type==='state'){
         applyHostState(d);
@@ -153,8 +169,15 @@ const MP = (function () {
     inMission = true;
     remotePlayers = {};
     closeWaitingRoom();
-    if(typeof launchFromLobby==='function') launchFromLobby();
-    else if(typeof startGame==='function') startGame();
+    closeEntryModal();
+    try{
+      if(typeof launchFromLobby==='function') launchFromLobby();
+      else if(typeof startGame==='function') startGame();
+      else { console.error('[MP] no launch function found (launchFromLobby/startGame)'); showToast && showToast('✖ COULD NOT START — LAUNCH FN MISSING'); }
+    }catch(err){
+      console.error('[MP] launch failed:', err);
+      showToast && showToast('✖ LAUNCH ERROR — CHECK CONSOLE');
+    }
 
     // Stamp coop flags onto the freshly-created G object (launchFromLobby just rebuilt it).
     try{
