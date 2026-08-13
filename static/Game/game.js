@@ -161,6 +161,7 @@ function initG(){
     wave:1,wSpawned:0,wMax:10,
     bossOn:false,bossKilled:false,
     bossHp:0,bossMaxHp:0,bossX:0,bossY:110,bossDir:1,bossT:0,bossPhase:1,bossKit:0,
+    coopMode:false,coopIsHost:false,coopEnemyIdSeq:0,
     wingmanOn:getWingmanOwned(),wingmanX:CV.width/2-52,wingmanY:CV.height-185+14,wingmanLastFire:0,
     bossName:'DESTROYER',
     combo:0,comboT:0,
@@ -315,28 +316,30 @@ function update(){
     b.y+=b.dy*f;b.x+=b.dx*f;if(b.y>ch+30||b.x<-20||b.x>cw+20||b.y<-20)G.eBullets.splice(i,1);
   }
 
-  for(const e of G.enemies){
-    e.t+=dt;
-    const slowFactor=G.activePU.timeslow?0.3:1; // TIME SLOW power-up
-    if(e.type==='kamikaze'){
-      // home in on player, accelerating dive
-      const ddx=G.px-e.x,ddy=G.py-e.y,dd=Math.hypot(ddx,ddy)||1;
-      e.dx+=(ddx/dd*3.4-e.dx)*.05;e.dy+=(ddy/dd*3.4-e.dy)*.05;
+  if(!G.coopMode||G.coopIsHost){
+    for(const e of G.enemies){
+      e.t+=dt;
+      const slowFactor=G.activePU.timeslow?0.3:1; // TIME SLOW power-up
+      if(e.type==='kamikaze'){
+        // home in on player, accelerating dive
+        const ddx=G.px-e.x,ddy=G.py-e.y,dd=Math.hypot(ddx,ddy)||1;
+        e.dx+=(ddx/dd*3.4-e.dx)*.05;e.dy+=(ddy/dd*3.4-e.dy)*.05;
+      }
+      e.y+=e.dy*f*slowFactor;e.x+=e.dx*f*slowFactor;
+      if(e.sway)e.x=e.bx+Math.sin(e.t*.002)*65;
+      if(e.x<e.w/2||e.x>CV.width-e.w/2)e.dx*=-1;
+      if(e.y>CV.height+60)e.hp=0;
+      if(e.type!=='kamikaze'){
+        e.shotT+=dt;
+        // Sniper fires less often but from far away
+        const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'||e.type==='shielded'?2000:e.type==='fast'?1800:2400;
+        if(e.shotT>sr){e.shotT=0;eFire(e);}
+      }
+      if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':e.type==='kamikaze'?'#ff8800':'#ff4400',life:220,ml:220});}
     }
-    e.y+=e.dy*f*slowFactor;e.x+=e.dx*f*slowFactor;
-    if(e.sway)e.x=e.bx+Math.sin(e.t*.002)*65;
-    if(e.x<e.w/2||e.x>CV.width-e.w/2)e.dx*=-1;
-    if(e.y>CV.height+60)e.hp=0;
-    if(e.type!=='kamikaze'){
-      e.shotT+=dt;
-      // Sniper fires less often but from far away
-      const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'||e.type==='shielded'?2000:e.type==='fast'?1800:2400;
-      if(e.shotT>sr){e.shotT=0;eFire(e);}
-    }
-    if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':e.type==='kamikaze'?'#ff8800':'#ff4400',life:220,ml:220});}
   }
   for(let i=G.enemies.length-1;i>=0;i--){if(G.enemies[i].hp<=0)G.enemies.splice(i,1);}
-  if(G.bossOn)updateBoss();
+  if(G.bossOn&&(!G.coopMode||G.coopIsHost))updateBoss();
 
   for(let i=G.drops.length-1;i>=0;i--){
     const d=G.drops[i];d.y+=1.4*f;d.t+=dt;
@@ -373,10 +376,10 @@ function update(){
     if(G.frame%2===0){const deg=(1-G.spCD/G.spMax)*360;spCD.style.setProperty('--p',deg+'deg');}
     if(G.spCD<=0){G.spReady=true;spBtn.style.opacity='1';}
   }
-  if(!G.bossOn&&!G.bossKilled&&G.enemies.length===0&&G.wSpawned>=G.wMax){
+  if((!G.coopMode||G.coopIsHost)&&!G.bossOn&&!G.bossKilled&&G.enemies.length===0&&G.wSpawned>=G.wMax){
     if(G.wave%3===0)spawnBoss();else advWave();
   }
-  if(!G.bossOn&&G.enemies.length<4&&G.wSpawned<G.wMax)spawnEnemy();
+  if((!G.coopMode||G.coopIsHost)&&!G.bossOn&&G.enemies.length<4&&G.wSpawned<G.wMax)spawnEnemy();
   for(const k in G.activePU){G.activePU[k]-=dt;if(G.activePU[k]<=0)delete G.activePU[k];}
   if(G.frame%3===0){updateWeaponHUD();updatePUPanel();}
 }
@@ -637,6 +640,7 @@ function bulletHit(){
       if(rectOverlap(b.x,b.y,b.w,b.h,e.x,e.y,e.w,e.h)){
         e.hp-=b.dmg;spark(b.x,b.y,b.crit?'#ffcc00':b.color);
         if(b.crit)floatText(b.x,b.y,'CRIT!','#ffcc00');
+        if(G.coopMode&&!G.coopIsHost&&e.id&&typeof MP!=='undefined'&&MP.reportEnemyHit)MP.reportEnemyHit(e.id,b.dmg,!!b.crit);
         G.bullets.splice(i,1);hit=true;
         if(e.hp<=0)killEnemy(e,j);break;
       }
@@ -644,6 +648,7 @@ function bulletHit(){
     if(hit)continue;
     if(G.bossOn&&rectOverlap(b.x,b.y,b.w,b.h,G.bossX,G.bossY,100,80)){
       G.bossHp-=b.dmg;spark(b.x,b.y,b.crit?'#ffcc00':'#ff6644');G.bullets.splice(i,1);
+      if(G.coopMode&&!G.coopIsHost&&typeof MP!=='undefined'&&MP.reportBossHit)MP.reportBossHit(b.dmg,!!b.crit);
     }
   }
 }
@@ -656,6 +661,63 @@ function killEnemy(e,j){
   addXP(e.elite?35:e.type==='shielded'?26:e.type==='tank'?22:e.type==='kamikaze'?18:16);
   addCombo();shake(e.type==='tank'||e.type==='shielded'?5:3,.6);
   if(Math.random()<.85)spawnDrop(e.x,e.y);
+}
+
+/* ═══ CO-OP: apply host's authoritative enemy list (non-host clients only) ═══ */
+function MP_syncEnemies(list){
+  if(!G.coopMode||G.coopIsHost||!list)return;
+  const seen=new Set();
+  for(const inc of list){
+    seen.add(inc.id);
+    let e=G.enemies.find(x=>x.id===inc.id);
+    if(!e){
+      // newly-seen enemy: create a local mirror with full shape drawEnemy() expects
+      G.enemies.push({id:inc.id,x:inc.x,y:inc.y,bx:inc.x,dx:0,dy:0,w:inc.w,h:inc.h,hp:inc.hp,maxHp:inc.maxHp,type:inc.type,elite:inc.elite,sway:false,shotT:0,t:0});
+    } else {
+      e.x=inc.x;e.y=inc.y;e.hp=inc.hp;
+    }
+  }
+  // anything no longer in the host's list has died — remove locally with a small burst
+  for(let i=G.enemies.length-1;i>=0;i--){
+    const e=G.enemies[i];
+    if(!seen.has(e.id)){
+      burst(e.x,e.y,e.elite?'#ff44aa':e.type==='shielded'?'#44aaff':'#ff3355',8);
+      G.enemies.splice(i,1);
+    }
+  }
+}
+
+/* ═══ CO-OP: apply wave/boss state broadcast from host (non-host clients only) ═══ */
+function MP_syncWaveBossState(state){
+  if(!G.coopMode||G.coopIsHost||!state)return;
+  if(state.wave!==G.wave)waveEl.textContent=state.wave;
+  G.wave=state.wave;G.wMax=state.wMax;G.wSpawned=state.wSpawned;
+  if(state.bossOn&&!G.bossOn){
+    bossLbl.textContent='◆ '+state.bossName+' ◆';
+    bossHUD.classList.add('on');
+  } else if(!state.bossOn&&G.bossOn){
+    bossHUD.classList.remove('on');
+  }
+  G.bossOn=state.bossOn;G.bossName=state.bossName;G.bossHp=state.bossHp;G.bossMaxHp=state.bossMaxHp;
+  G.bossPhase=state.bossPhase;G.bossX=state.bossX;G.bossY=state.bossY;
+  if(state.bossOn){
+    $id('bossPhaseLabel').textContent='PHASE '+(state.bossPhase===3?'III':state.bossPhase===2?'II':'I');
+    if(bossFill)bossFill.style.width=Math.max(0,(state.bossHp/state.bossMaxHp)*100)+'%';
+  }
+}
+
+/* ═══ CO-OP: apply hit reports from teammates (host is authoritative) ═══ */
+function MP_applyRemoteEnemyHit(enemyId,dmg,crit){
+  if(!G.coopMode||!G.coopIsHost)return;
+  const j=G.enemies.findIndex(e=>e.id===enemyId);
+  if(j<0)return;
+  const e=G.enemies[j];
+  e.hp-=dmg;spark(e.x,e.y,crit?'#ffcc00':'#ff3355');
+  if(e.hp<=0)killEnemy(e,j);
+}
+function MP_applyRemoteBossHit(dmg,crit){
+  if(!G.coopMode||!G.coopIsHost||!G.bossOn)return;
+  G.bossHp-=dmg;spark(G.bossX,G.bossY,crit?'#ffcc00':'#ff6644');
 }
 
 function hitPlayer(dmg){
@@ -727,7 +789,7 @@ function spawnEnemy(){
   else{type='normal';hp=65+w*20;spd=1.3;ew=34;eh=34;}
   if(w>=3&&Math.random()<.22){elite=true;hp=Math.round(hp*2);}
   const bx=rnd(50,CV.width-50);
-  G.enemies.push({x:bx,bx,y:-60,dx:(Math.random()-.5)*1.8,dy:spd,w:ew,h:eh,hp,maxHp:hp,type,sway,elite,shotT:rnd(400,2200),t:0});
+  G.enemies.push({id:'e'+(G.coopEnemyIdSeq++),x:bx,bx,y:-60,dx:(Math.random()-.5)*1.8,dy:spd,w:ew,h:eh,hp,maxHp:hp,type,sway,elite,shotT:rnd(400,2200),t:0});
   G.wSpawned++;
 }
 
@@ -738,7 +800,7 @@ function spawnFormation(){
   const w=G.wave;
   for(const p of positions){
     const hp=40+w*8;
-    G.enemies.push({x:cx+p.ox,bx:cx+p.ox,y:-60+p.oy,dx:(Math.random()-.5)*1.2,dy:2.0,w:28,h:28,hp,maxHp:hp,type:'fast',sway:false,elite:false,shotT:rnd(600,2000),t:0,formation:true});
+    G.enemies.push({id:'e'+(G.coopEnemyIdSeq++),x:cx+p.ox,bx:cx+p.ox,y:-60+p.oy,dx:(Math.random()-.5)*1.2,dy:2.0,w:28,h:28,hp,maxHp:hp,type:'fast',sway:false,elite:false,shotT:rnd(600,2000),t:0,formation:true});
   }
   G.wSpawned+=3;
 }
@@ -956,6 +1018,7 @@ function draw(){
   for(const b of G.eBullets)drawEBullet(b);
   drawPlayer();
   if(G.wingmanOn)drawWingman();
+  if(G.coopMode&&typeof MP!=='undefined'&&MP.drawRemotePlayers)MP.drawRemotePlayers(CX);
 
   // draw particles - batched by color
   if(G.particles.length){
