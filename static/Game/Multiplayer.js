@@ -68,7 +68,15 @@ const MP = (function () {
 
     socket.on('room_joined', (d)=>{
       myState = { code:d.code, hostSid:d.hostSid, mySid:d.you, players:d.players||{}, isHost:(d.hostSid===d.you) };
-      renderWaitingRoom();
+      if(d.missionStarted && !inMission){
+        // The mission was already underway when we (re)connected — jump straight in
+        // instead of showing a stale waiting room.
+        console.log('[MP] rejoined a room whose mission already started — launching');
+        showToast && showToast('🚀 REJOINING MISSION IN PROGRESS...');
+        beginLocalMission(false);
+      } else if(!inMission){
+        renderWaitingRoom();
+      }
     });
 
     socket.on('join_error', (d)=>{
