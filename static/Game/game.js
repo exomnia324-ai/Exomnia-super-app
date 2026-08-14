@@ -161,7 +161,7 @@ function initG(){
     wave:1,wSpawned:0,wMax:10,
     bossOn:false,bossKilled:false,
     bossHp:0,bossMaxHp:0,bossX:0,bossY:110,bossDir:1,bossT:0,bossPhase:1,bossKit:0,
-    coopMode:false,coopIsHost:false,coopEnemyIdSeq:0,
+    coopMode:false,coopIsHost:false,coopEnemyIdSeq:0,coopSquadKills:0,coopSquadScore:0,
     wingmanOn:getWingmanOwned(),wingmanX:CV.width/2-52,wingmanY:CV.height-185+14,wingmanLastFire:0,
     bossName:'DESTROYER',
     combo:0,comboT:0,
@@ -662,10 +662,15 @@ function killEnemy(e,j){
   G.enemies.splice(j,1);G.kills++;
   burst(e.x,e.y,e.elite?'#ff44aa':e.type==='shielded'?'#44aaff':'#ff3355',e.type==='tank'||e.type==='shielded'?20:11);
   if(e.type==='tank'||e.type==='shielded'||e.elite){SFX.enemy_explode_big();} else {SFX.enemy_explode();}
-  addScore(e.elite?100:e.type==='shielded'?70:e.type==='tank'?60:e.type==='kamikaze'?40:e.type==='fast'?35:25,e.x,e.y);
+  const pts=e.elite?100:e.type==='shielded'?70:e.type==='tank'?60:e.type==='kamikaze'?40:e.type==='fast'?35:25;
+  addScore(pts,e.x,e.y);
   addXP(e.elite?35:e.type==='shielded'?26:e.type==='tank'?22:e.type==='kamikaze'?18:16);
   addCombo();shake(e.type==='tank'||e.type==='shielded'?5:3,.6);
   if(Math.random()<.85)spawnDrop(e.x,e.y);
+  // Host is the single source of truth for every confirmed kill (its own bullets,
+  // or a teammate's hit applied via MP_applyRemoteEnemyHit) — track squad totals here
+  // so nothing gets double-counted across clients.
+  if(G.coopMode&&G.coopIsHost){G.coopSquadKills=(G.coopSquadKills||0)+1;G.coopSquadScore=(G.coopSquadScore||0)+pts;}
 }
 
 /* ═══ CO-OP: apply host's authoritative enemy list (non-host clients only) ═══ */
@@ -697,6 +702,7 @@ function MP_syncWaveBossState(state){
   if(!G.coopMode||G.coopIsHost||!state)return;
   if(state.wave!==G.wave)waveEl.textContent=state.wave;
   G.wave=state.wave;G.wMax=state.wMax;G.wSpawned=state.wSpawned;
+  G.coopSquadKills=state.squadKills||0;G.coopSquadScore=state.squadScore||0;
   if(state.bossOn&&!G.bossOn){
     bossLbl.textContent='◆ '+state.bossName+' ◆';
     bossHUD.classList.add('on');
