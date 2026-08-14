@@ -16,7 +16,7 @@ import traceback
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", ping_interval=20, ping_timeout=20)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
@@ -301,6 +301,7 @@ def on_create_room(data):
             sid: {"name": name, "ship": ship, "x": 0, "y": 0, "hp": 100, "alive": True}
         },
         "created_at": time.time(),
+        "mission_started": False,
     }
     sio_join_room(code)
     emit('room_created', {"code": code, "hostSid": sid, "you": sid})
@@ -327,6 +328,7 @@ def on_join_room(data):
         "hostSid": room["host_sid"],
         "you": sid,
         "players": {s: p for s, p in room["players"].items()},
+        "missionStarted": room.get("mission_started", False),
     })
     # tell everyone else about the newcomer
     emit('player_joined', {"sid": sid, "name": name, "ship": ship}, to=code, include_self=False)
@@ -361,6 +363,8 @@ def on_host_event(data):
     code, room = find_room_for_sid(sid)
     if not room or room["host_sid"] != sid:
         return  # only the host may broadcast authoritative game events
+    if (data or {}).get("type") == "mission_start":
+        room["mission_started"] = True
     emit('game_event', data or {}, to=code, include_self=False)
 
 # Any player can report a kill/hit they landed; broadcast so all clients stay in sync.
