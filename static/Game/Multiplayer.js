@@ -77,19 +77,35 @@ const MP = (function () {
 
     socket.on('player_joined', (d)=>{
       myState.players[d.sid] = { name:d.name, ship:d.ship, x:0,y:0,hp:100,alive:true };
-      renderWaitingRoom();
+      if(!inMission) renderWaitingRoom();
       showToast && showToast(d.name+' JOINED THE SQUAD');
     });
 
     socket.on('player_left', (d)=>{
+      const leftName = (myState.players[d.sid]&&myState.players[d.sid].name) || (remotePlayers[d.sid]&&remotePlayers[d.sid].name) || 'A pilot';
       delete myState.players[d.sid];
-      renderWaitingRoom();
+      delete remotePlayers[d.sid];
+      if(!inMission) renderWaitingRoom();
+      else { showToast && showToast(leftName+' LEFT THE SQUAD'); renderSquadHUD(); }
     });
 
     socket.on('host_changed', (d)=>{
+      const wasHost = myState.isHost;
       myState.hostSid = d.hostSid;
       myState.isHost = (d.hostSid === myState.mySid);
-      renderWaitingRoom();
+      if(!inMission) renderWaitingRoom();
+
+      if(inMission && myState.isHost && !wasHost){
+        // We were just promoted to host mid-mission — take over the authoritative
+        // simulation using whatever enemy state we already had mirrored locally.
+        console.log('[MP] promoted to host mid-mission, taking over simulation');
+        try{
+          G.coopIsHost = true;
+          if(typeof reseedEnemyIdCounter==='function') reseedEnemyIdCounter();
+        }catch(e){}
+        showToast && showToast('👑 HOST DISCONNECTED — YOU ARE NOW HOST');
+        if(!snapshotInterval) snapshotInterval = setInterval(broadcastSnapshot, 150);
+      }
     });
 
     // ── PHASE B: in-mission sync ──
@@ -120,10 +136,16 @@ const MP = (function () {
       if(p){
         p.x=d.x; p.y=d.y; p.hp=d.hp; p.alive=d.alive;
       }
+      const isNew = !remotePlayers[d.sid];
+      const wasAlive = remotePlayers[d.sid] ? remotePlayers[d.sid].alive!==false : true;
       remotePlayers[d.sid] = remotePlayers[d.sid] || { name:(p&&p.name)||'PILOT', ship:(p&&p.ship)||0 };
       remotePlayers[d.sid].fx = d.x; remotePlayers[d.sid].fy = d.y;
       remotePlayers[d.sid].hp = d.hp; remotePlayers[d.sid].alive = d.alive;
       remotePlayers[d.sid].lastSeen = Date.now();
+      if(isNew || (wasAlive && d.alive===false)){
+        if(wasAlive && d.alive===false && showToast) showToast('💀 '+(remotePlayers[d.sid].name||'A teammate')+' WENT DOWN');
+        renderSquadHUD();
+      }
     });
 
     return socket;
@@ -165,6 +187,37 @@ const MP = (function () {
     beginLocalMission(true);
   }
 
+  function broadcastSnapshot(){
+    if(!socket || !inMission) return;
+    try{
+      const enemies = (G.enemies||[]).map(e=>({
+        id:e.id, x:toFracX(e.x), y:toFracY(e.y), w:e.w, h:e.h,
+        hp:e.hp, maxHp:e.maxHp, type:e.type, elite:!!e.elite,
+      }));
+      socket.emit('host_event', {
+        type:'state',
+        wave:G.wave, wMax:G.wMax, wSpawned:G.wSpawned,
+        bossOn:G.bossOn, bossName:G.bossName, bossHp:G.bossHp, bossMaxHp:G.bossMaxHp,
+        bossPhase:G.bossPhase, bossX:toFracX(G.bossX), bossY:toFracY(G.bossY),
+        squadKills:G.coopSquadKills||0, squadScore:G.coopSquadScore||0,
+        enemies,
+      });
+    }catch(e){}
+  }
+
+  // Assigns a fresh, collision-safe enemy-id counter when a client is promoted to
+  // host mid-mission, based on the highest id it already knows about.
+  function reseedEnemyIdCounter(){
+    try{
+      let maxN = 0;
+      for(const e of (G.enemies||[])){
+        const m = /^e(\d+)$/.exec(e.id||'');
+        if(m) maxN = Math.max(maxN, parseInt(m[1],10));
+      }
+      G.coopEnemyIdSeq = maxN+1;
+    }catch(e){}
+  }
+
   function beginLocalMission(isHost){
     inMission = true;
     remotePlayers = {};
@@ -199,24 +252,9 @@ const MP = (function () {
     }, 120);
 
     if(isHost){
-      // Host: periodically broadcast the authoritative enemy/wave/boss snapshot.
-      snapshotInterval = setInterval(()=>{
-        if(!socket || !inMission) return;
-        try{
-          const enemies = (G.enemies||[]).map(e=>({
-            id:e.id, x:toFracX(e.x), y:toFracY(e.y), w:e.w, h:e.h,
-            hp:e.hp, maxHp:e.maxHp, type:e.type, elite:!!e.elite,
-          }));
-          socket.emit('host_event', {
-            type:'state',
-            wave:G.wave, wMax:G.wMax, wSpawned:G.wSpawned,
-            bossOn:G.bossOn, bossName:G.bossName, bossHp:G.bossHp, bossMaxHp:G.bossMaxHp,
-            bossPhase:G.bossPhase, bossX:toFracX(G.bossX), bossY:toFracY(G.bossY),
-            enemies,
-          });
-        }catch(e){}
-      }, 150);
+      snapshotInterval = setInterval(broadcastSnapshot, 150);
     }
+    renderSquadHUD();
   }
 
   function applyHostState(d){
@@ -230,8 +268,10 @@ const MP = (function () {
           wave:d.wave, wMax:d.wMax, wSpawned:d.wSpawned,
           bossOn:d.bossOn, bossName:d.bossName, bossHp:d.bossHp, bossMaxHp:d.bossMaxHp,
           bossPhase:d.bossPhase, bossX:fromFracX(d.bossX), bossY:fromFracY(d.bossY),
+          squadKills:d.squadKills, squadScore:d.squadScore,
         });
       }
+      renderSquadHUD();
     }catch(e){}
   }
 
@@ -248,8 +288,9 @@ const MP = (function () {
     const now = Date.now();
     for(const sid in remotePlayers){
       const p = remotePlayers[sid];
-      if(!p || p.alive===false) continue;
-      if(now - (p.lastSeen||0) > 4000) continue; // stale — they probably disconnected
+      if(!p) continue;
+      const stale = now - (p.lastSeen||0) > 4000; // probably disconnected
+      if(p.alive===false || stale) continue;
       const x = fromFracX(p.fx!==undefined?p.fx:0.5);
       const y = fromFracY(p.fy!==undefined?p.fy:0.5);
       ctx.save();
@@ -263,9 +304,48 @@ const MP = (function () {
       ctx.fillStyle = 'rgba(0,255,140,0.9)';
       ctx.font = "8px 'Courier New', monospace";
       ctx.textAlign = 'center';
-      ctx.fillText(p.name||'PILOT', x, y-22);
+      ctx.fillText(p.name||'PILOT', x, y-24);
+      // small health bar under the name
+      const hpFrac = Math.max(0, Math.min(1, (p.hp!==undefined?p.hp:3)/3));
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(x-14, y-20, 28, 3);
+      ctx.fillStyle = hpFrac>0.5?'#00ff8c':hpFrac>0.2?'#ffcc00':'#ff3355';
+      ctx.fillRect(x-14, y-20, 28*hpFrac, 3);
       ctx.restore();
     }
+  }
+
+  /* ══ Squad HUD (kills/score + teammate roster, shown top-right during a mission) ══ */
+  function renderSquadHUD(){
+    if(!inMission) { closeSquadHUD(); return; }
+    let el = document.getElementById('mpSquadHUD');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'mpSquadHUD';
+      el.style.cssText = `
+        position:fixed;top:8px;right:8px;z-index:120;
+        background:rgba(0,10,28,0.75);border:1px solid rgba(0,229,255,0.3);
+        border-radius:8px;padding:8px 10px;font-family:'Courier New',monospace;
+        color:#00e5ff;font-size:8px;letter-spacing:1px;min-width:120px;
+        pointer-events:none;backdrop-filter:blur(2px);
+      `;
+      document.body.appendChild(el);
+    }
+    const teammates = Object.values(remotePlayers).filter(p=>Date.now()-(p.lastSeen||0)<4000);
+    const rows = teammates.map(p=>`
+      <div style="display:flex;justify-content:space-between;gap:8px;margin-top:2px;color:${p.alive===false?'rgba(255,90,90,0.7)':'rgba(255,255,255,0.75)'};">
+        <span>${p.alive===false?'💀':'🚀'} ${(p.name||'PILOT').slice(0,10)}</span>
+      </div>
+    `).join('');
+    el.innerHTML = `
+      <div style="color:#ffd700;font-weight:900;">SQUAD ◈${(typeof G!=='undefined'?G.coopSquadScore:0)||0}</div>
+      <div style="color:rgba(255,255,255,0.5);font-size:7px;">${(typeof G!=='undefined'?G.coopSquadKills:0)||0} kills together</div>
+      ${rows}
+    `;
+  }
+  function closeSquadHUD(){
+    const el = document.getElementById('mpSquadHUD');
+    if(el) el.remove();
   }
 
   function stopIntervals(){
@@ -276,6 +356,7 @@ const MP = (function () {
   function endMission(){
     inMission = false;
     stopIntervals();
+    closeSquadHUD();
   }
 
   /* ══ UI: entry modal (create / join) ══ */
