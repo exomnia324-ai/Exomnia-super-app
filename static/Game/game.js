@@ -316,9 +316,10 @@ function update(){
     b.y+=b.dy*f;b.x+=b.dx*f;if(b.y>ch+30||b.x<-20||b.x>cw+20||b.y<-20)G.eBullets.splice(i,1);
   }
 
-  if(!G.coopMode||G.coopIsHost){
-    for(const e of G.enemies){
-      e.t+=dt;
+  for(const e of G.enemies){
+    e.t+=dt;
+    if(!G.coopMode||G.coopIsHost){
+      // Movement/AI position is host-authoritative — synced to teammates via snapshot.
       const slowFactor=G.activePU.timeslow?0.3:1; // TIME SLOW power-up
       if(e.type==='kamikaze'){
         // home in on player, accelerating dive
@@ -329,14 +330,18 @@ function update(){
       if(e.sway)e.x=e.bx+Math.sin(e.t*.002)*65;
       if(e.x<e.w/2||e.x>CV.width-e.w/2)e.dx*=-1;
       if(e.y>CV.height+60)e.hp=0;
-      if(e.type!=='kamikaze'){
-        e.shotT+=dt;
-        // Sniper fires less often but from far away
-        const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'||e.type==='shielded'?2000:e.type==='fast'?1800:2400;
-        if(e.shotT>sr){e.shotT=0;eFire(e);}
-      }
-      if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':e.type==='kamikaze'?'#ff8800':'#ff4400',life:220,ml:220});}
     }
+    // Shooting runs locally on EVERY client (host and teammates alike) so enemies
+    // feel alive and actually fire at whoever is nearby on that player's own screen.
+    // eFire() only ever targets this client's own G.px/G.py and its own G.eBullets,
+    // so it's safe to run independently without any network sync.
+    if(e.type!=='kamikaze'){
+      e.shotT+=dt;
+      // Sniper fires less often but from far away
+      const sr=e.type==='sniper'?3000:e.elite?1100:e.type==='tank'||e.type==='shielded'?2000:e.type==='fast'?1800:2400;
+      if(e.shotT>sr){e.shotT=0;eFire(e);}
+    }
+    if(G.frame%9===0&&G.particles.length<250){G.particles.push({x:e.x+rnd(-6,6),y:e.y-e.h*.4,vx:rnd(-.5,.5),vy:rnd(-1,-.3),r:rnd(1.5,3),c:e.elite?'#ff44aa':e.type==='sniper'?'#ff0000':e.type==='kamikaze'?'#ff8800':'#ff4400',life:220,ml:220});}
   }
   for(let i=G.enemies.length-1;i>=0;i--){if(G.enemies[i].hp<=0)G.enemies.splice(i,1);}
   if(G.bossOn&&(!G.coopMode||G.coopIsHost))updateBoss();
