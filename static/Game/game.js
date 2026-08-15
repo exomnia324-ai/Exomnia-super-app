@@ -1902,51 +1902,35 @@ function updatePUPanel(){
   }
 }
 
-/* ═══ CONTROLS ═══ */
-const jBase=$id('joyBase'),stk=$id('stick');
-let jCX=0,jCY=0,jID=-1,_stkX=0,_stkY=0;
-const JOY_MAX=36,JOY_DEAD=6; // dead zone = 6px
-function jCenter(){const r=jBase.getBoundingClientRect();jCX=r.left+r.width/2;jCY=r.top+r.height/2;}
-// recalc on resize too
-window.addEventListener('resize',()=>{if(jID!==-1)jCenter();});
-jBase.addEventListener('touchstart',e=>{
-  e.preventDefault();jCenter();
-  const t=e.changedTouches[0];jID=t.identifier;
-  moveStk(t.clientX,t.clientY);G.joyOn=true;
-  stk.style.boxShadow='0 0 0 1.5px #0a1820,0 0 0 3px #1a3045,0 0 0 4px #0a1520,0 4px 16px rgba(0,0,0,0.95),0 2px 6px rgba(0,0,0,0.8),inset 0 2px 3px rgba(255,255,255,0.12),inset 0 -2px 4px rgba(0,0,0,0.7),0 0 28px rgba(0,220,255,0.55),0 0 50px rgba(0,180,255,0.25)';
-},{passive:false});
-document.addEventListener('touchmove',e=>{
-  for(const t of e.changedTouches){
-    if(t.identifier===jID){e.preventDefault();moveStk(t.clientX,t.clientY);}
-  }
-},{passive:false});
-document.addEventListener('touchend',e=>{
-  for(const t of e.changedTouches){
-    if(t.identifier===jID){
-      jID=-1;G.joyOn=false;G.joyX=G.joyY=0;
-      stk.style.transition='transform 0.15s cubic-bezier(0.25,0.46,0.45,0.94)';
-      stk.style.transform='translate(-50%,-50%)';
-      stk.style.boxShadow='0 0 0 1.5px #0a1820,0 0 0 3px #1a3045,0 0 0 4px #0a1520,0 4px 16px rgba(0,0,0,0.95),0 2px 6px rgba(0,0,0,0.8),inset 0 2px 3px rgba(255,255,255,0.12),inset 0 -2px 4px rgba(0,0,0,0.7),0 0 18px rgba(0,180,255,0.15)';
-      setTimeout(()=>stk.style.transition='',160);
-    }
-  }
-});
-document.addEventListener('touchcancel',e=>{
-  for(const t of e.changedTouches){
-    if(t.identifier===jID){jID=-1;G.joyOn=false;G.joyX=G.joyY=0;stk.style.transform='translate(-50%,-50%)';}
-  }
-});
+/* ═══ CONTROLS — full-screen zones ═══
+   Left half of the screen (#moveZone): press+drag anywhere → a floating
+   joystick appears right under the finger and steers the ship.
+   Right half of the screen (#fireZone): any tap/hold → fires.
+   Uses Pointer Events so mouse (desktop) and touch (mobile) both work
+   through the same code path. */
+const moveZone=$id('moveZone'),fireZone=$id('fireZone');
+const floatStick=$id('floatStick'),floatDot=$id('floatDot');
+const JOY_MAX=48; // px radius the floating stick can travel before clamping
+
+let moveCX=0,moveCY=0,movePID=-1;
+
+function showFloatStick(x,y){
+  moveCX=x;moveCY=y;
+  floatStick.style.left=x+'px';floatStick.style.top=y+'px';
+  floatStick.classList.add('on');
+  floatDot.style.transform='translate(-50%,-50%)';
+}
+function hideFloatStick(){
+  floatStick.classList.remove('on');
+  floatDot.style.transform='translate(-50%,-50%)';
+}
 function moveStk(cx,cy){
-  const dx=cx-jCX,dy=cy-jCY;
+  const dx=cx-moveCX,dy=cy-moveCY;
   const dist=Math.sqrt(dx*dx+dy*dy);
   const r=Math.min(dist,JOY_MAX);
   const a=Math.atan2(dy,dx);
   const sx=Math.cos(a)*r, sy=Math.sin(a)*r;
-  // only update DOM if moved more than 0.5px (avoid layout thrash)
-  if(Math.abs(sx-_stkX)>0.5||Math.abs(sy-_stkY)>0.5){
-    _stkX=sx;_stkY=sy;
-    stk.style.transform=`translate(calc(-50% + ${sx}px),calc(-50% + ${sy}px))`;
-  }
+  floatDot.style.transform=`translate(calc(-50% + ${sx}px),calc(-50% + ${sy}px))`;
   // dead zone: below CFG.deadZone px → no input
   if(dist<CFG.deadZone){G.joyX=0;G.joyY=0;}
   else{
@@ -1956,12 +1940,48 @@ function moveStk(cx,cy){
     G.joyY=(dy/dist)*norm;
   }
 }
+moveZone.addEventListener('pointerdown',e=>{
+  if(movePID!==-1)return; // one active drag at a time
+  movePID=e.pointerId;
+  try{moveZone.setPointerCapture(movePID);}catch(err){}
+  showFloatStick(e.clientX,e.clientY);
+  G.joyOn=true;
+  moveStk(e.clientX,e.clientY);
+});
+moveZone.addEventListener('pointermove',e=>{
+  if(e.pointerId!==movePID)return;
+  moveStk(e.clientX,e.clientY);
+});
+function endMove(e){
+  if(e.pointerId!==movePID)return;
+  movePID=-1;G.joyOn=false;G.joyX=0;G.joyY=0;
+  hideFloatStick();
+}
+moveZone.addEventListener('pointerup',endMove);
+moveZone.addEventListener('pointercancel',endMove);
+moveZone.addEventListener('pointerleave',e=>{if(e.pointerId===movePID)endMove(e);});
 
-const fBtn=$id('fireBtn');
-fBtn.addEventListener('touchstart',e=>{e.preventDefault();G.firing=true;},{passive:false});
-fBtn.addEventListener('touchend',e=>{e.preventDefault();G.firing=false;});
-fBtn.addEventListener('mousedown',()=>G.firing=true);
-fBtn.addEventListener('mouseup',()=>G.firing=false);
+const firePIDs=new Set();
+function spawnFireRipple(x,y){
+  const r=document.createElement('div');
+  r.className='fireRipple';
+  r.style.left=x+'px';r.style.top=y+'px';
+  fireZone.appendChild(r);
+  setTimeout(()=>r.remove(),460);
+}
+fireZone.addEventListener('pointerdown',e=>{
+  firePIDs.add(e.pointerId);
+  try{fireZone.setPointerCapture(e.pointerId);}catch(err){}
+  G.firing=true;
+  spawnFireRipple(e.clientX,e.clientY);
+});
+function endFire(e){
+  firePIDs.delete(e.pointerId);
+  if(firePIDs.size===0)G.firing=false;
+}
+fireZone.addEventListener('pointerup',endFire);
+fireZone.addEventListener('pointercancel',endFire);
+fireZone.addEventListener('pointerleave',e=>{if(firePIDs.has(e.pointerId))endFire(e);});
 
 const K={};
 document.addEventListener('keydown',e=>{
@@ -1972,11 +1992,6 @@ document.addEventListener('keydown',e=>{
   if(e.code==='KeyQ')cycleWeapon();
 });
 document.addEventListener('keyup',e=>{K[e.code]=false;if(e.code==='Space')G.firing=false;});
-
-let mDown=false;
-CV.addEventListener('mousemove',e=>{if(!mDown||!G.alive||G.paused)return;G.px=e.clientX;G.py=clamp(e.clientY,G.ph/2,CV.height-140);});
-CV.addEventListener('mousedown',()=>{mDown=true;G.firing=true;});
-CV.addEventListener('mouseup',()=>{mDown=false;G.firing=false;});
 
 /* ═══ MENUS ═══ */
 function togglePause(){
