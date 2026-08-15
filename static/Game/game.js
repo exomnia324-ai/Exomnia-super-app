@@ -1620,31 +1620,31 @@ function drawBoss(){
   CX.globalAlpha=1;
 
   glow('#ff2244',ph2?45:32);
-  // main body
+  // main body — nose points DOWN (toward the player), tail/wings up
   CX.fillStyle=ph2?'#200008':'#1a0008';
   CX.beginPath();
-  CX.moveTo(x,y-65+pulse);
-  CX.bezierCurveTo(x+58,y-28,x+62,y+12,x+46,y+56);
-  CX.lineTo(x-46,y+56);
-  CX.bezierCurveTo(x-62,y+12,x-58,y-28,x,y-65+pulse);
+  CX.moveTo(x,y+65+pulse);
+  CX.bezierCurveTo(x+58,y+28,x+62,y-12,x+46,y-56);
+  CX.lineTo(x-46,y-56);
+  CX.bezierCurveTo(x-62,y-12,x-58,y+28,x,y+65+pulse);
   CX.fill();
 
   // body highlight
   CX.fillStyle='rgba(255,255,255,0.04)';
-  CX.beginPath();CX.moveTo(x,y-65+pulse);CX.bezierCurveTo(x+25,y-40,x+30,y-10,x+5,y+20);CX.lineTo(x,y-65+pulse);CX.fill();
+  CX.beginPath();CX.moveTo(x,y+65+pulse);CX.bezierCurveTo(x+25,y+40,x+30,y+10,x+5,y-20);CX.lineTo(x,y+65+pulse);CX.fill();
 
   // wings
   CX.fillStyle=ph2?'#300014':'#280010';
-  CX.beginPath();CX.moveTo(x+42,y+12);CX.lineTo(x+108,y+62);CX.lineTo(x+62,y+60);CX.closePath();CX.fill();
-  CX.beginPath();CX.moveTo(x-42,y+12);CX.lineTo(x-108,y+62);CX.lineTo(x-62,y+60);CX.closePath();CX.fill();
+  CX.beginPath();CX.moveTo(x+42,y-12);CX.lineTo(x+108,y-62);CX.lineTo(x+62,y-60);CX.closePath();CX.fill();
+  CX.beginPath();CX.moveTo(x-42,y-12);CX.lineTo(x-108,y-62);CX.lineTo(x-62,y-60);CX.closePath();CX.fill();
 
   // wing highlights
   CX.fillStyle='rgba(255,34,68,0.08)';
-  CX.beginPath();CX.moveTo(x+42,y+12);CX.lineTo(x+108,y+62);CX.lineTo(x+75,y+36);CX.closePath();CX.fill();
+  CX.beginPath();CX.moveTo(x+42,y-12);CX.lineTo(x+108,y-62);CX.lineTo(x+75,y-36);CX.closePath();CX.fill();
 
   // outline
   CX.strokeStyle=ph2?'#ff4400':'#ff2244';CX.lineWidth=2;
-  CX.beginPath();CX.moveTo(x,y-65+pulse);CX.bezierCurveTo(x+58,y-28,x+62,y+12,x+46,y+56);CX.lineTo(x-46,y+56);CX.bezierCurveTo(x-62,y+12,x-58,y-28,x,y-65+pulse);CX.closePath();CX.stroke();
+  CX.beginPath();CX.moveTo(x,y+65+pulse);CX.bezierCurveTo(x+58,y+28,x+62,y-12,x+46,y-56);CX.lineTo(x-46,y-56);CX.bezierCurveTo(x-62,y-12,x-58,y+28,x,y+65+pulse);CX.closePath();CX.stroke();
 
   // core reactor
   const cr=CX.createRadialGradient(x,y,4,x,y,40);
