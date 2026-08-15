@@ -331,7 +331,7 @@ body{
 #ctrl{
   position:absolute;bottom:0;left:0;right:0;
   height:auto;min-height:138px;
-  display:flex;align-items:center;justify-content:space-between;
+  display:flex;align-items:center;justify-content:center;
   /* Safe area bottom padding — works on iOS notch, Android gesture nav, Chrome toolbar */
   padding-left:  max(16px, calc(16px + env(safe-area-inset-left,   0px)));
   padding-right: max(16px, calc(16px + env(safe-area-inset-right,  0px)));
@@ -343,33 +343,20 @@ body{
 #ctrl::before{content:'';position:absolute;top:0;left:4%;right:4%;height:1px;
   background:linear-gradient(90deg,transparent,rgba(0,229,255,0.2) 50%,transparent);}
 
-/* ─── JOYSTICK ─── */
-/* ══ FIGHTER JET GEAR JOYSTICK ══ */
-#joyWrap{
-  position:relative;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;flex-shrink:0;
-  gap:0;
-  margin-left:40px;
+/* ─── FULL-SCREEN TOUCH ZONES (left = move, right = fire) ─── */
+#moveZone,#fireZone{
+  position:absolute;top:0;bottom:0;width:50%;
+  z-index:12;pointer-events:auto;touch-action:none;
 }
-/* SVG gear ring sits behind everything */
-#gearSvg{
-  position:absolute;top:50%;left:50%;
-  transform:translate(-50%,-50%);
-  width:100px;height:100px;
-  pointer-events:none;z-index:0;
-  animation:gearSpin 12s linear infinite;
-  filter:drop-shadow(0 0 6px rgba(0,200,255,0.35));
-}
-@keyframes gearSpin{from{transform:translate(-50%,-50%) rotate(0deg);}to{transform:translate(-50%,-50%) rotate(360deg);}}
-/* slow on active */
-#joyBase:active ~ #gearSvg, #joyBase.active #gearSvg{animation-duration:3s;}
+#moveZone{left:0;}
+#fireZone{right:0;}
 
-#joyBase{
-  width:80px;height:80px;border-radius:50%;
-  position:relative;display:flex;align-items:center;justify-content:center;
-  z-index:2;
-  background:
-    radial-gradient(circle at 38% 28%, #1e3040 0%, #0c1820 50%, #060d14 100%);
+/* floating joystick — appears wherever #moveZone is touched */
+#floatStick{
+  position:absolute;top:0;left:0;width:100px;height:100px;border-radius:50%;
+  transform:translate(-50%,-50%);
+  z-index:14;pointer-events:none;
+  background:radial-gradient(circle at 38% 28%, #1e3040 0%, #0c1820 50%, #060d14 100%);
   border:2px solid #0e2030;
   box-shadow:
     0 0 0 1px rgba(0,200,255,0.18),
@@ -377,83 +364,38 @@ body{
     0 8px 28px rgba(0,0,0,0.9),
     inset 0 2px 4px rgba(255,255,255,0.06),
     inset 0 -3px 8px rgba(0,0,0,0.7);
+  opacity:0;transition:opacity .12s;
 }
-/* recessed inner bowl */
-#joyBase::before{
-  content:'';position:absolute;inset:12px;border-radius:50%;
-  background:radial-gradient(circle at 42% 35%, #0a1824 0%, #050c14 65%, #030810 100%);
-  box-shadow:inset 0 4px 16px rgba(0,0,0,0.95),inset 0 1px 0 rgba(0,180,255,0.04);
-}
-/* subtle glow ring */
-#joyBase::after{
-  content:'';position:absolute;inset:-3px;border-radius:50%;
-  border:1px solid rgba(0,200,255,0.12);
-  box-shadow:0 0 20px rgba(0,200,255,0.08);
-}
-/* cardinal lines */
-#joyCross{position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:1;overflow:hidden;}
-#joyCross::before{
-  content:'';position:absolute;
-  top:calc(50% - 0.5px);left:20%;right:20%;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(0,200,255,0.14) 50%,transparent);
-}
-#joyCross::after{
-  content:'';position:absolute;
-  left:calc(50% - 0.5px);top:20%;bottom:20%;width:1px;
-  background:linear-gradient(180deg,transparent,rgba(0,200,255,0.14) 50%,transparent);
-}
-
-/* ── GRIP KNOB ── */
-#stick{
-  width:36px;height:36px;border-radius:50%;
-  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  cursor:grab;will-change:transform;z-index:4;
-  background:
-    radial-gradient(circle at 35% 25%, #5a7888 0%, #243848 30%, #121e28 65%, #080e14 100%);
+#floatStick.on{opacity:1;}
+/* grip knob inside the floating stick */
+#floatDot{
+  position:absolute;top:50%;left:50%;width:40px;height:40px;border-radius:50%;
+  transform:translate(-50%,-50%);will-change:transform;
+  background:radial-gradient(circle at 35% 25%, #5a7888 0%, #243848 30%, #121e28 65%, #080e14 100%);
   box-shadow:
-    0 0 0 2px #0a1820,
-    0 0 0 4px #162535,
-    0 0 0 5px #06101a,
+    0 0 0 2px #0a1820,0 0 0 4px #162535,0 0 0 5px #06101a,
     0 6px 20px rgba(0,0,0,1),
     inset 0 2px 4px rgba(255,255,255,0.14),
     inset 0 -2px 6px rgba(0,0,0,0.8),
     0 0 22px rgba(0,180,255,0.2);
 }
-/* highlight cap */
-#stick::before{
-  content:'';position:absolute;top:14%;left:16%;width:60%;height:55%;border-radius:50%;
-  background:radial-gradient(circle at 38% 30%,rgba(100,160,200,0.45) 0%,rgba(40,80,120,0.15) 55%,transparent 80%);
-  border-top:1px solid rgba(255,255,255,0.2);
-}
-/* targeting reticle glow */
-#stick::after{
+#floatDot::after{
   content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:12px;height:12px;border-radius:50%;
   background:radial-gradient(circle,rgba(0,230,255,1) 0%,rgba(0,150,230,0.6) 50%,transparent 100%);
   box-shadow:0 0 10px rgba(0,210,255,1),0 0 22px rgba(0,180,255,0.5);
-  animation:retPulse 1.8s ease-in-out infinite;
 }
-@keyframes retPulse{
-  0%,100%{opacity:.65;box-shadow:0 0 8px rgba(0,210,255,0.8),0 0 18px rgba(0,180,255,0.3);}
-  50%{opacity:1;box-shadow:0 0 14px rgba(0,230,255,1),0 0 30px rgba(0,200,255,0.6);}
+
+/* brief ripple where the fire zone is tapped */
+.fireRipple{
+  position:absolute;top:0;left:0;width:16px;height:16px;border-radius:50%;
+  border:2px solid rgba(255,26,60,0.85);
+  transform:translate(-50%,-50%);pointer-events:none;z-index:14;
+  animation:fireRippleAnim .45s ease-out forwards;
 }
-/* grip texture rings inside knob */
-#stkRing1{
-  position:absolute;top:50%;left:50%;width:28px;height:28px;
-  transform:translate(-50%,-50%);border-radius:50%;
-  border:1px solid rgba(0,180,255,0.1);pointer-events:none;
-}
-#stkRing2{
-  position:absolute;top:50%;left:50%;width:18px;height:18px;
-  transform:translate(-50%,-50%);border-radius:50%;
-  border:1px dashed rgba(0,180,255,0.07);pointer-events:none;
-}
-/* THRUST label */
-#joyLabel{
-  margin-top:6px;
-  font-family:'Courier New',monospace;font-size:6px;letter-spacing:4px;
-  color:rgba(0,180,255,0.28);pointer-events:none;white-space:nowrap;
-  text-shadow:0 0 8px rgba(0,180,255,0.3);
+@keyframes fireRippleAnim{
+  from{opacity:0.9;transform:translate(-50%,-50%) scale(0.4);}
+  to{opacity:0;transform:translate(-50%,-50%) scale(3.2);}
 }
 
 /* ─── BUTTON GROUP ─── */
@@ -474,31 +416,6 @@ body{
 #spCD{position:absolute;inset:0;border-radius:50%;
   background:conic-gradient(transparent 0deg,transparent var(--p,0deg),rgba(0,0,0,0.7) var(--p,0deg));
   pointer-events:none;}
-
-/* FIRE BUTTON */
-#fireBtn{
-  width:92px;height:58px;border-radius:8px;
-  border:2px solid rgba(255,26,60,0.55);
-  background:linear-gradient(135deg,rgba(255,26,60,0.18),rgba(80,0,15,0.5));
-  box-shadow:0 0 20px rgba(255,26,60,0.25),inset 0 1px 0 rgba(255,255,255,0.08);
-  font-family:'Courier New',monospace;font-weight:900;font-size:12px;
-  letter-spacing:4px;color:var(--red);text-shadow:0 0 10px var(--red);
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:all .1s;flex-shrink:0;position:relative;overflow:hidden;
-}
-#fireBtn::before{content:'';position:absolute;top:0;left:0;right:0;height:40%;
-  background:linear-gradient(180deg,rgba(255,255,255,0.06),transparent);}
-#fireBtn::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(255,26,60,0.6),transparent);}
-#fireBtn:active{
-  transform:scale(0.93);
-  background:linear-gradient(135deg,rgba(255,26,60,0.4),rgba(140,0,22,0.65));
-  box-shadow:0 0 40px rgba(255,26,60,0.8),inset 0 0 15px rgba(255,26,60,0.2);
-}
-/* fire pulse ring */
-#firePulse{position:absolute;inset:-4px;border-radius:10px;
-  border:1px solid rgba(255,26,60,0.3);animation:firePulseAnim 2s ease infinite;pointer-events:none;}
-@keyframes firePulseAnim{0%,100%{opacity:0.4;transform:scale(1);}50%{opacity:0;transform:scale(1.06);}}
 
 /* ─── LEVEL UP ─── */
 #lvlUp{
