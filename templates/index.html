@@ -170,6 +170,10 @@
 
   <!-- UI OVERLAY -->
   <div id="ui" style="visibility:hidden;">
+    <!-- FULL-SCREEN TOUCH ZONES: left half = move (floating joystick), right half = fire -->
+    <div id="moveZone"></div>
+    <div id="fireZone"></div>
+    <div id="floatStick"><div id="floatDot"></div></div>
     <div id="topHUD">
       <div class="corner-l"></div>
       <div class="corner-r"></div>
@@ -229,41 +233,12 @@
     <div id="radarSweep"></div>
   </div>
 
-  <!-- CONTROLS -->
+  <!-- CONTROLS: only the special-ability button remains here now.
+       Movement + fire are handled by the full-screen #moveZone / #fireZone above. -->
   <div id="ctrl" style="visibility:hidden;">
-    <div id="joyWrap">
-      <div id="joyBase">
-        <div id="joyCross"></div>
-        <div id="stick">
-          <div id="stkRing1"></div>
-          <div id="stkRing2"></div>
-        </div>
-      </div>
-      <svg id="gearSvg" viewBox="0 0 136 136" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="gG" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#1e3a50"/>
-            <stop offset="40%" stop-color="#0e2030"/>
-            <stop offset="100%" stop-color="#060e18"/>
-          </linearGradient>
-          <filter id="gGlow">
-            <feGaussianBlur stdDeviation="1.2" result="blur"/>
-            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
-        <!-- outer gear ring -->
-        <path d="M120.00,68.00L131.73,73.86L131.08,78.84L118.23,81.46L118.23,81.46L128.04,90.15L126.12,94.79L113.03,94.00L113.03,94.00L120.27,104.94L117.21,108.92L104.77,104.77L104.77,104.77L108.99,118.27L104.61,121.20L92.85,114.03L92.85,114.03L93.50,128.41L88.55,130.50L79.48,118.14L79.48,118.14L68.00,131.73L62.14,120.00L62.14,120.00L54.63,131.08L49.21,126.12L56.00,113.03L56.00,113.03L40.91,120.27L36.08,117.21L40.23,104.77L40.23,104.77L25.73,108.99L22.80,104.61L30.97,92.85L30.97,92.85L16.59,93.50L14.50,88.55L26.86,79.48L26.86,79.48L13.27,68.00L24.00,62.14L24.00,62.14L12.92,54.63L17.88,49.21L31.00,56.00L31.00,56.00L23.73,40.91L26.79,36.08L39.23,40.23L39.23,40.23L35.01,25.73L39.39,22.80L51.15,30.97L51.15,30.97L50.50,16.59L55.45,14.50L64.52,26.86L64.52,26.86L76.00,13.27L81.86,24.00L81.86,24.00L89.37,12.92L94.79,17.88L88.00,31.00L88.00,31.00L103.09,23.73L107.92,26.79L103.77,39.23L103.77,39.23L119.27,35.01L122.20,39.39L114.03,51.15L114.03,51.15L128.41,50.50L130.50,55.45L118.14,64.52L118.14,64.52Z" fill="url(#gG)" filter="url(#gGlow)"/>
-        <!-- inner accent ring -->
-        <circle cx="68" cy="68" r="49" fill="none" stroke="rgba(0,180,255,0.12)" stroke-width="1"/>
-        <!-- tick marks at teeth valleys -->
-        <circle cx="68" cy="68" r="44" fill="none" stroke="rgba(0,200,255,0.06)" stroke-width="4" stroke-dasharray="3 11.6"/>
-      </svg>
-      <div id="joyLabel">THRUST</div>
-    </div>
     <div id="btnGroup">
       <div id="specialBtn" onclick="doSpecial()">✨<div id="spCD"></div></div>
     </div>
-    <div id="fireBtn">FIRE<div id="firePulse"></div></div>
   </div>
 
   <!-- LEVEL UP -->
