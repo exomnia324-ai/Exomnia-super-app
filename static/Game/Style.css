@@ -1196,17 +1196,24 @@ body{
 /* ── BUTTON ROW ── */
 #lbyBtnRow{
   width:100%;max-width:500px;
-  display:flex;gap:8px;padding:10px 12px 0;
+  display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px 0;
+  justify-content:center;align-items:stretch;
   position:relative;z-index:1;flex-shrink:0;
 }
 .lby-action-btn{
-  flex:1;padding:10px 0;border-radius:7px;
+  flex:1 1 auto;min-width:100px;max-width:100%;padding:10px 12px;border-radius:7px;
   font-family:'Courier New',monospace;font-weight:700;
   font-size:clamp(9px,2.5vw,12px);letter-spacing:4px;
   cursor:pointer;transition:all .18s;text-align:center;
-  position:relative;overflow:hidden;
+  position:relative;overflow:hidden;white-space:nowrap;
   display:flex;align-items:center;justify-content:center;gap:5px;
-  touch-action:manipulation;
+  touch-action:manipulation;box-sizing:border-box;
+}
+/* Icon-only buttons (Achievements, Challenges, Prestige, Co-op, Install) get a
+   fixed square size so they never compete for space with the labeled buttons
+   above and always stay a consistent, tappable size on every screen. */
+.lby-action-btn[style*="width:52px"]{
+  flex:0 0 52px!important;min-width:52px!important;
 }
 .lby-action-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:50%;
   background:linear-gradient(180deg,rgba(255,255,255,0.05),transparent);}
