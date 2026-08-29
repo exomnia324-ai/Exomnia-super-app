@@ -133,6 +133,20 @@ def service_worker():
 def ads():
     return "google.com, pub-5744401524883457, DIRECT, f08c47fec0942fa0", 200, {'Content-Type': 'text/plain'}
 
+@app.route('/.well-known/assetlinks.json')
+def assetlinks():
+    data = [{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.onrender.exomnia_super_app.twa",
+            "sha256_cert_fingerprints": [
+                "E5:72:65:E6:52:9A:D9:92:90:E0:6F:B9:F1:67:A4:84:76:8C:75:91:E6:A6:A3:15:07:9D:25:7C:4A:1A:83:7C"
+            ]
+        }
+    }]
+    return jsonify(data)
+
 @app.route('/api/ping')
 def ping():
     return jsonify({"ok": True})
