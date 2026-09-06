@@ -40,15 +40,6 @@ body{
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
-  /* ── DESKTOP / WIDE-SCREEN LETTERBOX ──
-     This game is designed as a tall, portrait play field. On a phone
-     the viewport is already that shape, so nothing changes. On a wide
-     desktop monitor, centering a capped-width column here (see #gc)
-     keeps the play field at the same proportions instead of stretching
-     it into an unplayable ultra-wide field. */
-  display:flex;
-  align-items:center;
-  justify-content:center;
 }
 
 :root{
@@ -62,18 +53,13 @@ body{
 }
 
 #gc{
-  position:relative;
-  /* Capped to a portrait-ish ratio (~0.62 wide:tall) so desktop/wide
-     screens get a centered letterboxed play field instead of a
-     stretched-out ultra-wide one. On phones (already narrower than
-     this ratio) min() keeps it at the full, unmodified width. */
-  width:min(100%, calc(100dvh * 0.62));
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  width:100%;
   height:100%;
-  margin:0 auto;
-  overflow:hidden;cursor:default;
+  overflow:hidden;cursor:none;
   touch-action:none;
   -webkit-touch-callout:none;
-  box-shadow:0 0 0 1px rgba(0,229,255,0.12), 0 0 60px rgba(0,229,255,0.06);
 }
 #cv{position:absolute;inset:0;width:100%;height:100%;display:block;will-change:transform;image-rendering:pixelated;visibility:hidden;}
 #ui{position:absolute;inset:0;pointer-events:none;z-index:10;will-change:contents;}
