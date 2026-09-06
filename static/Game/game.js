@@ -30,16 +30,24 @@ const spBtn=$id('specialBtn'),spCD=$id('spCD'),startSc=$id('startScreen');
 const alertFlash=$id('alertFlash'),puPanel=$id('puPanel');
 
 /* ── CROSS-BROWSER RESIZE ──
-   Priority: visualViewport (Chrome mobile) → innerWidth/Height
-   Avoids the Chrome dynamic toolbar shrink bug */
+   The play field lives inside #gc, which CSS now caps to a portrait
+   ratio and centers on wide/desktop screens (see Style.css). We size
+   the canvas to #gc's actual rendered box (not the raw window), so
+   on a phone this is still the full screen, and on a desktop monitor
+   it's the centered, letterboxed column instead of an ultra-wide
+   stretched field. */
+const GC=$id('gc');
 function resize(){
-  // visualViewport is most accurate on Chrome/Safari mobile
-  // It excludes the dynamic address bar height
-  if(window.visualViewport){
+  const box=(GC&&GC.getBoundingClientRect)?GC.getBoundingClientRect():null;
+  if(box&&box.width>0&&box.height>0){
+    CV.width  = Math.round(box.width);
+    CV.height = Math.round(box.height);
+  } else if(window.visualViewport){
+    // Fallback: visualViewport is most accurate on Chrome/Safari mobile
     CV.width  = Math.round(window.visualViewport.width);
     CV.height = Math.round(window.visualViewport.height);
   } else {
-    // Fallback: document.documentElement for Firefox/Samsung/UC
+    // Last-resort fallback: document.documentElement for Firefox/Samsung/UC
     CV.width  = document.documentElement.clientWidth  || window.innerWidth;
     CV.height = document.documentElement.clientHeight || window.innerHeight;
   }
@@ -4252,11 +4260,33 @@ try{(function(){
     };
   }
 
+  /* ---------- 5. DESKTOP CONTROLS HINT ---------- */
+  function isDesktopPointer(){
+    try{ return window.matchMedia && window.matchMedia('(pointer: fine)').matches && !('ontouchstart' in window); }
+    catch(e){ return false; }
+  }
+
+  function buildDesktopHint(){
+    if(!isDesktopPointer())return;
+    if($id('pcHint'))return;
+    var topBar=$id('lbyTopBar');
+    if(!topBar||!topBar.parentNode)return;
+    var hint=document.createElement('div');
+    hint.id='pcHint';
+    hint.style.cssText='margin:4px 4px 0;padding:6px 10px;border-radius:6px;'
+      +'background:rgba(0,10,20,0.4);border:1px solid rgba(0,229,255,0.15);'
+      +'font-family:"Courier New",monospace;font-size:9px;letter-spacing:1px;color:rgba(0,229,255,0.55);'
+      +'text-align:center;';
+    hint.textContent='DESKTOP CONTROLS: WASD / ARROWS MOVE - SPACE FIRE - E SPECIAL - Q SWITCH WEAPON';
+    topBar.parentNode.insertBefore(hint,topBar.nextSibling);
+  }
+
   window.addEventListener('load',function(){
     setTimeout(function(){
       safe(buildModifierUI);
       safe(buildLobbyBanner);
       safe(buildTopPilotsPreview);
+      safe(buildDesktopHint);
     },3500);
   });
 
