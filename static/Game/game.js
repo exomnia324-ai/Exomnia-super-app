@@ -2847,6 +2847,7 @@ const DEFAULTS={
   speed:5, sensitivity:5, inertia:5, deadZone:6,
   fireRate:5, screenShake:5,
   particles:true, glow:true,
+  sfxVolume:10, musicVolume:6, muted:false,
 };
 let CFG=Object.assign({},DEFAULTS);
 
@@ -2860,6 +2861,12 @@ function cfgToGameValues(){
   G.pspd=CFG.speed*1.2;
   // fire rate: 1-10 → ms 240 (slow) to 80 (fast)
   G.fireRate=Math.round(240-(CFG.fireRate-1)*(160/9));
+  // audio: 0-10 sliders → 0..1 volume
+  if(typeof SFX!=='undefined' && SFX){
+    SFX.setSfxVolume(CFG.sfxVolume/10);
+    SFX.setMusicVolume(CFG.musicVolume/10);
+    SFX.setMute(!!CFG.muted);
+  }
 }
 
 function openSettings(){
@@ -2873,8 +2880,11 @@ function openSettings(){
   syncSlider('deadSlider','deadFill','deadVal',CFG.deadZone,2,20);
   syncSlider('fireRateSlider','fireRateFill','fireRateVal',CFG.fireRate,1,10);
   syncSlider('shakeSlider','shakeFill','shakeVal',CFG.screenShake,0,10);
+  syncSlider('sfxVolSlider','sfxVolFill','sfxVolVal',CFG.sfxVolume,0,10);
+  syncSlider('musicVolSlider','musicVolFill','musicVolVal',CFG.musicVolume,0,10);
   syncToggle('particleToggle',CFG.particles);
   syncToggle('glowToggle',CFG.glow);
+  syncToggle('muteToggle',!CFG.muted); // toggle shows ON when sound is ON (i.e. not muted)
   // wire up live preview on sliders
   wireSlider('spdSlider','spdFill','spdVal',2,10,v=>{CFG.speed=v;});
   wireSlider('sensSlider','sensFill','sensVal',1,10,v=>{CFG.sensitivity=v;});
@@ -2882,6 +2892,8 @@ function openSettings(){
   wireSlider('deadSlider','deadFill','deadVal',2,20,v=>{CFG.deadZone=v;});
   wireSlider('fireRateSlider','fireRateFill','fireRateVal',1,10,v=>{CFG.fireRate=v;});
   wireSlider('shakeSlider','shakeFill','shakeVal',0,10,v=>{CFG.screenShake=v;});
+  wireSlider('sfxVolSlider','sfxVolFill','sfxVolVal',0,10,v=>{CFG.sfxVolume=v;SFX.init();SFX.resume();SFX.setSfxVolume(v/10);SFX.ui_click();});
+  wireSlider('musicVolSlider','musicVolFill','musicVolVal',0,10,v=>{CFG.musicVolume=v;SFX.init();SFX.resume();SFX.setMusicVolume(v/10);});
 }
 function closeSettings(){
   $id('settingsPanel').classList.remove('on');
@@ -2926,6 +2938,13 @@ function toggleSetting(key){
   CFG[key]=!CFG[key];
   syncToggle(key+'Toggle',CFG[key]);
   applySettings();
+}
+function toggleAudioMute(){
+  CFG.muted=!CFG.muted;
+  SFX.init();SFX.resume();
+  syncToggle('muteToggle',!CFG.muted); // ON = sound enabled
+  applySettings();
+  if(!CFG.muted) SFX.ui_click();
 }
 function syncToggle(id,val){
   const el=$id(id);if(!el)return;
@@ -2997,24 +3016,72 @@ function shopAction(idx){
   }
 }
 
-// Apply on boot
-applySettings();
-
-/* ═══ SOUND SYSTEM (Web Audio API — no external files) ═══ */
+/* ═══ SOUND SYSTEM (Web Audio API — no external files, fully synthesized) ═══ */
 const SFX = (function(){
   let ctx = null;
-  let masterGain = null;
+  let masterGain = null;   // overall output
+  let sfxGain = null;      // SFX bus
+  let musicGain = null;    // music bus
+  let compressor = null;   // glue compressor so layered sfx don't clip
+  let convolver = null;    // small synthesized reverb for space/impact
+  let dryGain = null, wetGain = null;
   let musicNodes = null;
   let musicPlaying = false;
   let muted = false;
+  let sfxVol = 1;    // 0..1 user sfx volume
+  let musicVol = 0.55; // 0..1 user music volume
+
+  function _makeImpulse(dur, decay){
+    const len = Math.max(1, Math.floor(ctx.sampleRate*dur));
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for(let ch=0; ch<2; ch++){
+      const d = buf.getChannelData(ch);
+      for(let i=0;i<len;i++){
+        d[i] = (Math.random()*2-1) * Math.pow(1-i/len, decay);
+      }
+    }
+    return buf;
+  }
 
   function init(){
     if(ctx) return;
     try{
       ctx = new (window.AudioContext || window.webkitAudioContext)();
+
       masterGain = ctx.createGain();
-      masterGain.gain.value = 0.55;
+      masterGain.gain.value = 1;
+
+      compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = -18;
+      compressor.knee.value = 24;
+      compressor.ratio.value = 4;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.25;
+
+      compressor.connect(masterGain);
       masterGain.connect(ctx.destination);
+
+      // sfx bus → small reverb send + dry
+      sfxGain = ctx.createGain();
+      sfxGain.gain.value = muted?0:sfxVol;
+
+      dryGain = ctx.createGain(); dryGain.gain.value = 1;
+      wetGain = ctx.createGain(); wetGain.gain.value = 0.16;
+
+      convolver = ctx.createConvolver();
+      convolver.buffer = _makeImpulse(0.9, 2.2);
+      convolver.normalize = true;
+
+      sfxGain.connect(dryGain);
+      sfxGain.connect(convolver);
+      convolver.connect(wetGain);
+      dryGain.connect(compressor);
+      wetGain.connect(compressor);
+
+      // music bus → straight to compressor (kept cleaner/drier than sfx)
+      musicGain = ctx.createGain();
+      musicGain.gain.value = muted?0:musicVol;
+      musicGain.connect(compressor);
     }catch(e){ ctx=null; }
   }
 
@@ -3022,172 +3089,242 @@ const SFX = (function(){
     if(ctx && ctx.state==='suspended') ctx.resume();
   }
 
-  // ── core tone helper ──
+  function setSfxVolume(v){
+    sfxVol = Math.max(0, Math.min(1, v));
+    if(sfxGain) sfxGain.gain.setTargetAtTime(muted?0:sfxVol, ctx?ctx.currentTime:0, 0.02);
+  }
+  function setMusicVolume(v){
+    musicVol = Math.max(0, Math.min(1, v));
+    if(musicGain) musicGain.gain.setTargetAtTime(muted?0:musicVol, ctx?ctx.currentTime:0, 0.02);
+  }
+  function getSfxVolume(){ return sfxVol; }
+  function getMusicVolume(){ return musicVol; }
+
+  // ── core tone helper (supports layered detune + vibrato + filter for richer timbre) ──
   function tone(freq, type, vol, dur, opts={}){
-    if(!ctx||muted) return;
-    const g = ctx.createGain();
-    g.connect(masterGain);
+    if(!ctx||muted||!sfxGain) return;
     const now = ctx.currentTime;
     const attack = opts.attack||0.005;
-    const decay  = opts.decay ||0.05;
+
+    const g = ctx.createGain();
     g.gain.setValueAtTime(0, now);
     g.gain.linearRampToValueAtTime(vol, now+attack);
     g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
 
-    const o = ctx.createOscillator();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, now);
-    if(opts.sweep) o.frequency.exponentialRampToValueAtTime(opts.sweep, now+dur);
-    o.connect(g);
-    o.start(now);
-    o.stop(now+dur+0.05);
+    let out = g;
+    if(opts.filterFreq){
+      const f = ctx.createBiquadFilter();
+      f.type = opts.filterType||'lowpass';
+      f.frequency.setValueAtTime(opts.filterFreq, now);
+      if(opts.filterSweep) f.frequency.exponentialRampToValueAtTime(opts.filterSweep, now+dur);
+      f.Q.value = opts.filterQ||1;
+      g.connect(f); f.connect(sfxGain);
+    } else {
+      g.connect(sfxGain);
+    }
+
+    // Main voice + optional detuned side-voices, all summed BEFORE the shared envelope/filter
+    // so every voice fades with the same envelope (avoids clicks on the side voices).
+    const voices = opts.detune ? [0, opts.detune, -opts.detune] : [0];
+    voices.forEach((det,i)=>{
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, now);
+      o.detune.setValueAtTime(det, now);
+      if(opts.sweep) o.frequency.exponentialRampToValueAtTime(opts.sweep, now+dur);
+      if(opts.vibrato){
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.frequency.value = opts.vibratoRate||6;
+        lfoGain.gain.value = opts.vibrato;
+        lfo.connect(lfoGain); lfoGain.connect(o.frequency);
+        lfo.start(now); lfo.stop(now+dur+0.05);
+      }
+      if(i===0){
+        o.connect(g);
+      } else {
+        const sideGain = ctx.createGain();
+        sideGain.gain.value = 0.4; // side voices quieter than the main voice
+        o.connect(sideGain);
+        sideGain.connect(g);
+      }
+      o.start(now);
+      o.stop(now+dur+0.05);
+    });
   }
 
   // ── noise burst helper ──
   function noise(vol, dur, opts={}){
-    if(!ctx||muted) return;
+    if(!ctx||muted||!sfxGain) return;
     const bufLen = Math.ceil(ctx.sampleRate * dur);
     const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
     const data = buf.getChannelData(0);
-    for(let i=0;i<bufLen;i++) data[i]=(Math.random()*2-1);
+    let last=0;
+    for(let i=0;i<bufLen;i++){
+      const white = Math.random()*2-1;
+      // light brown/pink coloring for a less harsh burst
+      last = (last + 0.06*white) / 1.06;
+      data[i] = opts.colored ? last*3.2 : white;
+    }
     const src = ctx.createBufferSource();
     src.buffer = buf;
 
     const filter = ctx.createBiquadFilter();
     filter.type = opts.filter || 'bandpass';
-    filter.frequency.value = opts.freq || 800;
+    filter.frequency.setValueAtTime(opts.freq || 800, ctx.currentTime);
+    if(opts.freqSweep) filter.frequency.exponentialRampToValueAtTime(opts.freqSweep, ctx.currentTime+dur);
     filter.Q.value = opts.Q || 1.5;
 
     const g = ctx.createGain();
-    g.connect(masterGain);
     const now = ctx.currentTime;
     g.gain.setValueAtTime(vol, now);
     g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
 
     src.connect(filter);
     filter.connect(g);
+    g.connect(sfxGain);
     src.start(now);
     src.stop(now+dur+0.05);
   }
 
-  // ═══ SOUND EFFECTS ═══
+  // click/percussive transient using an ultra-short noise pop (for punch on hits/impacts)
+  function click(vol, dur, opts={}){
+    noise(vol, dur, Object.assign({filter:'highpass', freq:2000, Q:0.7}, opts));
+  }
+
+  // ═══ SOUND EFFECTS (each layered with 2-4 elements for a fuller, punchier feel) ═══
   function shoot_pulse(){
-    tone(420,'square',.18,.08,{sweep:200,attack:.002,decay:.03});
-    tone(210,'sawtooth',.08,.06,{sweep:120});
+    tone(460,'square',.16,.08,{sweep:190,attack:.001,detune:12});
+    tone(230,'sawtooth',.09,.06,{sweep:110});
+    click(.06,.02,{freq:2600});
   }
   function shoot_laser(){
-    tone(800,'sawtooth',.12,.07,{sweep:1400,attack:.001});
-    tone(1600,'sine',.06,.05,{sweep:2800});
+    tone(900,'sawtooth',.11,.08,{sweep:1600,attack:.001,detune:8});
+    tone(1800,'sine',.06,.06,{sweep:3000});
+    click(.05,.015,{freq:5000});
   }
   function shoot_plasma(){
-    tone(300,'sawtooth',.15,.09,{sweep:150});
-    noise(.1,.06,{filter:'highpass',freq:1200});
+    tone(320,'sawtooth',.14,.1,{sweep:140,detune:16,vibrato:8,vibratoRate:30});
+    noise(.11,.07,{filter:'highpass',freq:1400});
+    tone(640,'sine',.05,.08,{sweep:280});
   }
   function shoot_missile(){
-    noise(.22,.12,{filter:'lowpass',freq:600,Q:0.8});
-    tone(120,'sawtooth',.15,.15,{sweep:60,attack:.01});
+    noise(.22,.14,{filter:'lowpass',freq:600,Q:0.8,colored:true});
+    tone(120,'sawtooth',.15,.16,{sweep:55,attack:.01});
+    tone(60,'sine',.1,.2,{sweep:30,attack:.02});
   }
   function shoot_gatling(){
-    tone(380+Math.random()*80,'square',.12,.05,{sweep:200,attack:.001});
+    const jit=Math.random()*80;
+    tone(380+jit,'square',.11,.05,{sweep:190,attack:.001});
+    click(.05,.02,{freq:3200});
   }
   function shoot_shotgun(){
-    noise(.35,.18,{filter:'lowpass',freq:400,Q:0.5});
-    tone(80,'square',.2,.12,{sweep:40,attack:.003});
+    noise(.32,.2,{filter:'lowpass',freq:420,Q:0.5,colored:true});
+    tone(80,'square',.2,.13,{sweep:38,attack:.002});
+    click(.12,.03,{freq:1800});
   }
   function shoot_emp(){
-    tone(60,'sawtooth',.3,.4,{sweep:20,attack:.01});
-    noise(.25,.35,{filter:'lowpass',freq:300,Q:0.3});
-    tone(200,'sine',.15,.5,{sweep:800});
+    tone(60,'sawtooth',.28,.42,{sweep:20,attack:.01,vibrato:4,vibratoRate:14});
+    noise(.24,.36,{filter:'lowpass',freq:300,Q:0.3});
+    tone(200,'sine',.14,.5,{sweep:820});
   }
   function shoot_railgun(){
-    tone(50,'square',.35,.05,{sweep:2000,attack:.001});
-    noise(.3,.12,{filter:'highpass',freq:3000,Q:2});
-    tone(1200,'sine',.12,.18,{sweep:300});
+    tone(50,'square',.32,.06,{sweep:2100,attack:.001});
+    noise(.28,.14,{filter:'highpass',freq:3200,Q:2});
+    tone(1300,'sine',.12,.2,{sweep:320});
+    click(.14,.04,{freq:6000});
   }
   function shoot_nuke(){
-    tone(40,'sawtooth',.4,.8,{sweep:15,attack:.02});
-    noise(.5,.9,{filter:'lowpass',freq:200,Q:0.2});
-    tone(100,'square',.25,.6,{sweep:30});
+    tone(40,'sawtooth',.38,.8,{sweep:15,attack:.02,detune:10});
+    noise(.48,.9,{filter:'lowpass',freq:200,Q:0.2,colored:true});
+    tone(100,'square',.24,.6,{sweep:30});
     setTimeout(()=>{
-      noise(.6,.5,{filter:'lowpass',freq:500,Q:0.4});
-      tone(30,'sine',.3,1.2,{sweep:80,attack:.05});
+      noise(.56,.5,{filter:'lowpass',freq:500,Q:0.4,colored:true});
+      tone(30,'sine',.28,1.2,{sweep:80,attack:.05});
     },120);
   }
 
   function enemy_explode(){
-    noise(.28,.2,{filter:'lowpass',freq:500,Q:0.6});
-    tone(120,'square',.18,.15,{sweep:50,attack:.003});
+    noise(.26,.22,{filter:'lowpass',freq:500,Q:0.6,colored:true});
+    tone(120,'square',.17,.16,{sweep:48,attack:.003});
+    click(.08,.02,{freq:2200});
   }
   function enemy_explode_big(){
-    noise(.45,.4,{filter:'lowpass',freq:300,Q:0.4});
-    tone(60,'sawtooth',.3,.35,{sweep:25,attack:.005});
-    tone(200,'square',.15,.25,{sweep:80});
+    noise(.42,.42,{filter:'lowpass',freq:300,Q:0.4,colored:true});
+    tone(60,'sawtooth',.28,.36,{sweep:25,attack:.005,detune:14});
+    tone(200,'square',.14,.26,{sweep:78});
+    setTimeout(()=>noise(.2,.18,{filter:'bandpass',freq:900,Q:1.4}),40);
   }
   function player_hit(){
-    noise(.4,.22,{filter:'bandpass',freq:700,Q:1.2});
-    tone(150,'square',.3,.2,{sweep:60,attack:.002});
-    tone(400,'sine',.15,.15,{sweep:100});
+    noise(.38,.24,{filter:'bandpass',freq:700,Q:1.2});
+    tone(150,'square',.28,.2,{sweep:60,attack:.002});
+    tone(400,'sine',.14,.16,{sweep:100});
   }
   function pickup_coin(){
-    tone(880,'sine',.18,.07,{attack:.002});
-    tone(1320,'sine',.12,.05,{attack:.003});
+    tone(880,'sine',.17,.07,{attack:.002});
+    tone(1320,'sine',.11,.06,{attack:.003});
+    setTimeout(()=>tone(1760,'sine',.08,.08,{attack:.002}),40);
   }
   function pickup_health(){
-    tone(660,'sine',.2,.1,{attack:.005});
-    tone(880,'sine',.18,.12,{attack:.01});
-    tone(1100,'sine',.12,.15,{attack:.015});
+    tone(660,'sine',.19,.1,{attack:.005});
+    tone(880,'sine',.17,.12,{attack:.01});
+    tone(1100,'sine',.12,.16,{attack:.015});
   }
   function pickup_powerup(){
-    tone(440,'sine',.15,.05,{attack:.002});
-    tone(660,'sine',.15,.07,{attack:.01});
-    tone(880,'sine',.12,.1,{attack:.02});
+    tone(440,'sine',.14,.05,{attack:.002});
+    tone(660,'sine',.14,.07,{attack:.01});
+    tone(880,'sine',.11,.1,{attack:.02});
   }
   function level_up(){
     const notes=[523,659,784,1047];
     notes.forEach((f,i)=>{
-      setTimeout(()=>tone(f,'sine',.22,.18,{attack:.005}),i*80);
+      setTimeout(()=>{
+        tone(f,'sine',.2,.18,{attack:.005});
+        tone(f*2,'sine',.06,.14,{attack:.01});
+      },i*80);
     });
   }
   function wave_start(){
-    tone(220,'square',.2,.12,{attack:.01});
-    setTimeout(()=>tone(330,'square',.2,.12,{attack:.01}),130);
-    setTimeout(()=>tone(440,'square',.25,.2,{attack:.01}),260);
+    tone(220,'square',.19,.12,{attack:.01});
+    setTimeout(()=>tone(330,'square',.19,.12,{attack:.01}),130);
+    setTimeout(()=>tone(440,'square',.23,.22,{attack:.01,detune:6}),260);
   }
   function boss_spawn(){
-    tone(55,'sawtooth',.35,.5,{sweep:35,attack:.02});
-    setTimeout(()=>noise(.4,.4,{filter:'lowpass',freq:250,Q:0.3}),100);
+    tone(55,'sawtooth',.33,.5,{sweep:35,attack:.02,detune:12});
+    setTimeout(()=>noise(.38,.4,{filter:'lowpass',freq:250,Q:0.3,colored:true}),100);
     setTimeout(()=>{
-      tone(110,'square',.3,.4,{sweep:55,attack:.01});
+      tone(110,'square',.28,.4,{sweep:55,attack:.01});
     },300);
   }
   function boss_phase2(){
-    tone(80,'square',.4,.3,{attack:.01});
-    noise(.35,.25,{filter:'lowpass',freq:350});
-    setTimeout(()=>tone(160,'square',.35,.3,{attack:.01}),150);
+    tone(80,'square',.38,.32,{attack:.01,detune:10});
+    noise(.34,.26,{filter:'lowpass',freq:350,colored:true});
+    setTimeout(()=>tone(160,'square',.33,.3,{attack:.01}),150);
   }
   function boss_die(){
     for(let i=0;i<6;i++){
       setTimeout(()=>{
-        noise(.5,.35,{filter:'lowpass',freq:200+i*50,Q:0.3});
-        tone(60+i*15,'sawtooth',.3,.4,{sweep:20,attack:.003});
+        noise(.48,.36,{filter:'lowpass',freq:200+i*50,Q:0.3,colored:true});
+        tone(60+i*15,'sawtooth',.28,.4,{sweep:20,attack:.003});
       },i*120);
     }
   }
   function special_nova(){
-    tone(50,'sawtooth',.4,.6,{sweep:15,attack:.02});
-    noise(.45,.8,{filter:'lowpass',freq:250,Q:0.2});
+    tone(50,'sawtooth',.38,.6,{sweep:15,attack:.02,detune:10});
+    noise(.42,.8,{filter:'lowpass',freq:250,Q:0.2,colored:true});
     setTimeout(()=>{
-      for(let i=0;i<4;i++) setTimeout(()=>noise(.3,.25,{filter:'bandpass',freq:300+i*100}),i*80);
+      for(let i=0;i<4;i++) setTimeout(()=>noise(.28,.26,{filter:'bandpass',freq:300+i*100}),i*80);
     },200);
   }
   function game_over(){
     const notes=[440,330,220,110];
     notes.forEach((f,i)=>{
-      setTimeout(()=>tone(f,'sawtooth',.25,.4,{attack:.01,sweep:f*.4}),i*200);
+      setTimeout(()=>tone(f,'sawtooth',.24,.42,{attack:.01,sweep:f*.4}),i*200);
     });
   }
   function ui_click(){
     tone(660,'sine',.1,.04,{attack:.001});
+    click(.03,.012,{freq:4000});
   }
   function combo_hit(combo){
     const f=220+Math.min(combo,30)*18;
@@ -3208,53 +3345,72 @@ const SFX = (function(){
     }
   }
 
-  // Simple arpeggiated ambient sci-fi loop
+  // Arpeggiated ambient sci-fi loop with bass, arp, hats, kick and an evolving pad
   const SCALE=[55,65.4,73.4,82.4,98,110,130.8,146.8];
-  let _musicSeq=0;
+  let _musicBar=0;
   let _musicTimer=null;
   function _scheduleMusic(startAt){
     if(!musicPlaying||!ctx||muted) return;
     const now=ctx.currentTime;
     const t=Math.max(startAt,now);
+    _musicBar++;
 
-    // Bass drone
-    _playMusicNote(SCALE[0],t,'sawtooth',.06,1.4);
+    // Bass drone (root + fifth-ish overtone)
+    _playMusicNote(SCALE[0],t,'sawtooth',.065,1.4,{filterFreq:400});
     _playMusicNote(SCALE[0]*2,t,'sine',.04,1.4);
 
-    // Arpeggiated melody notes
-    const pattern=[0,2,4,7,4,2,5,3];
+    // Slow evolving pad every other bar for depth
+    if(_musicBar%2===0){
+      _playMusicNote(SCALE[2]*2,t,'sine',.03,1.7,{detune:6});
+      _playMusicNote(SCALE[4]*2,t,'triangle',.025,1.7,{detune:-6});
+    }
+
+    // Arpeggiated melody notes (pattern varies slightly every 4 bars)
+    const patterns=[[0,2,4,7,4,2,5,3],[0,3,5,7,5,3,4,2],[0,2,5,7,9,7,5,2]];
+    const pattern=patterns[_musicBar%patterns.length];
     const step=0.22;
     pattern.forEach((deg,i)=>{
       const freq=SCALE[deg%SCALE.length]*2;
-      _playMusicNote(freq,t+i*step,'sine',.03,.15);
+      _playMusicNote(freq,t+i*step,'sine',.032,.16,{filterFreq:2600});
     });
 
     // Hi-hat rhythm (noise clicks)
     for(let i=0;i<8;i++){
-      if(i%2===0) _playMusicNoise(t+i*step*.5,.03,.04,{filter:'highpass',freq:6000});
+      if(i%2===0) _playMusicNoise(t+i*step*.5,.028,.04,{filter:'highpass',freq:6000});
+      else if(i%4===1) _playMusicNoise(t+i*step*.5,.014,.03,{filter:'highpass',freq:8000});
     }
 
-    // Kick (low thump every bar)
-    _playMusicNote(55,t,'sine',.1,.08,{sweep:30});
-    _playMusicNote(55,t+step*4,'sine',.08,.07,{sweep:30});
+    // Kick (low thump every bar, plus a softer ghost hit)
+    _playMusicNote(55,t,'sine',.11,.09,{sweep:30});
+    _playMusicNote(55,t+step*4,'sine',.08,.08,{sweep:30});
 
     const loopLen=pattern.length*step+0.05;
     _musicTimer=setTimeout(()=>_scheduleMusic(t+loopLen), loopLen*1000-80);
   }
   function _playMusicNote(freq,when,type,vol,dur,opts={}){
-    if(!ctx||muted) return;
+    if(!ctx||muted||!musicGain) return;
     const g=ctx.createGain();
-    g.connect(masterGain);
     g.gain.setValueAtTime(0,when);
     g.gain.linearRampToValueAtTime(vol,when+0.01);
     g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+
+    let out=g;
+    if(opts.filterFreq){
+      const f=ctx.createBiquadFilter();
+      f.type='lowpass'; f.frequency.value=opts.filterFreq; f.Q.value=0.7;
+      g.connect(f); f.connect(musicGain);
+    } else {
+      g.connect(musicGain);
+    }
+
     const o=ctx.createOscillator();
     o.type=type;o.frequency.setValueAtTime(freq,when);
+    if(opts.detune) o.detune.setValueAtTime(opts.detune,when);
     if(opts.sweep) o.frequency.exponentialRampToValueAtTime(opts.sweep,when+dur);
     o.connect(g);o.start(when);o.stop(when+dur+0.05);
   }
   function _playMusicNoise(when,vol,dur,opts={}){
-    if(!ctx||muted) return;
+    if(!ctx||muted||!musicGain) return;
     const bufLen=Math.ceil(ctx.sampleRate*dur);
     const buf=ctx.createBuffer(1,bufLen,ctx.sampleRate);
     const d=buf.getChannelData(0);
@@ -3262,14 +3418,15 @@ const SFX = (function(){
     const src=ctx.createBufferSource();src.buffer=buf;
     const f=ctx.createBiquadFilter();
     f.type=opts.filter||'highpass';f.frequency.value=opts.freq||5000;
-    const g=ctx.createGain();g.connect(masterGain);
+    const g=ctx.createGain();g.connect(musicGain);
     g.gain.setValueAtTime(vol,when);g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
     src.connect(f);f.connect(g);src.start(when);src.stop(when+dur+0.05);
   }
 
   function setMute(v){
     muted=v;
-    if(masterGain) masterGain.gain.value=v?0:0.55;
+    if(sfxGain) sfxGain.gain.setTargetAtTime(v?0:sfxVol, ctx?ctx.currentTime:0, 0.02);
+    if(musicGain) musicGain.gain.setTargetAtTime(v?0:musicVol, ctx?ctx.currentTime:0, 0.02);
     if(v) stopMusic();
     else if(ctx&&!musicPlaying) startMusic();
   }
@@ -3298,13 +3455,19 @@ const SFX = (function(){
     special_nova,game_over,
     ui_click,combo_hit,
     startMusic,stopMusic,
-    toggleMute,isMuted,
+    toggleMute,isMuted,setMute,
+    setSfxVolume,setMusicVolume,
+    getSfxVolume,getMusicVolume,
   };
 })();
+
+// Apply on boot (SFX now defined; volumes take effect once audio context inits on first interaction)
+applySettings();
 
 window.openSettings=openSettings;window.closeSettings=closeSettings;
 window.saveSettings=saveSettings;window.resetSettings=resetSettings;
 window.toggleSetting=toggleSetting;
+window.toggleAudioMute=toggleAudioMute;
 window.openShop=openShop;window.closeShop=closeShop;
 
 window.startGame=startGame;window.doSpecial=doSpecial;window.cycleWeapon=cycleWeapon;window.upgrade=upgrade;
