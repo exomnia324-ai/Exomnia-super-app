@@ -389,6 +389,38 @@
         </div>
       </div>
 
+      <div class="setSection">AUDIO</div>
+
+      <div class="setRow">
+        <div class="setLbl">SFX VOLUME<span class="setVal" id="sfxVolVal">10</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="sfxVolFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="sfxVolSlider" min="0" max="10" step="1" value="10">
+        </div>
+        <div class="setHint">Weapons, impacts, pickups</div>
+      </div>
+
+      <div class="setRow">
+        <div class="setLbl">MUSIC VOLUME<span class="setVal" id="musicVolVal">6</span></div>
+        <div class="sliderWrap">
+          <div class="sliderTrack">
+            <div class="sliderFill" id="musicVolFill"></div>
+          </div>
+          <input type="range" class="setSlider" id="musicVolSlider" min="0" max="10" step="1" value="6">
+        </div>
+        <div class="setHint">Background score</div>
+      </div>
+
+      <div class="setRow toggleRow">
+        <div class="setLbl">SOUND</div>
+        <div class="toggleBtn" id="muteToggle" onclick="toggleAudioMute()">
+          <div class="toggleKnob"></div>
+          <span>ON</span>
+        </div>
+      </div>
+
       <div class="setBtnRow">
         <div class="setBtn reset" onclick="resetSettings()">↺ RESET</div>
         <div class="setBtn save" onclick="saveSettings()">✔ APPLY</div>
