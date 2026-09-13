@@ -1127,14 +1127,32 @@ body{
   display:flex;align-items:center;justify-content:center;gap:5px;
   touch-action:manipulation;box-sizing:border-box;
 }
-/* Icon-only buttons (Achievements, Challenges, Prestige, Co-op, Install) get a
-   fixed square size so they never compete for space with the labeled buttons
-   above and always stay a consistent, tappable size on every screen. */
+/* NOTE: Achievements, Challenges, Prestige, Co-op, Daily Reward, and Leaderboard
+   lobby buttons now use the same labeled style as Hangar/Shop (icon + text) for
+   clarity, so the old icon-only 52px override below is no longer applied to them. */
 .lby-action-btn[style*="width:52px"]{
   flex:0 0 52px!important;min-width:52px!important;
 }
 .lby-action-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:50%;
   background:linear-gradient(180deg,rgba(255,255,255,0.05),transparent);}
+
+/* Two-line variant (icon+title on top, short plain-language subtitle below) —
+   used for features whose purpose isn't obvious from a single word, like Co-op. */
+.lby-action-btn--stacked{
+  flex-direction:column;gap:2px;padding:9px 10px;white-space:normal;
+  animation:coopPulse 2.6s ease-in-out infinite;
+}
+.lby-action-btn--stacked .lby-action-btn__main{
+  font-size:clamp(9px,2.5vw,12px);letter-spacing:2px;font-weight:700;
+}
+.lby-action-btn--stacked .lby-action-btn__sub{
+  font-size:6.5px;letter-spacing:0.5px;font-weight:400;
+  color:rgba(255,255,255,0.65);white-space:nowrap;
+}
+@keyframes coopPulse{
+  0%,100%{box-shadow:0 0 0 rgba(0,229,255,0);}
+  50%{box-shadow:0 0 14px rgba(0,229,255,0.35);}
+}
 #hangarBtn{
   color:var(--c1);border:1px solid rgba(0,229,255,0.35);
   background:linear-gradient(145deg,rgba(0,229,255,0.07),rgba(0,229,255,0.02));
