@@ -385,12 +385,13 @@ const MP = (function () {
           <div style="font-size:9px;letter-spacing:5px;color:rgba(0,229,255,0.55);margin-bottom:4px;">SQUAD UP</div>
           <div style="font-size:18px;font-weight:900;letter-spacing:3px;color:#00e5ff;text-shadow:0 0 20px #00e5ff;">🛰 CO-OP MODE</div>
           <div style="font-size:8px;letter-spacing:1px;color:rgba(255,255,255,0.45);margin-top:6px;">2–4 players · beta</div>
+          <div style="font-size:9px;letter-spacing:0.5px;color:rgba(255,255,255,0.55);margin-top:10px;line-height:1.5;">Create a room to get a code, then share it with your friend. Or enter a friend's code below to join their room.</div>
         </div>
         <div id="mpCreateBtn" style="padding:12px;border-radius:8px;margin-bottom:10px;text-align:center;
           border:1px solid rgba(0,229,255,0.5);background:linear-gradient(145deg,rgba(0,229,255,0.16),rgba(0,229,255,0.04));
-          color:#00e5ff;font-size:11px;font-weight:900;letter-spacing:2px;cursor:pointer;">+ CREATE ROOM</div>
+          color:#00e5ff;font-size:11px;font-weight:900;letter-spacing:2px;cursor:pointer;">+ CREATE ROOM (INVITE A FRIEND)</div>
         <div style="text-align:center;font-size:8px;letter-spacing:2px;color:rgba(255,255,255,0.35);margin:12px 0;">— OR —</div>
-        <input id="mpCodeInput" maxlength="6" placeholder="ENTER ROOM CODE" style="
+        <input id="mpCodeInput" maxlength="6" placeholder="ENTER FRIEND'S ROOM CODE" style="
           width:100%;box-sizing:border-box;padding:11px;border-radius:8px;margin-bottom:10px;
           background:rgba(0,20,40,0.6);border:1px solid rgba(0,229,255,0.3);color:#fff;
           font-family:'Courier New',monospace;font-size:13px;letter-spacing:4px;text-align:center;text-transform:uppercase;">
@@ -478,17 +479,17 @@ const MP = (function () {
       if(document.getElementById('lbyMpBtn')) return;
       const btn=document.createElement('div');
       btn.id='lbyMpBtn';
-      btn.className='lby-action-btn';
+      btn.className='lby-action-btn lby-action-btn--stacked';
       btn.style.cssText=`
-        flex:none;width:52px;padding:10px 0;border-radius:7px;
-        font-size:20px;cursor:pointer;position:relative;
-        border:1px solid rgba(0,229,255,0.35);
-        background:linear-gradient(145deg,rgba(0,229,255,0.07),rgba(0,229,255,0.02));
-        display:flex;align-items:center;justify-content:center;
-        touch-action:manipulation;
+        border:1px solid rgba(0,229,255,0.45);
+        background:linear-gradient(145deg,rgba(0,229,255,0.1),rgba(0,229,255,0.02));
+        color:#00e5ff;
       `;
-      btn.innerHTML='🛰';
-      btn.title='Co-op Mode';
+      btn.innerHTML=`
+        <span class="lby-action-btn__main">👥 CO-OP</span>
+        <span class="lby-action-btn__sub">PLAY WITH A FRIEND</span>
+      `;
+      btn.title='Invite a friend to play together — create a room and share the code';
       btn.onclick=()=>openEntryModal();
       btnRow.appendChild(btn);
     };
