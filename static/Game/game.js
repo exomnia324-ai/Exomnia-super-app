@@ -212,6 +212,67 @@ const BIOMES=[
 ];
 function getBiome(){return BIOMES[Math.floor((G.wave-1)/3)%BIOMES.length];}
 
+/* ── DISTANT SUN / BRIGHT STAR (biome-tinted, with lens-flare corona for drama) ── */
+const SUN_PALETTES=[
+  {core:'rgba(255,250,230,1)', mid:'rgba(255,170,60,0.9)',  outer:'rgba(255,120,30,0)',  flare:'rgba(255,200,120,0.55)'}, // classic warm sun
+  {core:'rgba(235,250,255,1)', mid:'rgba(120,200,255,0.9)', outer:'rgba(60,150,255,0)',  flare:'rgba(150,220,255,0.5)'}, // blue-white star
+  {core:'rgba(255,235,245,1)', mid:'rgba(255,90,150,0.85)', outer:'rgba(255,40,110,0)',  flare:'rgba(255,140,190,0.5)'}, // red/pink giant
+  {core:'rgba(255,255,240,1)', mid:'rgba(255,225,130,0.9)', outer:'rgba(255,210,90,0)',  flare:'rgba(255,235,170,0.5)'}, // bright yellow-white
+];
+function drawSun(sun){
+  if(!sun)return;
+  const{x,y,r,pal}=sun;
+  const t=G._t||0;
+  const pulse=1+Math.sin(t*1.1)*0.05;
+  CX.save();
+  // big soft outer halo
+  const haloR=r*6*pulse;
+  const halo=CX.createRadialGradient(x,y,0,x,y,haloR);
+  halo.addColorStop(0,pal.mid);
+  halo.addColorStop(.35,pal.mid.replace(/[\d.]+\)$/,'0.22)'));
+  halo.addColorStop(1,pal.outer);
+  CX.globalAlpha=.55;
+  CX.fillStyle=halo;
+  CX.beginPath();CX.arc(x,y,haloR,0,Math.PI*2);CX.fill();
+  CX.globalAlpha=1;
+
+  // lens-flare spikes radiating from the core
+  CX.save();
+  CX.translate(x,y);
+  CX.rotate((sun.flareAng||0)+t*0.02);
+  const spikeCount=6;
+  for(let i=0;i<spikeCount;i++){
+    const ang=(i/spikeCount)*Math.PI*2;
+    const len=r*(i%2===0?4.4:2.4)*pulse;
+    const grad=CX.createLinearGradient(0,0,Math.cos(ang)*len,Math.sin(ang)*len);
+    grad.addColorStop(0,pal.flare);
+    grad.addColorStop(1,'rgba(255,255,255,0)');
+    CX.strokeStyle=grad;
+    CX.lineWidth=Math.max(1,r*0.05);
+    CX.beginPath();CX.moveTo(0,0);CX.lineTo(Math.cos(ang)*len,Math.sin(ang)*len);CX.stroke();
+  }
+  CX.restore();
+
+  // secondary flare glints along the line toward screen center (classic photographic lens flare)
+  const dx=(CV.width*0.5-x),dy=(CV.height*0.5-y);
+  for(let i=1;i<=2;i++){
+    const tt=i*0.32;
+    const gx=x+dx*tt,gy=y+dy*tt,gr=r*0.2/i;
+    const gflare=CX.createRadialGradient(gx,gy,0,gx,gy,gr);
+    gflare.addColorStop(0,pal.flare);gflare.addColorStop(1,'rgba(255,255,255,0)');
+    CX.globalAlpha=.4/i;CX.fillStyle=gflare;
+    CX.beginPath();CX.arc(gx,gy,gr,0,Math.PI*2);CX.fill();
+  }
+  CX.globalAlpha=1;
+
+  // bright core
+  const core=CX.createRadialGradient(x,y,0,x,y,r*pulse);
+  core.addColorStop(0,pal.core);core.addColorStop(.5,pal.mid);core.addColorStop(1,pal.outer);
+  CX.fillStyle=core;
+  CX.beginPath();CX.arc(x,y,r*pulse,0,Math.PI*2);CX.fill();
+  CX.restore();
+}
+
 /* ── DISTANT PLANETS (purely decorative, drift slowly behind the action) ── */
 const PLANET_PALETTES=[
   {bands:['#2a1a10','#5a3a1e','#7d5a2c','#4a2e16'],ring:true, ringColor:'rgba(210,180,130,.4)',glow:'rgba(220,170,100,.5)'},
@@ -220,19 +281,24 @@ const PLANET_PALETTES=[
   {bands:['#08241a','#12442c','#1c623f'],            ring:true, ringColor:'rgba(140,220,170,.35)',glow:'rgba(90,220,150,.45)'},
   {bands:['#1c0a2a','#33144a','#4a1e66'],            ring:false,glow:'rgba(170,100,220,.45)'},
   {bands:['#26200a','#4a3d12','#6b5a1c'],            ring:true, ringColor:'rgba(230,210,140,.35)',glow:'rgba(230,200,120,.4)'},
+  {bands:['#0a2a4a','#123a5a','#1a5a3a','#2a7a4a'],  ring:false,glow:'rgba(90,170,255,.5)', earthlike:true}, // blue/green earth-like world
+  {bands:['#5a3018','#8a5a2a','#a67a3a','#6b4020'],  ring:true, ringColor:'rgba(230,190,140,.4)',glow:'rgba(230,170,90,.55)'}, // big Jupiter-style giant
 ];
 function spawnPlanet(){
+  const big=Math.random()<.2; // occasional dramatic close/foreground planet, like a real space-art poster
   const pal=PLANET_PALETTES[_floor(_rnd()*PLANET_PALETTES.length)];
-  const r=rnd(46,120);
+  const r=big? rnd(140,230) : rnd(50,132);
   // Planets sit far back — bias them toward the edges so they don't sit on top of the action,
   // and start above/around the screen so they drift into view like a real distant body.
   const edge=Math.random()<.5;
-  const x=edge? rnd(-r*.3,CV.width*.28) : rnd(CV.width*.72,CV.width+r*.3);
+  const x=edge? rnd(-r*.5,CV.width*.28) : rnd(CV.width*.72,CV.width+r*.5);
   G.planets.push({
-    x,y:rnd(-CV.height*.4,-r),r,pal,
-    spd:.006+Math.random()*.01,        // slower than the slowest star layer -> feels far away
+    x,y:rnd(-CV.height*.4,-r*.6),r,pal,
+    spd:big?.012+Math.random()*.016:.006+Math.random()*.01,   // closer/bigger ones drift a touch faster (parallax)
     rot:rnd(0,6.28),
     lightAng:rnd(-.9,-.3),             // shading light comes from upper-left-ish
+    big,
+    blotchSeed:rnd(0,1000),
   });
 }
 function initBG(){
@@ -241,30 +307,42 @@ function initBG(){
   const starCols=bm.starTint.concat(['#ffffff']);
   for(let i=0;i<110;i++)G.stars1.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.25+Math.random()*.45,a:.15+Math.random()*.35,twinkleSpd:rnd(.4,1.5),twinkleOff:rnd(0,6.28),col:starCols[_floor(_rnd()*starCols.length)]});
   for(let i=0;i<65;i++)G.stars2.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.55+Math.random()*.75,a:.3+Math.random()*.4,twinkleSpd:rnd(.3,1.2),twinkleOff:rnd(0,6.28),col:starCols[_floor(_rnd()*starCols.length)]});
-  for(let i=0;i<30;i++)G.stars3.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.9+Math.random()*1.3,a:.5+Math.random()*.4,twinkleSpd:rnd(.2,1.0),twinkleOff:rnd(0,6.28),col:starCols[_floor(_rnd()*starCols.length)],flare:Math.random()<.3});
+  for(let i=0;i<38;i++)G.stars3.push({x:rnd(0,CV.width),y:rnd(0,CV.height),r:.9+Math.random()*1.5,a:.55+Math.random()*.45,twinkleSpd:rnd(.2,1.0),twinkleOff:rnd(0,6.28),col:starCols[_floor(_rnd()*starCols.length)],flare:Math.random()<.4});
   G.nebulae=[];
   const nc=bm.nc;
   // Each nebula is 2-3 overlapping soft blobs (offset centers) instead of one perfect circle,
-  // so the cloud reads as a wispy irregular gas cloud rather than a soft dot.
-  for(let i=0;i<9;i++){
+  // so the cloud reads as a wispy irregular gas cloud rather than a soft dot. Alpha and size
+  // pushed up noticeably so the clouds actually read as color in the sky, not just a faint tint.
+  for(let i=0;i<12;i++){
     const lobeCount=2+Math.floor(Math.random()*2);
     const lobes=[];
-    for(let j=0;j<lobeCount;j++)lobes.push({ox:rnd(-40,40),oy:rnd(-30,30),rMul:.6+Math.random()*.55});
-    G.nebulae.push({x:rnd(-80,CV.width+80),y:rnd(-80,CV.height+80),r:rnd(100,240),c:nc[i%nc.length],spd:.018+Math.random()*.035,drift:(Math.random()-.5)*.007,alpha:.06+Math.random()*.07,pulse:rnd(0,6.28),pulseSpd:rnd(.003,.01),lobes});
+    for(let j=0;j<lobeCount;j++)lobes.push({ox:rnd(-50,50),oy:rnd(-38,38),rMul:.6+Math.random()*.55});
+    G.nebulae.push({x:rnd(-100,CV.width+100),y:rnd(-100,CV.height+100),r:rnd(140,320),c:nc[i%nc.length],spd:.018+Math.random()*.035,drift:(Math.random()-.5)*.007,alpha:.16+Math.random()*.15,pulse:rnd(0,6.28),pulseSpd:rnd(.003,.01),lobes});
   }
   // Distant Milky-Way-style band: a soft diagonal light streak with its own dense star speckling.
   {
     const ang=rnd(-.55,.55);
     const speckles=[];
-    for(let i=0;i<220;i++){
-      speckles.push({u:rnd(-1.3,1.3),v:(Math.random()*2-1)*(Math.random()*2-1)*.5, r:.3+Math.random()*.6, a:.2+Math.random()*.5});
+    for(let i=0;i<260;i++){
+      speckles.push({u:rnd(-1.3,1.3),v:(Math.random()*2-1)*(Math.random()*2-1)*.5, r:.3+Math.random()*.7, a:.25+Math.random()*.55});
     }
     G.galaxy={ang,speckles,scroll:0,col:bm.starTint[0]||'#ffffff'};
   }
+  // Distant bright sun/star with lens-flare corona — appears most biomes for a dramatic sky
+  if(Math.random()<.78){
+    const pal=SUN_PALETTES[_floor(_rnd()*SUN_PALETTES.length)];
+    const corner=_floor(_rnd()*4);
+    let sx,sy;
+    if(corner===0){sx=rnd(-30,CV.width*.22);sy=rnd(-20,CV.height*.2);}
+    else if(corner===1){sx=rnd(CV.width*.78,CV.width+30);sy=rnd(-20,CV.height*.2);}
+    else if(corner===2){sx=rnd(-30,CV.width*.22);sy=rnd(CV.height*.8,CV.height+20);}
+    else {sx=rnd(CV.width*.78,CV.width+30);sy=rnd(CV.height*.8,CV.height+20);}
+    G.sun={x:sx,y:sy,r:rnd(46,82),pal,flareAng:rnd(0,6.28)};
+  } else G.sun=null;
   // Distant planets — start with one on screen, then trickle in slowly over time.
   G.planets=[];
-  if(Math.random()<.8) spawnPlanet();
-  G._planetTimer=rnd(9000,18000);
+  spawnPlanet();
+  G._planetTimer=rnd(6000,13000);
   // Shooting stars pool
   G.shootingStars=[];G._ssTimer=rnd(3000,7000);
   // Asteroids / obstacles pool — density and tint driven by the current biome
@@ -392,9 +470,9 @@ function update(){
       if(p.y-p.r>CV.height+40) G.planets.splice(i,1);
     }
     G._planetTimer-=G.dt;
-    if(G._planetTimer<=0 && G.planets.length<2){
+    if(G._planetTimer<=0 && G.planets.length<3){
       spawnPlanet();
-      G._planetTimer=rnd(14000,26000);
+      G._planetTimer=rnd(8000,16000);
     }
   }
   if(G.galaxy) G.galaxy.scroll+=0.003*f;
@@ -1180,6 +1258,9 @@ function draw(){
   CX.fillStyle=_bg;CX.fillRect(0,0,CV.width,CV.height);
   if(_bm.fogCol){CX.fillStyle=_bm.fogCol;CX.fillRect(0,0,CV.width,CV.height);}
 
+  // Distant bright sun/star with lens-flare corona — the most distant light source, drawn first
+  if(G.sun) drawSun(G.sun);
+
   // Milky-Way style galaxy band — very distant, drawn first so everything else layers over it
   if(G.galaxy) drawGalaxyBand(G.galaxy);
 
@@ -1367,7 +1448,29 @@ function drawPlanet(p){
   CX.fillStyle=shade;
   CX.fillRect(x-r,y-r,r*2,r*2);
   // horizontal banding for gas-giant palettes (subtle stripes clipped to the sphere)
-  if(!pal.cratered){
+  if(pal.earthlike){
+    // continents: irregular blotches in green/brown tones scattered with a seeded pattern
+    const contCols=['#2f6b3a','#3d7a3f','#7a6a3a','#5a7a3a'];
+    CX.globalAlpha=.85;
+    for(let i=0;i<7;i++){
+      const ang=p.blotchSeed*0.13+i*1.9;
+      const rad=r*(0.15+((i*53)%40)/100);
+      const cx2=x+Math.cos(ang)*r*.55,cy2=y+Math.sin(ang)*r*.5;
+      CX.fillStyle=contCols[i%contCols.length];
+      CX.beginPath();
+      CX.ellipse(cx2,cy2,rad,rad*.7,ang,0,Math.PI*2);
+      CX.fill();
+    }
+    // cloud wisps: soft white translucent streaks
+    CX.globalAlpha=.28;
+    CX.fillStyle='#ffffff';
+    for(let i=0;i<5;i++){
+      const ang=p.blotchSeed*0.07+i*2.3+p.rot*0.1;
+      const cx2=x+Math.cos(ang)*r*.4,cy2=y+Math.sin(ang)*r*.6;
+      CX.beginPath();CX.ellipse(cx2,cy2,r*.4,r*.12,ang*.6,0,Math.PI*2);CX.fill();
+    }
+    CX.globalAlpha=1;
+  } else if(!pal.cratered){
     CX.globalAlpha=.22;
     for(let i=-3;i<=3;i++){
       const by=y+i*r*.26+Math.sin(p.rot+i)*3;
@@ -1394,6 +1497,12 @@ function drawPlanet(p){
   term.addColorStop(1,'rgba(0,0,0,0.55)');
   CX.fillStyle=term;
   CX.fillRect(x-r,y-r,r*2,r*2);
+  // small specular glint on the lit edge for a more physical, "photographed" sphere look
+  const spec=CX.createRadialGradient(lx,ly,0,lx,ly,r*.35);
+  spec.addColorStop(0,'rgba(255,255,255,0.35)');
+  spec.addColorStop(1,'rgba(255,255,255,0)');
+  CX.fillStyle=spec;
+  CX.beginPath();CX.arc(lx,ly,r*.35,0,Math.PI*2);CX.fill();
   CX.restore();
 
   // ring front half (drawn on top so the sphere appears to pass through it)
