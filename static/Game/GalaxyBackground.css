@@ -1,23 +1,40 @@
-/* Clear, readable galaxy layer for the game field. */
+/* Realistic, readable deep-space atmosphere layered over the procedural field. */
 #gc .realistic-galaxy-overlay{
   position:absolute;inset:0;z-index:2;pointer-events:none;overflow:hidden;
-  opacity:.24;mix-blend-mode:screen;
+  opacity:.28;mix-blend-mode:screen;
   background:
-    radial-gradient(ellipse 34% 22% at 14% 12%,rgba(255,235,180,.78) 0 1%,rgba(255,135,55,.26) 6%,transparent 34%),
-    radial-gradient(ellipse 58% 34% at 68% 35%,rgba(255,65,155,.24),rgba(130,20,115,.16) 30%,transparent 68%),
-    radial-gradient(ellipse 48% 34% at 35% 65%,rgba(0,125,220,.18),transparent 68%),
-    linear-gradient(145deg,#060812 0%,#02030a 62%,#000105 100%);
-  filter:saturate(1.15) contrast(1.12);
+    radial-gradient(ellipse 22% 18% at 13% 12%,rgba(255,250,225,.9) 0 1%,rgba(255,177,75,.5) 4%,rgba(196,50,58,.18) 17%,transparent 43%),
+    radial-gradient(ellipse 45% 28% at 66% 34%,rgba(255,87,168,.28) 0 5%,rgba(143,36,130,.2) 20%,transparent 68%),
+    radial-gradient(ellipse 37% 27% at 35% 66%,rgba(0,139,221,.2),rgba(28,41,137,.12) 35%,transparent 72%),
+    linear-gradient(145deg,rgba(8,10,25,.28),rgba(38,8,42,.16) 48%,rgba(0,3,12,.2));
+  filter:saturate(1.3) contrast(1.16);
 }
+/* Milky-Way dust lane: several soft, offset structures are more natural than one ring. */
 #gc .realistic-galaxy-overlay::before{
-  content:'';position:absolute;inset:-15%;transform:rotate(-16deg);opacity:.5;
-  background:radial-gradient(ellipse 70% 13% at 50% 50%,transparent 0 32%,rgba(235,215,255,.16) 48%,transparent 72%),linear-gradient(90deg,transparent 20%,rgba(255,255,255,.13) 50%,transparent 80%);
+  content:'';position:absolute;inset:-24%;transform:rotate(-19deg);opacity:.7;
+  background:
+    radial-gradient(ellipse 80% 13% at 50% 50%,transparent 0 31%,rgba(235,214,255,.14) 43%,rgba(107,72,153,.12) 54%,transparent 72%),
+    radial-gradient(ellipse 62% 7% at 48% 47%,rgba(255,255,255,.13),transparent 62%),
+    linear-gradient(90deg,transparent 12%,rgba(255,214,238,.04) 35%,rgba(255,255,255,.16) 50%,rgba(173,130,220,.06) 65%,transparent 88%);
   filter:blur(5px);mix-blend-mode:screen;
 }
+/* Multi-scale star clusters and tiny colored stars. */
 #gc .realistic-galaxy-overlay::after{
-  content:'';position:absolute;inset:0;opacity:.72;
-  background-image:radial-gradient(circle at 7% 18%,#fff 0 1px,transparent 1.8px),radial-gradient(circle at 15% 64%,#9feaff 0 1px,transparent 2px),radial-gradient(circle at 27% 38%,#ffe0aa 0 1px,transparent 2px),radial-gradient(circle at 42% 22%,#ffb9ed 0 1px,transparent 2px),radial-gradient(circle at 57% 70%,#fff 0 1.2px,transparent 2px),radial-gradient(circle at 72% 14%,#a9eaff 0 1px,transparent 2px),radial-gradient(circle at 86% 46%,#fff 0 1.2px,transparent 2px),radial-gradient(circle at 94% 80%,#ffdaa0 0 1px,transparent 2px);
+  content:'';position:absolute;inset:0;opacity:.78;
+  background-image:
+    radial-gradient(circle at 7% 18%,#fff 0 1.2px,transparent 2px),
+    radial-gradient(circle at 15% 64%,#9feaff 0 1px,transparent 1.8px),
+    radial-gradient(circle at 25% 38%,#ffe2af 0 1.1px,transparent 2px),
+    radial-gradient(circle at 35% 76%,#fff 0 .8px,transparent 1.7px),
+    radial-gradient(circle at 43% 22%,#ffb6ed 0 1px,transparent 1.8px),
+    radial-gradient(circle at 54% 57%,#d8c5ff 0 .8px,transparent 1.6px),
+    radial-gradient(circle at 62% 13%,#a9eaff 0 1px,transparent 1.9px),
+    radial-gradient(circle at 71% 72%,#fff 0 1.1px,transparent 2px),
+    radial-gradient(circle at 82% 45%,#ffdda5 0 .9px,transparent 1.8px),
+    radial-gradient(circle at 93% 80%,#fff 0 1px,transparent 1.8px),
+    radial-gradient(ellipse at 70% 32%,rgba(255,160,220,.12),transparent 18%),
+    radial-gradient(ellipse at 48% 48%,rgba(255,255,255,.1),transparent 22%);
+  background-size:100% 100%;
 }
-/* Make the canvas and layer stack explicit: gameplay remains sharp above the atmosphere. */
 #gc #cv{position:absolute;z-index:1;background:transparent;}
 @media (prefers-reduced-motion:reduce){#gc .realistic-galaxy-overlay,#gc .realistic-galaxy-overlay::before,#gc .realistic-galaxy-overlay::after{animation:none}}
