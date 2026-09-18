@@ -1,7 +1,6 @@
 /*
- * Injects the realistic galaxy atmosphere without changing the game's
- * procedural canvas renderer. The overlay stays behind the HUD and uses
- * screen blending so ships, bullets, enemies, and particles remain visible.
+ * Mounts the readable galaxy atmosphere above the canvas but below the HUD.
+ * GalaxyBackground.js must be included by templates/index.html.
  */
 (function(){
   'use strict';
@@ -10,12 +9,12 @@
     if(!gc||gc.querySelector('.realistic-galaxy-overlay'))return;
     var link=document.createElement('link');
     link.rel='stylesheet';
-    link.href='/static/Game/GalaxyBackground.css';
+    link.href='/static/Game/GalaxyBackground.css?v=readable';
     document.head.appendChild(link);
     var overlay=document.createElement('div');
     overlay.className='realistic-galaxy-overlay';
     overlay.setAttribute('aria-hidden','true');
-    gc.insertBefore(overlay,gc.firstChild);
+    gc.appendChild(overlay);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mountGalaxyOverlay);
   else mountGalaxyOverlay();
